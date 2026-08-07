@@ -13,6 +13,7 @@ import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
 import sanitizeFilenameLib from 'sanitize-filename'
 import * as utils from './utils'
+import logger from './logger'
 
 /* jslint node: true */
 
@@ -41,7 +42,24 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+
+const DEFAULT_SECURITY_ANSWER_HMAC_KEY = 'pa4qacea4VK9t9nGv7yZtwmj'
+const SECURITY_ANSWER_HMAC_KEY_FILE = 'encryptionkeys/securityAnswerHmac.key'
+let cachedSecurityAnswerHmacKey: string | undefined
+const getSecurityAnswerHmacKey = () => {
+  if (!cachedSecurityAnswerHmacKey) {
+    if (process.env.SECURITY_ANSWER_HMAC_KEY !== undefined && process.env.SECURITY_ANSWER_HMAC_KEY !== '') {
+      cachedSecurityAnswerHmacKey = process.env.SECURITY_ANSWER_HMAC_KEY
+    } else if (fs.existsSync(SECURITY_ANSWER_HMAC_KEY_FILE)) {
+      cachedSecurityAnswerHmacKey = fs.readFileSync(SECURITY_ANSWER_HMAC_KEY_FILE, 'utf8')
+    } else {
+      logger.warn('SECURITY_ANSWER_HMAC_KEY is not set and no key file was found at ' + SECURITY_ANSWER_HMAC_KEY_FILE + '. Falling back to an insecure hardcoded default HMAC key for security question answers. Set the SECURITY_ANSWER_HMAC_KEY environment variable (or provide ' + SECURITY_ANSWER_HMAC_KEY_FILE + ') in production.')
+      cachedSecurityAnswerHmacKey = DEFAULT_SECURITY_ANSWER_HMAC_KEY
+    }
+  }
+  return cachedSecurityAnswerHmacKey
+}
+export const hmac = (data: string) => crypto.createHmac('sha256', getSecurityAnswerHmacKey()).update(data).digest('hex')
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'

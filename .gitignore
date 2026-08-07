@@ -65,5 +65,8 @@ config/*.yml
 !config/oss.yml
 !config/defcon33.yml
 
+# Externalized secrets
+encryptionkeys/securityAnswerHmac.key
+
 # System Files
 .DS_Store

@@ -86,7 +86,7 @@ const getCtfKey = () => {
   return cachedCtfKey
 }
 export const ctfFlag = (text: string) => {
-  return crypto.createHmac('sha1', getCtfKey()).update(text).digest('hex')
+  return crypto.createHmac('sha256', getCtfKey()).update(text).digest('hex')
 }
 
 export const toMMMYY = (date: Date) => {
