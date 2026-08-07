@@ -38,7 +38,13 @@ export function imageCaptchas () {
 export const verifyImageCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = security.authenticatedUsers.from(req)
-    const UserId = user ? user.data ? user.data.id : undefined : undefined
+    const UserId = user?.data?.id
+    if (UserId === undefined) {
+      // Without a UserId, sequelize drops the key from the WHERE clause entirely and the
+      // query matches the newest CAPTCHA belonging to *any* user.
+      res.status(401).send(res.__('You need to be logged in to solve a CAPTCHA.'))
+      return
+    }
     const captchas = await ImageCaptchaModel.findAll({
       limit: 1,
       where: {
@@ -49,7 +55,9 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // Absence of a CAPTCHA must fail closed. Previously "!captchas[0] ||" let anyone who
+    // simply never requested one (or waited out the 5 minute window) skip verification.
+    if (captchas[0] && req.body.answer === captchas[0].answer) {
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
