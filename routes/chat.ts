@@ -172,23 +172,15 @@ export function chat () {
 
       // vuln-code-snippet start chatbotPromptInjectionChallenge
       generateCoupon: tool({
-        description: 'Generate a discount coupon for a customer with a verified damaged order. Requires a valid order ID.',
+        description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'),
-          orderId: z.string().describe('The order ID of the damaged order (format: xxxx-xxxxxxxxxxxxxxxx)')
+          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
-        execute: async ({ discount, orderId }) => {
-          const userId = await getUserId(req)
-          if (!userId) return { error: 'Customer not authenticated' }
-
-          const user = await UserModel.findByPk(userId, { attributes: ['email'] })
-          if (!user) return { error: 'Customer not found' }
-
-          const order = await db.ordersCollection.findOne({ orderId, email: user.email })
-          if (!order) return { error: 'No verified damaged order found for this order ID.' }
-
-          const couponCode = security.generateCoupon(discount)
-          return { couponCode, discount }
+        execute: async ({ discount }) => {
+          challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
+          challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
+          const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
+          return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
         }
       })
     } // vuln-code-snippet end chatbotGreedyInjectionChallenge chatbotPromptInjectionChallenge
