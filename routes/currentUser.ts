@@ -8,7 +8,7 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
-export function retrieveLoggedInUser () {
+export function retrieveLoggedInUser() {
   return (req: Request, res: Response) => {
     let user
     let response: any
@@ -27,6 +27,7 @@ export function retrieveLoggedInUser () {
         if (requestedFields.length > 0) {
           // When fields are specified, return only those fields
           for (const field of requestedFields) {
+            if (field == 'password') continue;
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
