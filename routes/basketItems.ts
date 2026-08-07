@@ -34,12 +34,16 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    // Authorize the BasketId that is actually persisted below. parseJsonCustom
+    // preserves duplicate JSON keys, so checking basketIds[0] while writing the
+    // last one let a second, attacker-chosen BasketId past the ownership check.
+    const basketId = basketIds[basketIds.length - 1]
+    if (user && basketId && basketId !== 'undefined' && Number(user.bid) != Number(basketId)) { // eslint-disable-line eqeqeq
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        BasketId: basketId,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -67,11 +71,27 @@ export function quantityCheckBeforeBasketItemUpdate () {
     try {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
+      // The caller must own the basket the item is currently in, and may not
+      // move it into a basket they do not own. Previously the mismatch was only
+      // recorded, never rejected, so any authenticated user could rewrite
+      // another user's basket items.
+      if (user == null) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+      if (item == null) {
+        throw new Error('No such item found!')
+      }
+      if (Number(item.BasketId) !== Number(user.bid)) {
+        res.status(401).json({ error: 'Invalid BasketId' })
+        return
+      }
+      if (req.body.BasketId && Number(req.body.BasketId) !== Number(user.bid)) {
+        res.status(401).json({ error: 'Invalid BasketId' })
+        return
+      }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
-        if (item == null) {
-          throw new Error('No such item found!')
-        }
         void quantityCheck(req, res, next, item.ProductId, req.body.quantity)
       } else {
         next()

@@ -51,10 +51,37 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+/* Tokens are issued as RS256 and nothing else may be accepted. jws@0.2.6 takes
+   the verification algorithm from the token's OWN header and jwa implements
+   both "none" and the HMAC family, so an unpinned verifier will happily honour
+   `alg: none` (no signature at all) or `alg: HS256` keyed with the RSA public
+   key, which this app publishes at /encryptionkeys/jwt.pub. Neither library
+   version exposes an `algorithms` option, so the pin has to happen here, ahead
+   of every signature check. */
+const expectedJwtAlgorithm = 'RS256'
+
+export const hasExpectedJwtAlgorithm = (token: string) => {
+  try {
+    return jws.decode(token)?.header?.alg === expectedJwtAlgorithm
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const authorizeToken = expressJwt(({ secret: publicKey }) as any) as (req: Request, res: Response, next: NextFunction) => void
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (token && !hasExpectedJwtAlgorithm(token)) {
+      res.status(401).send('Unauthorized')
+      return
+    }
+    authorizeToken(req, res, next)
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => (token && hasExpectedJwtAlgorithm(token)) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -123,9 +150,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +159,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -187,7 +211,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {

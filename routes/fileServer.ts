@@ -24,9 +24,13 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
+    // Truncate at the poison null byte *before* validating, so that the name the
+    // allowlist approves is the same name that is served. Checking the raw
+    // parameter and then serving the truncated one let any file be fetched by
+    // appending "%00.md" to it.
+    file = security.cutOffPoisonNullByte(file)
 
+    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 

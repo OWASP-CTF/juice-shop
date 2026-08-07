@@ -16,6 +16,29 @@ import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
 
+const MAX_UPLOAD_SIZE = 100000
+const ALLOWED_UPLOAD_TYPES = ['pdf', 'xml', 'zip', 'yml', 'yaml']
+const MAX_YAML_ALIASES = 20
+
+// Resolves `candidate` against `base` and returns null if the result escapes `base`.
+function resolveWithin (base: string, candidate: string) {
+  const absoluteBase = path.resolve(base)
+  const absolutePath = path.resolve(absoluteBase, candidate)
+  const relative = path.relative(absoluteBase, absolutePath)
+  if (relative === '' || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
+    return null
+  }
+  return absolutePath
+}
+
+// A YAML "billion laughs" bomb expands a handful of anchors through deeply nested
+// aliases. Legitimate complaint documents do not need them, so cap alias usage
+// before handing the document to the parser.
+function hasExcessiveAliases (data: string) {
+  const aliases = data.match(/(?:^|[\s[{,])\*[A-Za-z0-9_-]+/g)
+  return aliases !== null && aliases.length > MAX_YAML_ALIASES
+}
+
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
   if (file != null) {
     next()
@@ -39,10 +62,11 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                const absolutePath = resolveWithin('uploads/complaints/', fileName)
+                if (absolutePath !== null) {
+                  const targetPath: string = absolutePath
+                  challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return targetPath === path.resolve('ftp/legal.md') })
+                  entry.pipe(fs.createWriteStream(targetPath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -58,17 +82,17 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
 }
 
 function checkUploadSize ({ file }: Request, res: Response, next: NextFunction) {
-  if (file != null) {
-    challengeUtils.solveIf(challenges.uploadSizeChallenge, () => { return file?.size > 100000 })
+  if (file != null && file.size > MAX_UPLOAD_SIZE) {
+    return res.status(413).json({ error: 'File too large' })
   }
   next()
 }
 
 function checkFileType ({ file }: Request, res: Response, next: NextFunction) {
   const fileType = file?.originalname.substr(file.originalname.lastIndexOf('.') + 1).toLowerCase()
-  challengeUtils.solveIf(challenges.uploadTypeChallenge, () => {
-    return !(fileType === 'pdf' || fileType === 'xml' || fileType === 'zip' || fileType === 'yml' || fileType === 'yaml')
-  })
+  if (fileType === undefined || !ALLOWED_UPLOAD_TYPES.includes(fileType)) {
+    return res.status(415).json({ error: 'Unsupported file type' })
+  }
   next()
 }
 
@@ -80,7 +104,7 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, dtdload: false, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
@@ -111,6 +135,9 @@ function handleYamlUpload ({ file }: Request, res: Response, next: NextFunction)
     challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) {
       const data = file.buffer.toString()
+      if (hasExcessiveAliases(data)) {
+        return res.status(400).json({ error: 'YAML document uses too many aliases' })
+      }
       try {
         const sandbox = { yaml, data }
         vm.createContext(sandbox)
