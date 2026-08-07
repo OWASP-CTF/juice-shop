@@ -13,6 +13,7 @@ import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
 import sanitizeFilenameLib from 'sanitize-filename'
 import * as utils from './utils'
+import logger from './logger'
 
 /* jslint node: true */
 
@@ -96,8 +97,58 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+// Dedicated signing key for coupon integrity (HMAC), independent of any other key in this codebase
+// (e.g. the JWT keys or the CTF flag key) so that a leak of one purpose-specific key cannot be used
+// to forge tokens for another purpose.
+const COUPON_SIGNING_KEY_ENV_VAR = 'COUPON_SIGNING_KEY'
+// Insecure default used only when COUPON_SIGNING_KEY is not configured. Replace with a securely
+// generated, environment-provided secret in any real deployment.
+const INSECURE_DEFAULT_COUPON_SIGNING_KEY = 'CHANGE-ME-insecure-default-coupon-signing-key-8f3a1c'
+const COUPON_SIGNATURE_MIN_LENGTH = 12 // minimum truncated hex chars (48 bits) - short code, still infeasible to brute force offline
+const Z85_BLOCK_SIZE = 4 // z85.encode/decode only operate on strings whose length is a multiple of 4 bytes
+
+let cachedCouponSigningKey: string | undefined
+const getCouponSigningKey = () => {
+  if (cachedCouponSigningKey === undefined) {
+    if (process.env[COUPON_SIGNING_KEY_ENV_VAR] !== undefined && process.env[COUPON_SIGNING_KEY_ENV_VAR] !== '') {
+      cachedCouponSigningKey = process.env[COUPON_SIGNING_KEY_ENV_VAR]
+    } else {
+      logger.warn(`${COUPON_SIGNING_KEY_ENV_VAR} is not set - falling back to an insecure default coupon signing key. Set the ${COUPON_SIGNING_KEY_ENV_VAR} environment variable in production!`)
+      cachedCouponSigningKey = INSECURE_DEFAULT_COUPON_SIGNING_KEY
+    }
+  }
+  return cachedCouponSigningKey
+}
+
+// The discount segment of the payload has a variable number of digits (and, in principle, an
+// attacker-influenceable value - see chatbotPromptInjectionChallenge), so the signature length is
+// derived from the payload length rather than fixed, ensuring "payload-signature" always lands on
+// a 4-byte boundary as required by z85.encode/decode. This is a pure function of the payload, so
+// signing and verification always agree on the same length for the same payload.
+function couponSignatureLengthFor (payload: string) {
+  const lengthWithoutSignature = payload.length + 1 // + '-' separator
+  const shortfall = (Z85_BLOCK_SIZE - ((lengthWithoutSignature + COUPON_SIGNATURE_MIN_LENGTH) % Z85_BLOCK_SIZE)) % Z85_BLOCK_SIZE
+  return COUPON_SIGNATURE_MIN_LENGTH + shortfall
+}
+
+function signCouponPayload (payload: string) {
+  const signatureLength = couponSignatureLengthFor(payload)
+  return crypto.createHmac('sha256', getCouponSigningKey()).update(payload).digest('hex').slice(0, signatureLength)
+}
+
+function timingSafeEqualHex (a: string, b: string) {
+  const bufferA = Buffer.from(a, 'hex')
+  const bufferB = Buffer.from(b, 'hex')
+  if (bufferA.length === 0 || bufferA.length !== bufferB.length) {
+    return false
+  }
+  return crypto.timingSafeEqual(bufferA, bufferB)
+}
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
+  const payload = utils.toMMMYY(date) + '-' + discount
+  const signature = signCouponPayload(payload)
+  const coupon = payload + '-' + signature
   return z85.encode(coupon)
 }
 
@@ -106,18 +157,27 @@ export const discountFromCoupon = (coupon?: string) => {
     return undefined
   }
   const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  if (!decoded || (hasValidFormat(decoded.toString()) == null)) {
+    return undefined
   }
+  const parts = decoded.toString().split('-')
+  const validity = parts[0]
+  const discount = parts[1]
+  const signature = parts[2]
+  const expectedSignature = signCouponPayload(validity + '-' + discount)
+  if (!timingSafeEqualHex(signature, expectedSignature)) {
+    return undefined
+  }
+  if (utils.toMMMYY(new Date()) === validity) {
+    return parseInt(discount)
+  }
+  return undefined
 }
 
 function hasValidFormat (coupon: string) {
-  return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
+  // Signature length varies (12-15 hex chars) because it is padded to keep the overall
+  // "payload-signature" string a multiple of 4 bytes for z85 - see couponSignatureLengthFor.
+  return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{1,3}-[0-9a-f]{12,15}/)
 }
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge

@@ -34,10 +34,13 @@ describe('insecurity', () => {
   })
 
   describe('generateCoupon', () => {
-    it('returns base85-encoded month, year and discount as coupon code', () => {
+    it('returns base85-encoded month, year, discount and HMAC signature as coupon code', () => {
       const coupon = security.generateCoupon(20, new Date('1980-01-02'))
-      expect(coupon).to.equal('n<MiifFb4l')
-      expect(z85.decode(coupon).toString()).to.equal('JAN80-20')
+      const decoded = z85.decode(coupon).toString()
+      // Format is now "MMMYY-discount-signature" (signature is a truncated hex HMAC). The
+      // signature length varies slightly (12-15 hex chars) so that the overall string always
+      // stays a multiple of 4 bytes, which z85 requires - see couponSignatureLengthFor.
+      expect(decoded).to.match(/^JAN80-20-[0-9a-f]{12,15}$/)
     })
 
     it('uses current month and year if not specified', () => {
@@ -73,12 +76,28 @@ describe('insecurity', () => {
     })
 
     it('returns undefined for expired coupon code', () => {
-      expect(security.discountFromCoupon(z85.encode('SEP14-50'))).to.equal(undefined)
+      // Generated through the real signing path (valid signature) but for a month/year
+      // that is not the current one, so only the expiry check should reject it.
+      const expiredCoupon = security.generateCoupon(50, new Date('2014-09-01'))
+      expect(security.discountFromCoupon(expiredCoupon)).to.equal(undefined)
     })
 
     it('returns discount from valid coupon code', () => {
       expect(security.discountFromCoupon(security.generateCoupon(10))).to.equal(10)
       expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(99)
+    })
+
+    it('rejects a hand-tampered coupon code due to signature mismatch', () => {
+      // Take a real, validly-signed coupon and tamper with the discount value after
+      // decoding it, the way an attacker without the signing key would attempt to forge
+      // a bigger discount. The recomputed HMAC must no longer match, so verification
+      // must fail even though the tampered code still has the right shape.
+      const coupon = security.generateCoupon(10)
+      const [validity, discount, signature] = z85.decode(coupon).toString().split('-')
+      const tamperedDiscount = String(Number(discount) + 1)
+      const tamperedCoupon = z85.encode([validity, tamperedDiscount, signature].join('-'))
+
+      expect(security.discountFromCoupon(tamperedCoupon)).to.equal(undefined)
     })
   })
 
