@@ -17,6 +17,7 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
+import { validatePasswordHasAtLeastTenChar, validatePasswordIsNotInTopOneMillionCommonPasswordsList } from '../lib/passwordValidation'
 
 class User extends Model<
 InferAttributes<User>,
@@ -74,7 +75,9 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       password: {
         type: DataTypes.STRING,
         set (clearTextPassword: string) {
-          this.setDataValue('password', security.hash(clearTextPassword)) // vuln-code-snippet vuln-line weakPasswordChallenge
+          validatePasswordHasAtLeastTenChar(clearTextPassword)
+          validatePasswordIsNotInTopOneMillionCommonPasswordsList(clearTextPassword)
+          this.setDataValue('password', security.hash(clearTextPassword))
         }
       }, // vuln-code-snippet end weakPasswordChallenge
       role: {
