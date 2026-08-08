@@ -36,7 +36,11 @@ export function placeOrder () {
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
-          const email = customer ? customer.data ? customer.data.email : '' : ''
+          if (!customer?.bid || Number(customer.bid) !== Number(id)) {
+            res.status(403).json({ error: 'Forbidden' })
+            return
+          }
+          const email = customer.data?.email ?? ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
           const { default: PDFDocument } = await import('pdfkit')
@@ -138,23 +142,26 @@ export function placeOrder () {
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
+          if (totalPrice < 0) {
+            next(new Error('Invalid order total'))
+            return
+          }
 
-          if (req.body.UserId) {
-            if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
-              const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
-              if ((wallet != null) && wallet.balance >= totalPrice) {
-                await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } })
-              } else {
-                next(new Error('Insufficient wallet balance.'))
-                return
-              }
-            }
-            try {
-              await WalletModel.increment({ balance: totalPoints }, { where: { UserId: req.body.UserId } })
-            } catch (error: unknown) {
-              next(error)
+          const userId = customer.data.id
+          if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
+            const wallet = await WalletModel.findOne({ where: { UserId: userId } })
+            if ((wallet != null) && wallet.balance >= totalPrice) {
+              await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: userId } })
+            } else {
+              next(new Error('Insufficient wallet balance.'))
               return
             }
+          }
+          try {
+            await WalletModel.increment({ balance: totalPoints }, { where: { UserId: userId } })
+          } catch (error: unknown) {
+            next(error)
+            return
           }
 
           db.ordersCollection.insert({
@@ -163,7 +170,7 @@ export function placeOrder () {
             addressId: req.body.orderDetails ? req.body.orderDetails.addressId : null,
             orderId,
             delivered: false,
-            email: (email ? email.replace(/[aeiou]/gi, '*') : undefined),
+            email,
             totalPrice,
             products: basketProducts,
             bonus: totalPoints,
