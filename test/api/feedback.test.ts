@@ -17,12 +17,43 @@ let app: Express
 const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
 const jsonHeader = { 'content-type': 'application/json' }
 
+function solveCaptcha (expression: string): string {
+  const match = expression.match(/^(\d+)([*+-])(\d+)([*+-])(\d+)$/)
+  assert.ok(match)
+  const [, first, firstOperator, second, secondOperator, third] = match
+  const calculate = (left: number, operator: string, right: number) => operator === '*' ? left * right : operator === '+' ? left + right : left - right
+  if (secondOperator === '*' && firstOperator !== '*') {
+    return calculate(Number(first), firstOperator, calculate(Number(second), secondOperator, Number(third))).toString()
+  }
+  return calculate(calculate(Number(first), firstOperator, Number(second)), secondOperator, Number(third)).toString()
+}
+
 before(async () => {
   const result = await createTestApp()
   app = result.app
 }, { timeout: 60000 })
 
 void describe('/api/Feedbacks', () => {
+  void it('GET CAPTCHA does not disclose its answer', async () => {
+    const res = await request(app).get('/rest/captcha')
+
+    assert.equal(res.status, 200)
+    assert.equal(res.body.answer, undefined)
+  })
+
+  void it('POST cannot reuse a solved CAPTCHA', async () => {
+    const captchaRes = await request(app).get('/rest/captcha')
+    const payload = {
+      comment: 'Single-use CAPTCHA test',
+      rating: 1,
+      captchaId: captchaRes.body.captchaId,
+      captcha: solveCaptcha(captchaRes.body.captcha)
+    }
+
+    assert.equal((await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)).status, 201)
+    assert.equal((await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)).status, 401)
+  })
+
   void it('GET all feedback', async () => {
     const res = await request(app)
       .get('/api/Feedbacks')
@@ -42,7 +73,7 @@ void describe('/api/Feedbacks', () => {
         comment: 'I am a harm<script>steal-cookie</script><img src="csrf-attack"/><iframe src="evil-content"></iframe>less comment.',
         rating: 1,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 201)
     assert.equal(res.body.data.comment, 'I am a harmless comment.')
@@ -62,7 +93,7 @@ void describe('/api/Feedbacks', () => {
           comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
           rating: 1,
           captchaId: captchaRes.body.captchaId,
-          captcha: captchaRes.body.answer
+          captcha: solveCaptcha(captchaRes.body.captcha)
         })
       assert.equal(res.status, 201)
       assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: <iframe src="javascript:alert(`xss`)">')
@@ -83,7 +114,7 @@ void describe('/api/Feedbacks', () => {
         rating: 1,
         UserId: 3,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -104,7 +135,7 @@ void describe('/api/Feedbacks', () => {
         rating: 0,
         UserId: 4711,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 500)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -130,7 +161,7 @@ void describe('/api/Feedbacks', () => {
         rating: 5,
         UserId: 4,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -156,7 +187,7 @@ void describe('/api/Feedbacks', () => {
         rating: 5,
         UserId: 3,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -175,7 +206,7 @@ void describe('/api/Feedbacks', () => {
       .send({
         rating: 1,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -194,7 +225,7 @@ void describe('/api/Feedbacks', () => {
       .set(jsonHeader)
       .send({
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -214,7 +245,7 @@ void describe('/api/Feedbacks', () => {
       .send({
         rating: 1,
         captchaId: captchaRes.body.captchaId,
-        captcha: (captchaRes.body.answer + 1)
+        captcha: (Number(solveCaptcha(captchaRes.body.captcha)) + 1).toString()
       })
     assert.equal(res.status, 401)
   })
@@ -291,7 +322,7 @@ void describe('/api/Feedbacks/:id', () => {
         comment: 'I will be gone soon!',
         rating: 1,
         captchaId: captchaRes.body.captchaId,
-        captcha: captchaRes.body.answer
+        captcha: solveCaptcha(captchaRes.body.captcha)
       })
     assert.equal(createRes.status, 201)
     assert.equal(typeof createRes.body.data.id, 'number')

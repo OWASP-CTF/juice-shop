@@ -104,6 +104,21 @@ void describe('/rest/user/change-password', () => {
 })
 
 void describe('/rest/user/reset-password', () => {
+  void it('POST password reset for Stan is retired because the answer is publicly researchable', async () => {
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'stan@' + config.get<string>('application.domain'),
+        answer: 'Used Ship Emporium',
+        new: 'a-new-password',
+        repeat: 'a-new-password'
+      })
+
+    assert.equal(res.status, 410)
+    assert.ok(res.text.includes('Password recovery with this security question is no longer supported.'))
+  })
+
   void it('POST password reset for Jim with correct answer to his security question', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')

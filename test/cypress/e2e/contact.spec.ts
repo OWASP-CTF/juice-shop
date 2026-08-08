@@ -153,7 +153,7 @@ describe('/#/contact', () => {
 
         async function sendPostRequest (captcha: {
           captchaId: number
-          answer: string
+          captcha: string
         }) {
           const response = await fetch(
             `${Cypress.config('baseUrl')}/api/Feedbacks`,
@@ -165,7 +165,7 @@ describe('/#/contact', () => {
               },
               body: JSON.stringify({
                 captchaId: captcha.captchaId,
-                captcha: `${captcha.answer}`,
+                captcha: solveCaptcha(captcha.captcha),
                 comment: 'Comment',
                 rating: 0
               })
@@ -181,45 +181,35 @@ describe('/#/contact', () => {
   })
 
   describe('challenge "captchaBypass"', () => {
-    it('should be possible to post 10 or more customer feedbacks in less than 20 seconds', () => {
+    it('should not disclose CAPTCHA answers or allow CAPTCHA replay', () => {
       cy.window().then(async () => {
-        for (let i = 0; i < 15; i++) {
-          const response = await fetch(
-            `${Cypress.config('baseUrl')}/rest/captcha/`,
-            {
-              method: 'GET',
-              headers: {
-                'Content-type': 'text/plain'
-              }
+        const response = await fetch(
+          `${Cypress.config('baseUrl')}/rest/captcha/`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-type': 'text/plain'
             }
-          )
-          if (response.status === 200) {
-            const responseJson = await response.json()
-
-            await sendPostRequest(responseJson)
           }
-
-          async function sendPostRequest (captcha: {
-            captchaId: number
-            answer: string
-          }) {
-            await fetch(`${Cypress.config('baseUrl')}/api/Feedbacks`, {
-              method: 'POST',
-              cache: 'no-cache',
-              headers: {
-                'Content-type': 'application/json'
-              },
-              body: JSON.stringify({
-                captchaId: captcha.captchaId,
-                captcha: `${captcha.answer}`,
-                comment: `Spam #${i}`,
-                rating: 3
-              })
-            })
-          }
+        )
+        const captcha = await response.json()
+        expect(captcha.answer).to.equal(undefined)
+        const payload = JSON.stringify({
+          captchaId: captcha.captchaId,
+          captcha: solveCaptcha(captcha.captcha),
+          comment: 'Replay attempt',
+          rating: 3
+        })
+        const options = {
+          method: 'POST',
+          cache: 'no-cache' as RequestCache,
+          headers: { 'Content-type': 'application/json' },
+          body: payload
         }
+
+        expect((await fetch(`${Cypress.config('baseUrl')}/api/Feedbacks`, options)).status).to.equal(201)
+        expect((await fetch(`${Cypress.config('baseUrl')}/api/Feedbacks`, options)).status).to.equal(401)
       })
-      cy.expectChallengeSolved({ challenge: 'CAPTCHA Bypass' })
     })
   })
 
@@ -258,4 +248,15 @@ function solveNextCaptcha () {
       const answer = eval(val).toString()
       cy.get('#captchaControl').type(answer)
     })
+}
+
+function solveCaptcha (expression: string): string {
+  const match = expression.match(/^(\d+)([*+-])(\d+)([*+-])(\d+)$/)
+  if (!match) throw new Error('Unexpected CAPTCHA expression')
+  const [, first, firstOperator, second, secondOperator, third] = match
+  const calculate = (left: number, operator: string, right: number) => operator === '*' ? left * right : operator === '+' ? left + right : left - right
+  if (secondOperator === '*' && firstOperator !== '*') {
+    return calculate(Number(first), firstOperator, calculate(Number(second), secondOperator, Number(third))).toString()
+  }
+  return calculate(calculate(Number(first), firstOperator, Number(second)), secondOperator, Number(third)).toString()
 }
