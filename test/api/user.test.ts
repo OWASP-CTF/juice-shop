@@ -59,7 +59,7 @@ void describe('/api/Users', () => {
     assert.equal(res.body.data.password, undefined)
   })
 
-  void it('POST new admin', async () => {
+  void it('POST new user ignores an injected admin role', async () => {
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -74,7 +74,7 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
     assert.equal(res.body.data.password, undefined)
-    assert.equal(res.body.data.role, 'admin')
+    assert.equal(res.body.data.role, 'customer')
   })
 
   void it('POST new blank user', async () => {
