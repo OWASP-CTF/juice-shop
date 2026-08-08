@@ -30,11 +30,12 @@ export const emptyUserRegistration = () => (req: Request, res: Response, next: N
 }
 
 export const forgedFeedbackChallenge = () => (req: Request, res: Response, next: NextFunction) => {
+  const user = security.authenticatedUsers.from(req)
+  const userId = user?.data ? user.data.id : undefined
   challengeUtils.solveIf(challenges.forgedFeedbackChallenge, () => {
-    const user = security.authenticatedUsers.from(req)
-    const userId = user?.data ? user.data.id : undefined
     return req.body?.UserId && req.body.UserId != userId // eslint-disable-line eqeqeq
   })
+  req.body.UserId = userId ?? null
   next()
 }
 
@@ -64,6 +65,10 @@ export const registerAdminChallenge = () => (req: Request, res: Response, next: 
 
 export const passwordRepeatChallenge = () => (req: Request, res: Response, next: NextFunction) => {
   challengeUtils.solveIf(challenges.passwordRepeatChallenge, () => { return req.body && req.body.passwordRepeat !== req.body.password })
+  if (req.body && req.body.passwordRepeat !== req.body.password) {
+    res.status(400).send(res.__('Passwords do not match.'))
+    return
+  }
   next()
 }
 
