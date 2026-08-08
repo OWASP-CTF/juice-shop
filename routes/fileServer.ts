@@ -25,7 +25,7 @@ export function servePublicFiles () {
   function verify (file: string, res: Response, next: NextFunction) {
     if (file &&
       !/%00|\0/i.test(file) &&
-      (endsWithAllowlistedFileType(file) || file === 'incident-support.kdbx')) {
+      endsWithAllowlistedFileType(file)) {
 
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
