@@ -74,6 +74,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+      if (req.body.ProductId) {
+        const product = await ProductModel.findByPk(req.body.ProductId) // paranoid model: excludes soft-deleted products
+        if (product == null) {
+          res.status(400).json({ error: 'Product does not exist' })
+          return
+        }
+      }
       if (req.body.quantity) {
         if (item == null) {
           throw new Error('No such item found!')
