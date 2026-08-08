@@ -7,22 +7,16 @@ describe('/rest/products/reviews', () => {
     beforeEach(() => {
       cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
     })
-    it('should be possible to inject a command into the get route', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.window().then(() => {
-            void fetch(
-              `${Cypress.config('baseUrl')}/rest/products/sleep(1000)/reviews`,
-              {
-                method: 'GET',
-                headers: {
-                  'Content-type': 'text/plain'
-                }
-              }
-            )
-          })
-          cy.expectChallengeSolved({ challenge: 'NoSQL DoS' })
-        }
+    it('should reject command injection without solving the challenge', () => {
+      cy.request({
+        url: '/rest/products/sleep(1000)/reviews',
+        failOnStatusCode: false
+      }).then((response) => {
+        expect(response.status).to.equal(400)
+        expect(response.body).to.deep.equal({ error: 'Wrong Params' })
+      })
+      cy.request('/api/Challenges/?name=NoSQL DoS').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
       })
     })
   })
@@ -47,21 +41,29 @@ describe('/rest/products/reviews', () => {
       cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
     })
 
-    it('should be possible to inject a selector into the update route', () => {
-      cy.window().then(async () => {
-        await fetch(`${Cypress.config('baseUrl')}/rest/products/reviews`, {
+    it('should reject a selector injection without changing reviews', () => {
+      cy.request('/rest/products/1/reviews').then((before) => {
+        const snapshot = before.body.data.map(({ _id, message }: { _id: string, message: string }) => ({ _id, message }))
+        cy.window().then((win) => cy.request({
           method: 'PATCH',
+          url: '/rest/products/reviews',
+          failOnStatusCode: false,
           headers: {
-            'Content-type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
+            Authorization: `Bearer ${win.localStorage.getItem('token')}`
           },
-          body: JSON.stringify({
+          body: {
             id: { $ne: -1 },
             message: 'NoSQL Injection!'
-          })
+          }
+        })).its('status').should('equal', 400)
+        cy.request('/rest/products/1/reviews').then((after) => {
+          const current = after.body.data.map(({ _id, message }: { _id: string, message: string }) => ({ _id, message }))
+          expect(current).to.deep.equal(snapshot)
         })
       })
-      cy.expectChallengeSolved({ challenge: 'NoSQL Manipulation' })
+      cy.request('/api/Challenges/?name=NoSQL Manipulation').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 
@@ -70,42 +72,29 @@ describe('/rest/products/reviews', () => {
       cy.login({ email: 'mc.safesearch', password: 'Mr. N00dles' })
     })
 
-    it('should be possible to edit any existing review', () => {
-      cy.visit('/')
-      cy.window().then(async () => {
-        const response = await fetch(
-          `${Cypress.config('baseUrl')}/rest/products/1/reviews`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-type': 'text/plain'
-            }
-          }
-        )
-        if (response.status === 200) {
-          const responseJson = await response.json()
-          const reviewId = responseJson.data[0]._id
-          await editReview(reviewId)
-        }
-
-        async function editReview (reviewId: string) {
-          const response = await fetch(
-            `${Cypress.config('baseUrl')}/rest/products/reviews`,
-            {
-              method: 'PATCH',
-              headers: {
-                'Content-type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              },
-              body: JSON.stringify({ id: reviewId, message: 'injected' })
-            }
-          )
-          if (response.status === 200) {
-            console.log('Success')
-          }
-        }
+    it('should not edit another user\'s review', () => {
+      cy.request('/rest/products/1/reviews').then((before) => {
+        const review = before.body.data.find(({ author }: { author: string }) => author !== 'mc.safesearch@juice-sh.op')
+        expect(review).to.exist
+        cy.window().then((win) => cy.request({
+          method: 'PATCH',
+          url: '/rest/products/reviews',
+          headers: {
+            Authorization: `Bearer ${win.localStorage.getItem('token')}`
+          },
+          body: { id: review._id, message: 'Forged edit' }
+        })).then((response) => {
+          expect(response.status).to.equal(200)
+          expect(response.body.modified).to.equal(0)
+        })
+        cy.request('/rest/products/1/reviews').then((after) => {
+          const unchanged = after.body.data.find(({ _id }: { _id: string }) => _id === review._id)
+          expect(unchanged.message).to.equal(review.message)
+        })
       })
-      cy.expectChallengeSolved({ challenge: 'Forged Review' })
+      cy.request('/api/Challenges/?name=Forged Review').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 

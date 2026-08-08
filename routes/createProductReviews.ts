@@ -13,10 +13,14 @@ export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
     const author = user?.data?.email ?? 'Anonymous'
+    const product = Number(req.params.id)
+    if (!Number.isSafeInteger(product) || product <= 0) {
+      return res.status(400).json({ error: 'Wrong Params' })
+    }
 
     try {
       await reviewsCollection.insert({
-        product: req.params.id,
+        product,
         message: req.body.message,
         author,
         likesCount: 0,
