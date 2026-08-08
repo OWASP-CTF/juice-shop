@@ -1,9 +1,13 @@
-describe('challenge "Password Hash Leak"', () => {
+// routes/currentUser.ts now allowlists the `fields` parameter of
+// GET /rest/user/whoami, so the Password Hash Leak challenge is unsolvable
+// by design. This case asserts the closure so the fix cannot silently
+// regress.
+describe('challenge "Password Hash Leak" (patched)', () => {
   beforeEach(() => {
     cy.login({ email: 'admin@juice-sh.op', password: 'admin123' })
   })
 
-  it('should solve the challenge by leaking the password hash via fields parameter', () => {
+  it('should not leak the password hash via fields parameter', () => {
     cy.request({
       method: 'GET',
       url: '/rest/user/whoami?fields=id,email,password',
@@ -11,9 +15,10 @@ describe('challenge "Password Hash Leak"', () => {
         // Cypress automatically handles cookies after cy.login
       }
     }).then((res) => {
-      expect(res.body.user.password).to.be.a('string')
-      expect(res.body.user.password.length).to.be.greaterThan(0)
-      cy.expectChallengeSolved({ challenge: 'Password Hash Leak' })
+      expect(res.status).to.equal(200)
+      expect(res.body.user).to.not.have.property('password')
+      expect(res.body.user.id).to.be.a('number')
+      expect(res.body.user.email).to.be.a('string')
     })
   })
 })
