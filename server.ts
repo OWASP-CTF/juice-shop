@@ -410,6 +410,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
+        // Prevent mass-assignment self-provisioning of privileged accounts:
+        // a public registration request must never be able to set its own role.
+        req.body.role = security.roles.customer
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
