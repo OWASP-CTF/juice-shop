@@ -8,6 +8,8 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+const ALLOWED_FIELDS = new Set(['id', 'email', 'lastLoginIp', 'profileImage'])
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -20,7 +22,7 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => ALLOWED_FIELDS.has(f)) : []
 
         let baseUser: any = {}
 
@@ -48,9 +50,6 @@ export function retrieveLoggedInUser () {
     } catch (err) {
       response = { user: emptyUser }
     }
-    // Solve passwordHashLeakChallenge when password field is included in response
-    challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
-
     if (req.query.callback === undefined) {
       res.json(response)
     } else {
