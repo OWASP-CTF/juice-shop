@@ -5,41 +5,43 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { type ProductModel } from '../models/product'
 import { MemoryModel } from '../models/memory'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import * as db from '../data/mongodb'
 
 export function dataExport () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const loggedInUser = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
+      const loggedInUser = security.authenticatedUsers.from(req)
       if (loggedInUser?.data?.email && loggedInUser.data.id) {
+        const userId = loggedInUser.data.id
+        if (!Number.isSafeInteger(userId) || userId <= 0) {
+          res.status(401).send(res.__('Invalid authentication data.'))
+          return
+        }
         const username = loggedInUser.data.username
         const email = loggedInUser.data.email
-        const updatedEmail = email.replace(/[aeiou]/gi, '*')
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          memories = await MemoryModel.findAll({ where: { UserId: userId } })
         } catch (error) {
           next(error)
           return
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          orders = await db.ordersCollection.find({ UserId: userId })
         } catch (error) {
-          next(new Error(`Error retrieving orders for ${updatedEmail}`))
+          next(new Error(`Error retrieving orders for user ${userId}`))
           return
         }
 
         try {
           reviews = await db.reviewsCollection.find({ author: email })
         } catch (error) {
-          next(new Error(`Error retrieving reviews for ${updatedEmail}`))
+          next(new Error(`Error retrieving reviews for ${email}`))
           return
         }
 
@@ -101,10 +103,6 @@ export function dataExport () {
           }))
         }
 
-        const emailHash = security.hash(email).slice(0, 4)
-        for (const order of userData.orders) {
-          challengeUtils.solveIf(challenges.dataExportChallenge, () => { return order.orderId.split('-')[0] !== emailHash })
-        }
         res.status(200).send({ userData: JSON.stringify(userData, null, 2), confirmation: 'Your data export will open in a new Browser window.' })
       } else {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))

@@ -17,7 +17,8 @@ export function trackOrder () {
     }
 
     return db.ordersCollection.findOne({ orderId: id }).then((order: any) => {
-      const result = utils.queryResultToJson(order == null ? [{ orderId: id }] : [order])
+      const { UserId: _UserId, ...publicOrder } = order ?? { orderId: id }
+      const result = utils.queryResultToJson([publicOrder])
       return res.json(result)
     }, () => {
       return res.status(400).json({ error: 'Wrong Param' })

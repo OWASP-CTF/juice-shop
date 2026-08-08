@@ -10,14 +10,14 @@ import * as security from '../lib/insecurity'
 
 export function orderHistory () {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const loggedInUser = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
-    if (loggedInUser?.data?.email && loggedInUser.data.id) {
-      const email = loggedInUser.data.email
-      const updatedEmail = email.replace(/[aeiou]/gi, '*')
-      const order = await ordersCollection.find({ email: updatedEmail })
-      res.status(200).json({ status: 'success', data: order })
+    const loggedInUser = security.authenticatedUsers.from(req)
+    const userId = loggedInUser?.data?.id
+    if (typeof userId === 'number' && Number.isSafeInteger(userId) && userId > 0) {
+      const orders = await ordersCollection.find({ UserId: userId })
+      const publicOrders = orders.map(({ UserId: _UserId, ...order }: { UserId?: number }) => order)
+      res.status(200).json({ status: 'success', data: publicOrders })
     } else {
-      next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+      res.status(401).json({ status: 'error', message: 'Invalid authentication data' })
     }
   }
 }

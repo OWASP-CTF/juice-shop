@@ -7,8 +7,11 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
+import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import { challenges, users } from '../../data/datacache'
+import { PrivacyRequestModel } from '../../models/privacyRequests'
 
 let app: Express
 
@@ -45,25 +48,31 @@ void describe('/dataerasure', () => {
     const res = await request(app)
       .get('/dataerasure/')
 
-    assert.equal(res.status, 500)
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.equal(res.status, 401)
+    assert.ok(res.text.includes('You need to be logged in'))
   })
 
   void it('POST erasure request does not actually delete the user', async () => {
-    const { token } = await login(app, { email: 'bjoern.kimminich@gmail.com', password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=' })
+    challenges.lfrChallenge.solved = false
+    const { token } = await login(app, { email: 'bjoern@owasp.org', password: 'kitten lesser pooch karate buffoon indoors' })
 
     const res = await request(app)
       .post('/dataerasure/')
       .set({ Cookie: 'token=' + token })
-      .field('email', 'bjoern.kimminich@gmail.com')
+      .type('form')
+      .send({ email: 'bjoern@owasp.org', securityAnswer: 'Zaya' })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('text/html'))
+    const privacyRequest = await PrivacyRequestModel.findOne({ where: { UserId: users.bjoernOwasp.id } })
+    assert.ok(privacyRequest)
+    assert.equal(privacyRequest.deletionRequested, true)
+    assert.equal(challenges.lfrChallenge.solved, false)
 
     const loginRes = await request(app)
       .post('/rest/user/login')
       .set({ 'content-type': 'application/json' })
-      .send({ email: 'bjoern.kimminich@gmail.com', password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=' })
+      .send({ email: 'bjoern@owasp.org', password: 'kitten lesser pooch karate buffoon indoors' })
 
     assert.equal(loginRes.status, 200)
   })
@@ -72,43 +81,56 @@ void describe('/dataerasure', () => {
     const res = await request(app)
       .post('/dataerasure/')
 
-    assert.equal(res.status, 500)
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.equal(res.status, 401)
+    assert.ok(res.text.includes('You need to be logged in'))
   })
 
   void it('POST erasure request with empty layout parameter returns', async () => {
-    const { token } = await login(app, { email: 'bjoern.kimminich@gmail.com', password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=' })
+    const { token } = await login(app, { email: 'bjoern@owasp.org', password: 'kitten lesser pooch karate buffoon indoors' })
 
     const res = await request(app)
       .post('/dataerasure/')
       .set({ Cookie: 'token=' + token })
-      .send({ layout: null })
+      .send({ layout: null, email: 'bjoern@owasp.org', securityAnswer: 'Zaya' })
 
     assert.equal(res.status, 200)
   })
 
-  void it('POST erasure request with non-existing file path as layout parameter throws error', async () => {
-    const { token } = await login(app, { email: 'bjoern.kimminich@gmail.com', password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=' })
+  void it('POST cannot submit an erasure request for another user', async () => {
+    challenges.lfrChallenge.solved = false
+    const { token } = await login(app, { email: 'jim@' + config.get<string>('application.domain'), password: 'ncc-1701' })
+    const countBefore = await PrivacyRequestModel.count({ where: { UserId: users.jim.id } })
 
     const res = await request(app)
       .post('/dataerasure/')
       .set({ Cookie: 'token=' + token })
-      .send({ layout: '../this/file/does/not/exist' })
+      .send({
+        email: 'admin@' + config.get<string>('application.domain'),
+        securityAnswer: 'Samuel'
+      })
 
-    assert.equal(res.status, 500)
-    assert.ok(res.text.includes('no such file or directory'))
+    assert.equal(res.status, 403)
+    assert.equal(await PrivacyRequestModel.count({ where: { UserId: users.jim.id } }), countBefore)
+    assert.equal(challenges.lfrChallenge.solved, false)
   })
 
-  void it('POST erasure request with existing file path as layout parameter returns content truncated', async () => {
-    const { token } = await login(app, { email: 'bjoern.kimminich@gmail.com', password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=' })
+  void it('POST rejects local file references without reading them or solving the challenge', async () => {
+    challenges.lfrChallenge.solved = false
+    const { token } = await login(app, { email: 'bjoern@owasp.org', password: 'kitten lesser pooch karate buffoon indoors' })
+    const countBefore = await PrivacyRequestModel.count({ where: { UserId: users.bjoernOwasp.id } })
 
     const res = await request(app)
       .post('/dataerasure/')
       .set({ Cookie: 'token=' + token })
-      .send({ layout: '../package.json' })
+      .send({
+        layout: '../package.json',
+        email: 'bjoern@owasp.org',
+        securityAnswer: 'Zaya'
+      })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.text.includes('juice-shop'))
-    assert.ok(res.text.includes('......'))
+    assert.equal(res.status, 400)
+    assert.equal(res.text.includes('juice-shop'), false)
+    assert.equal(await PrivacyRequestModel.count({ where: { UserId: users.bjoernOwasp.id } }), countBefore)
+    assert.equal(challenges.lfrChallenge.solved, false)
   })
 })

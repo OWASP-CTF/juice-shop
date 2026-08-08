@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 import express, { type NextFunction, type Request, type Response } from 'express'
-import path from 'node:path'
 import config from 'config'
 import { themes } from '../views/themes/themes'
 import * as utils from '../lib/utils'
@@ -12,10 +11,7 @@ import { AllHtmlEntities as Entities } from 'html-entities'
 import { SecurityQuestionModel } from '../models/securityQuestion'
 import { PrivacyRequestModel } from '../models/privacyRequests'
 import { SecurityAnswerModel } from '../models/securityAnswer'
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
-import { UserModel } from '../models/user'
 
 const entities = new Entities()
 
@@ -23,19 +19,18 @@ const router = express.Router()
 
 router.get('/', (req: Request, res: Response, next: NextFunction) => {
   void (async () => {
-    const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
-    if (!loggedInUser) {
-      next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+    const token = req.cookies.token
+    const loggedInUser = security.verify(token) ? security.authenticatedUsers.get(token) : undefined
+    const userId = loggedInUser?.data?.id
+    const email = loggedInUser?.data?.email
+    if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0 || typeof email !== 'string') {
+      res.status(401).send(res.__('You need to be logged in to request data erasure.'))
       return
     }
-    const email = loggedInUser.data.email
 
     try {
       const answer = await SecurityAnswerModel.findOne({
-        include: [{
-          model: UserModel,
-          where: { email }
-        }]
+        where: { UserId: userId }
       })
       if (answer == null) {
         throw new Error('No answer found!')
@@ -66,22 +61,44 @@ router.get('/', (req: Request, res: Response, next: NextFunction) => {
 })
 
 interface DataErasureRequestParams {
-  layout?: string
-  email: string
-  securityAnswer: string
+  layout?: unknown
+  email?: unknown
+  securityAnswer?: unknown
 }
 
 router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>, DataErasureRequestParams>, res: Response, next: NextFunction): void => {
   void (async () => {
-    const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
-    if (!loggedInUser) {
-      next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+    const token = req.cookies.token
+    const loggedInUser = security.verify(token) ? security.authenticatedUsers.get(token) : undefined
+    const userId = loggedInUser?.data?.id
+    const email = loggedInUser?.data?.email
+    if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0 || typeof email !== 'string') {
+      res.status(401).send(res.__('You need to be logged in to request data erasure.'))
       return
     }
 
     try {
+      if (req.body.layout !== undefined && req.body.layout !== null && req.body.layout !== '') {
+        res.status(400).send(res.__('Invalid data erasure request.'))
+        return
+      }
+      if (typeof req.body.email !== 'string' || req.body.email.toLowerCase() !== email.toLowerCase()) {
+        res.status(403).send(res.__('The supplied email does not belong to the authenticated user.'))
+        return
+      }
+      if (typeof req.body.securityAnswer !== 'string' || req.body.securityAnswer.length === 0) {
+        res.status(400).send(res.__('A security answer is required.'))
+        return
+      }
+
+      const storedAnswer = await SecurityAnswerModel.findOne({ where: { UserId: userId } })
+      if (storedAnswer == null || security.hmac(req.body.securityAnswer) !== storedAnswer.answer) {
+        res.status(401).send(res.__('Wrong answer to security question.'))
+        return
+      }
+
       await PrivacyRequestModel.create({
-        UserId: loggedInUser.data.id,
+        UserId: userId,
         deletionRequested: true
       })
 
@@ -100,31 +117,7 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
         _logo_: utils.extractFilename(config.get('application.logo'))
       }
 
-      if (req.body.layout) {
-        const filePath: string = path.resolve(req.body.layout).toLowerCase()
-        const isForbiddenFile: boolean = (filePath.includes('ftp') || filePath.includes('ctf.key') || filePath.includes('encryptionkeys'))
-        if (!isForbiddenFile) {
-          res.render('dataErasureResult', {
-            ...req.body,
-            ...themeVars
-          }, (error, html) => {
-            if (!html || error) {
-              next(new Error(error.message))
-            } else {
-              const sendlfrResponse: string = html.slice(0, 100) + '......'
-              res.send(sendlfrResponse)
-              challengeUtils.solveIf(challenges.lfrChallenge, () => { return true })
-            }
-          })
-        } else {
-          next(new Error('File access not allowed'))
-        }
-      } else {
-        res.render('dataErasureResult', {
-          ...req.body,
-          ...themeVars
-        })
-      }
+      res.render('dataErasureResult', themeVars)
     } catch (error) {
       next(error)
     }
