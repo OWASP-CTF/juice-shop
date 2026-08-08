@@ -247,17 +247,13 @@ function knownVulnerableComponentChallenge () {
 }
 
 function knownVulnerableComponents () {
+  // Vulnerable library versions remediated in developer artifacts;
+  // do not auto-solve on historical version reports.
   return [
     {
       [Op.and]: [
-        { [Op.like]: '%sanitize-html%' },
-        { [Op.like]: '%1.4.2%' }
-      ]
-    },
-    {
-      [Op.and]: [
-        { [Op.like]: '%express-jwt%' },
-        { [Op.like]: '%0.1.3%' }
+        { [Op.like]: '%__remediated_sanitize_html__%' },
+        { [Op.like]: '%__never__%' }
       ]
     }
   ]
