@@ -40,19 +40,18 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
+          const sanitizedComment = security.sanitizeHtml(comment)
           if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
             challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
               return utils.contains(
                 sanitizedComment,
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
           }
-          this.setDataValue('comment', sanitizedComment)
+          /* Always reach a sanitization fixed point before storing, regardless
+             of challenge enablement or application safety mode. */
+          this.setDataValue('comment', security.sanitizeSecure(sanitizedComment))
         }
       },
       rating: {

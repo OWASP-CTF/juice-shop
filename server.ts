@@ -388,7 +388,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', rateLimit({
     windowMs: 60 * 1000,
-    max: 10,
+    /* The challenge is triggered by the tenth submission, so allowing ten
+       requests still left the documented automation bypass intact. */
+    max: 9,
     keyGenerator: (req: Request) => req.socket.remoteAddress ?? 'unknown',
     validate: false
   }))

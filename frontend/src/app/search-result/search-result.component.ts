@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable @typescript-eslint/prefer-for-of */
 import { ActivatedRoute, Router } from '@angular/router'
 import { ProductService } from '../Services/product.service'
 import { type AfterViewInit, Component, NgZone, type OnDestroy, ViewChild, ChangeDetectorRef, ElementRef, inject } from '@angular/core'

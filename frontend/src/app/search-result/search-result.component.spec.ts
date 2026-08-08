@@ -18,7 +18,6 @@ import { MatTableModule } from '@angular/material/table'
 import { MatPaginatorModule } from '@angular/material/paginator'
 import { MatDialog, MatDialogModule } from '@angular/material/dialog'
 import { of, throwError } from 'rxjs'
-import { DomSanitizer } from '@angular/platform-browser'
 import { BasketService } from '../Services/basket.service'
 import { EventEmitter } from '@angular/core'
 import { SocketIoService } from '../Services/socket-io.service'
@@ -60,7 +59,6 @@ describe('SearchResultComponent', () => {
     let translateService: any
     let activatedRoute: MockActivatedRoute
     let dialog: any
-    let sanitizer: any
     let socketIoService: any
     let mockSocket: MockSocket
     let quantityService: any
@@ -105,12 +103,6 @@ describe('SearchResultComponent', () => {
         Object.defineProperty(translateService, 'onTranslationChange', { value: new EventEmitter() })
         Object.defineProperty(translateService, 'onFallbackLangChange', { value: new EventEmitter() })
         Object.defineProperty(translateService, 'onDefaultLangChange', { value: new EventEmitter() })
-        sanitizer = {
-            bypassSecurityTrustHtml: vi.fn().mockName("DomSanitizer.bypassSecurityTrustHtml"),
-            sanitize: vi.fn().mockName("DomSanitizer.sanitize")
-        }
-        sanitizer.bypassSecurityTrustHtml.mockReturnValue(of({}))
-        sanitizer.sanitize.mockReturnValue('')
         activatedRoute = new MockActivatedRoute()
         mockSocket = new MockSocket()
         socketIoService = {
@@ -139,7 +131,6 @@ describe('SearchResultComponent', () => {
                 { provide: MatSnackBar, useValue: snackBar },
                 { provide: BasketService, useValue: basketService },
                 { provide: ProductService, useValue: productService },
-                { provide: DomSanitizer, useValue: sanitizer },
                 { provide: ActivatedRoute, useValue: activatedRoute },
                 { provide: SocketIoService, useValue: socketIoService },
                 { provide: QuantityService, useValue: quantityService },
@@ -162,11 +153,11 @@ describe('SearchResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should render product descriptions as trusted HTML', () => {
+    it('should preserve product descriptions for Angular to render safely', () => {
         productService.search.mockReturnValue(of([{ description: '<script>alert("XSS")</script>' }]))
         component.ngAfterViewInit()
         fixture.detectChanges()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>alert("XSS")</script>')
+        expect(component.tableData[0].description).toBe('<script>alert("XSS")</script>')
     })
 
     it('should hold no products when product search API call fails', () => {
@@ -215,9 +206,9 @@ describe('SearchResultComponent', () => {
         expect(component.dataSource.filter).toEqual('product search')
     })
 
-    it('should pass the search query as trusted HTML', () => {
+    it('should keep the search query as plain text', () => {
         activatedRoute.setQueryParameter('<script>scripttag</script>')
         component.filterTable()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>scripttag</script>')
+        expect(component.searchValue).toBe('<script>scripttag</script>')
     })
 })
