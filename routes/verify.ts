@@ -116,8 +116,8 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
-      if (err === null) {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] } as jwt.VerifyOptions, (err: jwt.VerifyErrors | null) => {
+      if (err === null && security.hasAcceptedAlgorithm(token)) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
         })
