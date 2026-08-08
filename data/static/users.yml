@@ -181,8 +181,8 @@
   role: 'deluxe'
   profileImage: '13.jpg'
   securityQuestion:
-    id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    id: 13 # "favourite pet" is answerable from this account holder's public appearances, so it is not used
+    answer: 'Mv5e-Ky93-Ptn2-Zhc7'
 -
   email: chris.pike
   password: 'uss enterprise'
