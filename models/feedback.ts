@@ -59,10 +59,11 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
         type: DataTypes.INTEGER,
         allowNull: false,
         set (rating: number) {
-          this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {
             return Number(rating) === 0
           })
+          const normalized = Math.min(5, Math.max(1, Number(rating) || 1))
+          this.setDataValue('rating', normalized)
         }
       }
     },

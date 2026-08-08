@@ -22,6 +22,10 @@ export const emptyUserRegistration = () => (req: Request, res: Response, next: N
   challengeUtils.solveIf(challenges.emptyUserRegistration, () => {
     return req.body && req.body.email === '' && req.body.password === ''
   })
+  if (req.body && (req.body.email === '' || req.body.password === '' || req.body.email == null || req.body.password == null)) {
+    res.status(400).send(res.__('Email and password are required.'))
+    return
+  }
   next()
 }
 
@@ -51,6 +55,10 @@ export const registerAdminChallenge = () => (req: Request, res: Response, next: 
   challengeUtils.solveIf(challenges.registerAdminChallenge, () => {
     return req.body && req.body.role === security.roles.admin
   })
+  if (req.body) {
+    // Do not allow clients to self-assign privileged roles at registration.
+    req.body.role = security.roles.customer
+  }
   next()
 }
 
