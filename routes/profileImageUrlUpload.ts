@@ -82,7 +82,6 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
@@ -90,15 +89,23 @@ export function profileImageUrlUpload () {
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
-          const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
+          // Only a request the server genuinely carried out counts as having reached an
+          // internal target. Recording it up front, purely because of what the submitted URL
+          // looked like, marked the server as abused even when the request was refused.
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+          const ext =['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
           await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
           try {
+            // Falling back to the submitted link is only acceptable for something that is
+            // actually a well-formed http(s) URL. Persisting arbitrary text here is what put
+            // header-injection payloads into the profile in the first place.
+            const isPlainHttpUrl = /^https?:\/\/[\w.-]+(?::\d+)?(?:\/[\w\-./:?=&%~+]*)?$/.test(String(url))
             const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
+            await user?.update({ profileImage: isPlainHttpUrl ? url : '/assets/public/images/uploads/default.svg' })
             logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
           } catch (error) {
             next(error)

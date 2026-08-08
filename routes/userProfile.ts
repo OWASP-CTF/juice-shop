@@ -49,18 +49,15 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    // Usernames must never be evaluated as code (server-side template injection / RCE),
-    // regardless of what pattern they happen to match.
-    username = '\\' + username
+    // The username is attacker-controlled, so it must never become part of the template
+    // *source*: Pug treats `#{...}` in its input as an expression and would execute it
+    // (server-side template injection). It is HTML-encoded here and spliced into the already
+    // rendered markup further down, where it can be neither Pug code nor HTML markup.
+    const displayedUsername = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -81,14 +78,14 @@ export function getUserProfile () {
       const CSP = `img-src 'self' ${safeProfileImage}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
+        return displayedUsername && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(displayedUsername, '<script>alert(`xss`)</script>')
       })
 
       res.set({
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => displayedUsername))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

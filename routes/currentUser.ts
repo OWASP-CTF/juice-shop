@@ -8,6 +8,11 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+/* The complete set of user properties this endpoint is ever allowed to hand back. Anything
+   absent from this list - the password hash, the TOTP secret, the deluxe token - stays
+   server-side no matter which `fields` the caller asks for. */
+const DISCLOSABLE_USER_FIELDS = ['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -20,18 +25,15 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
-        // Sensitive fields must never be returned via this generic accessor, regardless of what was requested
-        const forbiddenFields = new Set(['password', 'totpSecret', 'deluxeToken'])
+        const requestedFields = fieldsParam
+          ? fieldsParam.split(',').map(f => f.trim()).filter(f => DISCLOSABLE_USER_FIELDS.includes(f))
+          : []
 
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields (excluding sensitive ones)
+          // Only ever answer with fields that are safe to disclose, whatever was asked for
           for (const field of requestedFields) {
-            if (forbiddenFields.has(field)) {
-              continue
-            }
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }

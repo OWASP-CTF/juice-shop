@@ -75,11 +75,10 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  // Store administration is not part of the customer-facing storefront. A client-side route
+  // guard is only a UI convenience and never an access restriction, so the administration
+  // screen is no longer reachable from this application at all; it is operated from the
+  // internal back-office deployment instead.
   {
     path: 'accounting',
     component: AccountingComponent,
