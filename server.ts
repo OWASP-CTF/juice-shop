@@ -308,8 +308,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(bodyParser.urlencoded({ extended: true }))
   /* File Upload */
   app.post('/file-upload', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), checkUploadSize, checkFileType, handleZipFileUpload, handleXmlUpload, handleYamlUpload)
-  app.post('/profile/image/file', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
-  app.post('/profile/image/url', uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
+  app.post('/profile/image/file', security.sameOriginOnly(), uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
+  app.post('/profile/image/url', security.sameOriginOnly(), uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
   app.post('/rest/memories', uploadToDisk.single('image'), ensureFileIsPassed, security.appendUserId(), metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(addMemory()))
 
   app.use(bodyParser.text({ type: '*/*' }))
