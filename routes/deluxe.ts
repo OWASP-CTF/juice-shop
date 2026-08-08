@@ -5,9 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { WalletModel } from '../models/wallet'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 import { CardModel } from '../models/card'
@@ -21,9 +19,13 @@ export function upgradeToDeluxe () {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
+      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
+        res.status(400).json({ status: 'error', error: 'Unsupported payment mode' })
+        return
+      }
       if (req.body.paymentMode === 'wallet') {
         const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
-        if ((wallet != null) && wallet.balance < 49) {
+        if (wallet == null || wallet.balance < 49) {
           res.status(400).json({ status: 'error', error: 'Insuffienct funds in Wallet' })
           return
         } else {
@@ -41,9 +43,6 @@ export function upgradeToDeluxe () {
 
       try {
         const updatedUser = await user.update({ role: security.roles.deluxe, deluxeToken: security.deluxeToken(user.email) })
-        challengeUtils.solveIf(challenges.freeDeluxeChallenge, () => {
-          return security.verify(utils.jwtFrom(req)) && req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card'
-        })
         const userWithStatus = utils.queryResultToJson(updatedUser)
         const updatedToken = security.authorize(userWithStatus)
         security.authenticatedUsers.put(updatedToken, userWithStatus)
