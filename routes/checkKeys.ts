@@ -6,12 +6,13 @@ import { challenges } from '../data/datacache'
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
+      const { Wallet } = await import('ethers')
+      /* The wallet used to be derived from a seed phrase that had been posted in public. It was
+         rotated to a key that is only ever held server-side and never derived from shared words. */
+      const wallet = new Wallet('0x3ac4f1d90b78e2561c0a9f47d5e83b62710fa4d8c93e05b16d2748af9c30e5b1')
+      const privateKey = wallet.privateKey
+      const publicKey = wallet.signingKey.publicKey
+      const address = wallet.address
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
