@@ -659,7 +659,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
   app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
-  app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
+  /* This endpoint was reachable by anyone who guessed or found the path: its
+     only protection was the URL being long and unadvertised, which is security
+     through obscurity rather than access control. It now requires a session. */
+  app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', security.isAuthorized(), servePrivacyPolicyProof())
 
   /* Route for dataerasure page */
   app.use('/dataerasure', dataErasure)
