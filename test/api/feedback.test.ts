@@ -69,7 +69,8 @@ void describe('/api/Feedbacks', () => {
     })
   }
 
-  void it('POST feedback in another users name as anonymous user', async () => {
+  void it('POST anonymous feedback cannot forge another user ID', async () => {
+    challenges.forgedFeedbackChallenge.solved = false
     const captchaRes = await request(app)
       .get('/rest/captcha')
     assert.equal(captchaRes.status, 200)
@@ -87,10 +88,12 @@ void describe('/api/Feedbacks', () => {
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.UserId, 3)
+    assert.equal(res.body.data.UserId, null)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
-  void it('POST feedback in a non-existing users name as anonymous user fails with constraint error', async () => {
+  void it('POST feedback with a zero-star rating is rejected', async () => {
+    challenges.zeroStarsChallenge.solved = false
     const captchaRes = await request(app)
       .get('/rest/captcha')
     assert.equal(captchaRes.status, 200)
@@ -102,13 +105,12 @@ void describe('/api/Feedbacks', () => {
       .send({
         comment: 'Pickle Rick says your express-jwt 0.1.3 has Eurogium Edule and Hueteroneel in it!',
         rating: 0,
-        UserId: 4711,
         captchaId: captchaRes.body.captchaId,
         captcha: captchaRes.body.answer
       })
-    assert.equal(res.status, 500)
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.ok(res.body.errors.includes('SQLITE_CONSTRAINT: FOREIGN KEY constraint failed'))
+    assert.equal(challenges.zeroStarsChallenge.solved, false)
   })
 
   void it('POST feedback is associated with current user', async () => {
@@ -135,9 +137,10 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(res.body.data.UserId, 4)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
-  void it('POST feedback is associated with any passed user ID', async () => {
+  void it('POST feedback ignores a different passed user ID', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
@@ -160,7 +163,8 @@ void describe('/api/Feedbacks', () => {
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.UserId, 3)
+    assert.equal(res.body.data.UserId, 4)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
   void it('POST feedback can be created without actually supplying comment', async () => {
@@ -234,6 +238,24 @@ void describe('/api/Feedbacks', () => {
         captcha: 42
       })
     assert.equal(res.status, 401)
+  })
+
+  void it('POST consumes a CAPTCHA so it cannot be replayed', async () => {
+    challenges.captchaBypassChallenge.solved = false
+    const captchaRes = await request(app).get('/rest/captcha')
+    const payload = {
+      comment: 'One-time CAPTCHA regression',
+      rating: 3,
+      captchaId: captchaRes.body.captchaId,
+      captcha: captchaRes.body.answer
+    }
+
+    const first = await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)
+    const replay = await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)
+
+    assert.equal(first.status, 201)
+    assert.equal(replay.status, 401)
+    assert.equal(challenges.captchaBypassChallenge.solved, false)
   })
 })
 

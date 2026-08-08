@@ -44,40 +44,45 @@ describe('verify', () => {
       challenges.forgedFeedbackChallenge = { solved: false, save } as unknown as Challenge
     })
 
-    it('is not solved when an authenticated user passes his own ID when writing feedback', () => {
+    it('keeps the authenticated user ID when writing feedback', () => {
       req.body.UserId = 42
       req.headers = { authorization: 'Bearer token12345' }
 
       verify.forgedFeedbackChallenge()(req, res, next)
 
+      expect(req.body.UserId).to.equal(42)
       expect(challenges.forgedFeedbackChallenge.solved).to.equal(false)
+      expect(next.calledOnce).to.equal(true)
     })
 
-    it('is not solved when an authenticated user passes no ID when writing feedback', () => {
+    it('assigns the authenticated user ID when none is supplied', () => {
       req.body.UserId = undefined
       req.headers = { authorization: 'Bearer token12345' }
 
       verify.forgedFeedbackChallenge()(req, res, next)
 
+      expect(req.body.UserId).to.equal(42)
       expect(challenges.forgedFeedbackChallenge.solved).to.equal(false)
     })
 
-    it('is solved when an authenticated user passes someone elses ID when writing feedback', () => {
+    it('overwrites another user ID supplied by an authenticated user', () => {
       req.body.UserId = 1
       req.headers = { authorization: 'Bearer token12345' }
 
       verify.forgedFeedbackChallenge()(req, res, next)
 
-      expect(challenges.forgedFeedbackChallenge.solved).to.equal(true)
+      expect(req.body.UserId).to.equal(42)
+      expect(challenges.forgedFeedbackChallenge.solved).to.equal(false)
     })
 
-    it('is solved when an unauthenticated user passes someones ID when writing feedback', () => {
+    it('removes a user ID supplied by an anonymous user', () => {
       req.body.UserId = 1
       req.headers = {}
 
       verify.forgedFeedbackChallenge()(req, res, next)
 
-      expect(challenges.forgedFeedbackChallenge.solved).to.equal(true)
+      expect(req.body.UserId).to.equal(null)
+      expect(challenges.forgedFeedbackChallenge.solved).to.equal(false)
     })
   })
 

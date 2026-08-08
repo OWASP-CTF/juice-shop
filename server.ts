@@ -167,8 +167,6 @@ void collectDurationPromise('validateConfig', validateConfig)({})
 function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Locals */
   app.locals.captchaId = 0
-  app.locals.captchaReqId = 1
-  app.locals.captchaBypassReqTimes = []
   app.locals.abused_ssti_bug = false
   app.locals.abused_ssrf_bug = false
 
@@ -393,7 +391,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
-  app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
     if (req.body && typeof req.body === 'object') {
