@@ -395,16 +395,37 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
+  /* Feedback is attributed to the caller: the UserId used to be taken from the
+     request body, so feedback could be posted in another customer's name. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const author = security.authenticatedUsers.from(req)
+    if (author?.data?.id) {
+      req.body.UserId = author.data.id
+    } else {
+      delete req.body.UserId
+    }
+    next()
+  })
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
-      if (req.body.email.length !== 0 && req.body.password.length !== 0) {
-        req.body.email = req.body.email.trim()
-        req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
-      } else {
-        res.status(400).send(res.__('Invalid email/password cannot be empty'))
-      }
+    /* This used to send a 400 and then call next() regardless, so an empty
+       registration went through anyway, and the whole check was skipped when
+       the fields were absent rather than empty. */
+    const email = typeof req.body.email === 'string' ? req.body.email.trim() : ''
+    const password = typeof req.body.password === 'string' ? req.body.password.trim() : ''
+    if (email.length === 0 || password.length === 0) {
+      res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      return
+    }
+    req.body.email = email
+    req.body.password = password
+    const passwordRepeat = typeof req.body.passwordRepeat === 'string' ? req.body.passwordRepeat.trim() : undefined
+    req.body.passwordRepeat = passwordRepeat
+    /* The repeated password was only ever compared for a challenge check, never
+       enforced, so a mistyped confirmation still created the account. */
+    if (passwordRepeat !== password) {
+      res.status(400).send(res.__('Invalid password cannot be empty'))
+      return
     }
     next()
   })

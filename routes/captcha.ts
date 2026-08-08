@@ -36,6 +36,9 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      /* A captcha was never consumed, so one solved challenge could be replayed
+         indefinitely to submit in bulk. Each captcha is now single-use. */
+      await CaptchaModel.destroy({ where: { captchaId: req.body.captchaId } })
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
