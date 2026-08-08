@@ -27,9 +27,8 @@ void describe('/profile', () => {
       .get('/profile')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('Blocked illegal activity'), false)
   })
 
   void it('GET user profile of authenticated user', async () => {
@@ -46,6 +45,7 @@ void describe('/profile', () => {
     const res = await request(app)
       .post('/profile')
       .set('Cookie', authHeader.Cookie)
+      .set('Origin', config.get<string>('server.baseUrl'))
       .field('username', 'Localhorst')
       .redirects(0)
 
@@ -58,6 +58,16 @@ void describe('/profile', () => {
       .set('Cookie', authHeader.Cookie)
       .set('Origin', 'https://attacker.invalid')
       .field('username', 'Cross-site attacker')
+      .redirects(0)
+
+    assert.equal(res.status, 403)
+  })
+
+  void it('POST rejects a profile update without origin evidence', async () => {
+    const res = await request(app)
+      .post('/profile')
+      .set('Cookie', authHeader.Cookie)
+      .field('username', 'Originless attacker')
       .redirects(0)
 
     assert.equal(res.status, 403)

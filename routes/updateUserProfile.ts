@@ -15,16 +15,18 @@ import * as utils from '../lib/utils'
 export function updateUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const requestOrigin = req.headers.origin ?? req.headers.referer
-    if (requestOrigin) {
-      try {
-        if (new URL(requestOrigin).origin !== new URL(config.get<string>('server.baseUrl')).origin) {
-          res.status(403).json({ error: 'Cross-origin profile updates are not allowed' })
-          return
-        }
-      } catch {
-        res.status(403).json({ error: 'Invalid request origin' })
+    if (!requestOrigin) {
+      res.status(403).json({ error: 'A same-origin profile update is required' })
+      return
+    }
+    try {
+      if (new URL(requestOrigin).origin !== new URL(config.get<string>('server.baseUrl')).origin) {
+        res.status(403).json({ error: 'Cross-origin profile updates are not allowed' })
         return
       }
+    } catch {
+      res.status(403).json({ error: 'Invalid request origin' })
+      return
     }
     const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
 

@@ -128,10 +128,6 @@ import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType
 const app = express()
 const server = new http.Server(app)
 
-// errorhandler requires us from overwriting a string property on it's module which is a big no-no with esmodules :/
-
-const errorhandler = require('errorhandler')
-
 const startTime = Date.now()
 
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
@@ -726,7 +722,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    logger.warn(`Request failed (${req.method} ${req.originalUrl}): ${utils.getErrorMessage(err)}`)
+    const errorStatus = typeof err === 'object' && err !== null
+      ? Number((err as { status?: unknown, statusCode?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode)
+      : 500
+    const status = Number.isInteger(errorStatus) && errorStatus >= 400 && errorStatus < 500
+      ? errorStatus
+      : (res.statusCode >= 400 && res.statusCode < 500 ? res.statusCode : 500)
+    res.status(status).json({ error: 'The request could not be processed.' })
+  })
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.
@@ -772,8 +777,6 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
-
 export async function start (readyCallback?: () => void) {
   const datacreatorEnd = startupGauge.startTimer({ task: 'datacreator' })
   await sequelize.sync({ force: true })

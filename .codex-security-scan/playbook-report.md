@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The assessment confirmed three high-confidence canonical vulnerabilities and a set of related web-security weaknesses. The remediation removes directly reachable SQL injection, cross-account basket access, ZIP traversal, unsafe evaluation/deserialization, weak credential and token handling, several authorization gaps, stored/reflected injection paths, SSRF to private networks, and input-validation flaws. A second source-derived pass additionally gates operational artifacts and premium/Web3 routes, disables legacy knowledge-based recovery by default, removes an embedded Web3 challenge secret, makes review likes atomic, rejects expired coupons and active SVG profile images, and constrains chatbot tools. Focused and full native regression suites exercise both expected behavior and adversarial inputs; dependency risk, generic error disclosure, and residual defense-in-depth gaps remain explicitly tracked below.
+The assessment confirmed three high-confidence canonical vulnerabilities and a set of related web-security weaknesses. The remediation removes directly reachable SQL injection, cross-account basket access, ZIP traversal, unsafe evaluation/deserialization, weak credential and token handling, several authorization gaps, stored/reflected injection paths, SSRF to private networks, and input-validation flaws. Later source-derived passes additionally gate operational artifacts and premium/Web3 routes, disable legacy knowledge-based recovery by default, remove an embedded Web3 challenge secret, make review likes atomic, reject expired coupons and active SVG profile images, constrain chatbot tools, sign progress codes, remove Angular trust bypasses, and replace verbose error responses. Focused and full native regression suites exercise both expected behavior and adversarial inputs; dependency risk and residual defense-in-depth gaps remain explicitly tracked below.
 
 ## Findings Summary
 
@@ -25,8 +25,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 | 8 | HIGH | Deprecated XML/YAML and weak upload checks enabled XXE and resource abuse | CWE-611 / CWE-400 / CWE-434 | — | A05 Security Misconfiguration | Fixed |
 | 9 | HIGH | Business operations accepted forged identities and invalid monetary quantities | CWE-20 / CWE-841 | — | A04 Insecure Design | Fixed in reviewed routes |
 | 10 | CRITICAL | Installed dependencies include known vulnerable components | CWE-1104 | — | A06 Vulnerable and Outdated Components | Open |
-| 11 | MEDIUM | Cookie-authenticated mutations lacked explicit anti-CSRF controls | CWE-352 | [464-084](https://www.opencre.org/cre/464-084) | A01 Broken Access Control | Partially fixed; profile mutation protected |
-| 12 | LOW | Generic error handling and public training artifacts disclose implementation data | CWE-200 | — | A05 Security Misconfiguration | Artifacts fixed; generic errors open |
+| 11 | MEDIUM | Cookie-authenticated mutations lacked explicit anti-CSRF controls | CWE-352 | [464-084](https://www.opencre.org/cre/464-084) | A01 Broken Access Control | Fixed for reviewed cookie mutation |
+| 12 | LOW | Generic error handling and public training artifacts disclosed implementation data | CWE-200 | — | A05 Security Misconfiguration | Fixed in reviewed server paths |
 
 ## Findings Detail
 
@@ -85,8 +85,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A02:2021 Cryptographic Failures; A07:2021 Identification and Authentication Failures
 - **Location**: `lib/insecurity.ts`, `models/user.ts`, `routes/checkKeys.ts`, authentication and recovery routes
 - **Impact**: Repository readers could forge tokens and coupons, crack unsalted MD5 passwords cheaply, and exploit JWT algorithm confusion.
-- **Evidence**: Current-file secret-pattern scanning found zero API-token, private-key, or embedded-URL-credential pattern files. Unit and API tests verify salted password hashes, incorrect passwords, repeated-password validation, minimum change/reset length, signed coupon bounds, unsigned/wrong-algorithm JWT rejection, default-disabled security-question recovery, and complete 2FA setup/disable flows.
-- **Remediation**: Private JWT and application HMAC keys are environment-backed with per-process safe fallbacks, the embedded Web3 mnemonic/private-key derivation was removed in favor of an environment-backed challenge key, RSA is at least 2048 bits, accepted JWTs are pinned to RS256, passwords use salted scrypt with constant-time comparison, and coupons carry an HMAC with a bounded discount. Legacy knowledge-based recovery requires an explicit compatibility opt-in.
+- **Evidence**: Current-file secret-pattern scanning found zero API-token, private-key, or embedded-URL-credential pattern files. Unit and API tests verify salted password hashes, incorrect passwords, repeated-password validation, minimum change/reset length, signed coupon and progress-code bounds, forged/unknown progress-code rejection, unsigned/wrong-algorithm JWT rejection, default-disabled security-question recovery, and complete 2FA setup/disable flows.
+- **Remediation**: Private JWT and application HMAC keys are environment-backed with per-process safe fallbacks, the embedded Web3 mnemonic/private-key derivation was removed in favor of an environment-backed challenge key, RSA is at least 2048 bits, accepted JWTs are pinned to RS256, passwords use salted scrypt with constant-time comparison, and coupons and continue codes carry scoped HMACs. Restore endpoints accept only authenticated codes containing known challenge IDs. Legacy knowledge-based recovery requires an explicit compatibility opt-in.
 - **Confidence**: HIGH
 
 ### HIGH — Profile image retrieval allowed server-side requests to internal hosts
@@ -108,8 +108,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A03:2021 Injection; ASVS V5.3.3; WSTG-INPV-01
 - **Location**: `models/user.ts`, `models/product.ts`, `models/feedback.ts`, `routes/userProfile.ts`, `routes/saveLoginIp.ts`, `routes/trackOrder.ts`
 - **Impact**: Stored and reflected payloads could execute in another user's browser or escape the server-side profile template.
-- **Evidence**: API regressions submit direct and recursively masked iframe/script payloads and assert sanitized storage/output. Profile usernames are encoded, the profile CSP no longer permits `unsafe-eval`, and remotely referenced SVG profile images are rejected before retrieval.
-- **Remediation**: Secure recursive sanitization is unconditional at model boundaries, dynamic template evaluation was removed, reflected identifiers are constrained to inert characters, and remote profile images are restricted to non-active raster extensions.
+- **Evidence**: API regressions submit direct and recursively masked iframe/script payloads and assert sanitized storage/output. Angular search regressions verify query/product HTML remains untrusted, profile usernames are encoded, the profile CSP no longer permits `unsafe-eval`, and remotely referenced SVG profile images are rejected before retrieval.
+- **Remediation**: Secure recursive sanitization is unconditional at model boundaries, Angular's built-in HTML sanitization is no longer bypassed for product descriptions or search queries, dynamic template evaluation was removed, reflected identifiers are constrained to inert characters, and remote profile images are restricted to non-active raster extensions.
 - **Confidence**: HIGH for reviewed server paths; exhaustive Angular DOM-sink analysis was out of scope.
 
 ### HIGH — Deprecated XML/YAML and weak upload checks enabled XXE and resource abuse
@@ -130,8 +130,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A04:2021 Insecure Design
 - **Location**: `server.ts`, `routes/wallet.ts`, `routes/deluxe.ts`, `routes/order.ts`, `routes/dataErasure.ts`, `routes/captcha.ts`
 - **Impact**: Callers could self-register privileged roles, charge invalid wallet amounts, gain deluxe status without a real payment mode, manipulate inventory with negative quantities, forge feedback owners, reuse CAPTCHAs, or submit erasure requests without the account security answer.
-- **Evidence**: API regressions verify role fields are ignored, foreign payment cards and invalid amounts are denied, negative item quantities, expired/forged/excessive coupons fail, concurrent duplicate review likes result in exactly one success, feedback owner IDs are overwritten, and erasure requires the stored HMAC answer.
-- **Remediation**: Server-side identity binding and allowlisted registration fields were added; monetary/rating/quantity ranges are validated; obsolete campaign coupons were removed; review likes use an atomic conditional update with per-process duplicate suppression; CAPTCHAs are one-use; erasure renders a fixed template and verifies the account answer.
+- **Evidence**: API regressions verify role fields are ignored, foreign payment cards and invalid amounts are denied, negative item quantities, expired/forged/excessive coupons fail, concurrent duplicate review likes result in exactly one success, CAPTCHA answers are not returned and cannot be replayed, feedback owner IDs are overwritten, and erasure requires the stored HMAC answer.
+- **Remediation**: Server-side identity binding and allowlisted registration fields were added; monetary/rating/quantity ranges are validated; obsolete campaign coupons were removed; review likes use an atomic conditional update with per-process duplicate suppression; arithmetic and image CAPTCHAs are one-use and image answers remain server-side; erasure renders a fixed template and verifies the account answer.
 - **Confidence**: HIGH
 
 ### CRITICAL — Installed dependencies include known vulnerable components
@@ -153,19 +153,19 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A01:2021 Broken Access Control
 - **Location**: cookie-authenticated profile routes and token cookie issuance
 - **Impact**: Browser behavior or future cookie-policy changes could allow a malicious origin to induce authenticated state changes.
-- **Evidence**: CORS was previously unrestricted and no synchronizer/double-submit token was present. CORS is now restricted to `server.baseUrl`; authentication cookies are explicitly HttpOnly and SameSite=Strict (and Secure in production); the cookie-authenticated profile mutation rejects a present cross-origin Origin/Referer. Its API regression verifies a foreign origin receives 403.
-- **Remediation**: Explicit cookie attributes and profile origin validation address the demonstrated path. Extend origin or token validation to any future cookie-authenticated mutation and retain header-based authorization for API clients.
+- **Evidence**: CORS was previously unrestricted and no synchronizer/double-submit token was present. CORS is now restricted to `server.baseUrl`; authentication cookies are explicitly HttpOnly and SameSite=Strict (and Secure in production); the cookie-authenticated profile mutation requires a same-origin Origin/Referer. API regressions verify foreign and missing origins receive 403.
+- **Remediation**: Explicit cookie attributes and mandatory profile origin validation address the demonstrated path. Extend origin or token validation to any future cookie-authenticated mutation and retain header-based authorization for API clients.
 - **Confidence**: MEDIUM because modern browser defaults reduce the currently demonstrated attack surface.
 
-### LOW — Generic error handling and public training artifacts disclose implementation data
+### LOW — Generic error handling and public training artifacts disclosed implementation data
 
 - **ID**: JS-2026-012
 - **CWE**: CWE-200
 - **OWASP Ref**: A05:2021 Security Misconfiguration
-- **Location**: final `errorhandler()` middleware; formerly `/ftp`, `/encryptionkeys`, and `/metrics`
-- **Impact**: Attackers can learn stack, dependency, operational, or deliberately published challenge information that accelerates follow-on attacks.
-- **Evidence**: The final middleware still renders detailed errors. The reviewed operational surfaces no longer expose FTP/quarantine listings or backup artifacts, encryption keys, or unauthenticated metrics; regressions verify 403/404/401 behavior as appropriate.
-- **Remediation**: FTP is restricted to the legal document and generated order PDFs, quarantine and key routes are disabled, and metrics require an authenticated administrator. Replace generic development errors with logged correlation IDs and a minimal client message.
+- **Location**: final server error boundary; formerly `/ftp`, `/encryptionkeys`, and `/metrics`
+- **Impact**: Attackers could learn stack, dependency, operational, or deliberately published challenge information that accelerates follow-on attacks.
+- **Evidence**: The final middleware returns a fixed JSON error while preserving safe 4xx statuses and logs diagnostics server-side. The reviewed operational surfaces no longer expose FTP/quarantine listings or backup artifacts, encryption keys, or unauthenticated metrics; regressions verify 403/404/401 behavior as appropriate.
+- **Remediation**: FTP is restricted to the legal document and generated order PDFs, quarantine and key routes are disabled, metrics require an authenticated administrator, and verbose development errors were replaced by a minimal client response.
 - **Confidence**: HIGH for disclosure presence; operational severity depends on deployment intent.
 
 ## Verification Evidence
@@ -173,6 +173,10 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - `PORT=37123 npm run test:api`: 459 tests, 446 passed, 2 failed, 11 skipped. One failure is an external StackOverflow HTTP 403; the other is cross-file asynchronous test activity after all 9 chatbot assertions passed. The isolated changed-route batch below is clean.
 - Second-pass focused security API batch: 137 tests, 131 passed, 0 failed, 6 pre-existing skips.
 - Second-pass focused server unit batch: 58 passed, 0 failed.
+- Third-pass focused security API batch: 41 passed, 0 failed; additional affected error-path suites passed apart from an external profile-image fetch timeout.
+- Focused Angular search suite: 9 passed, 0 failed.
+- Third-pass full API suite: 460 tests, 447 passed, 2 failed, 11 skipped. Both failures were external-resource connection timeouts (Disqus and Stack Overflow); all repository-owned API tests passed.
+- Third-pass full frontend suite: 120 files, 938 tests passed, 0 failed.
 - `test/api/2fa.test.ts`: 13 passed, 0 failed.
 - Focused security API batch: 51 tests, 49 passed, 0 failed, 2 pre-existing skips.
 - Focused server unit batch: 98 tests, 96 passed, 0 failed, 2 pending; `test/server/insecuritySpec.ts` separately passed 37/37.
@@ -180,7 +184,7 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - `npm run build:server`: passed.
 - `npm run lint`: passed, including frontend TypeScript and SCSS lint.
 - `npm run rsn:update && npm run rsn`: reviewed deltas locked; all codefix files match the locked state.
-- Official PR scorer baseline after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched; the second pass has not yet been scored at the time of this report update.
+- Official PR scorer after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched. The second signed-off batch improved this to 118/141 points (84%), 32/38 challenges patched. The third pass has not yet been scored at the time of this report update.
 - Current-file manual secret-pattern scan: 1,166 files examined; 0 API-token pattern files, 0 private-key pattern files, and 0 embedded URL-credential pattern files (dependencies, build output, and Git metadata excluded). Five high-risk-named files were contextually reviewed: npm policy files, test-compose configuration, and static CTF/training key material rather than active service credentials. No trufflehog/gitleaks/detect-secrets binary, CI secret-scanning control, or broad `.env`/`*.key`/`*.pem` ignore coverage was present; these are preventive-control gaps.
 
 ## Out of Scope
@@ -210,4 +214,4 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 2. Set `JWT_PRIVATE_KEY` and `APPLICATION_HMAC_KEY` through production secret management so multiple instances share stable, rotated keys.
 3. Triage and upgrade the root critical/high npm advisories, then the frontend high advisories, with compatibility tests.
 4. Add connection-level DNS/IP pinning for outbound image retrieval and extend mutation origin/token checks as cookie-authenticated routes evolve.
-5. Replace verbose error handling with a production-safe error boundary while retaining server-side diagnostic correlation.
+5. Add a stable multi-instance secret-management policy for JWT, HMAC, coupon, and continue-code signing keys, including rotation and versioning.

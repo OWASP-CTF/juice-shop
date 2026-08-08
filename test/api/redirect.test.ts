@@ -7,7 +7,6 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
-import config from 'config'
 import { createTestApp } from './helpers/setup'
 
 let app: Express
@@ -81,13 +80,12 @@ void describe('/redirect', () => {
     assert.equal(res.text.includes('TypeError'), false)
   })
 
-  void it('GET error message hinting at allowlist validation when calling /redirect with an unrecognized "to" target', async () => {
+  void it('GET rejects an unrecognized redirect target without leaking validation details', async () => {
     const res = await request(app)
       .get('/redirect?to=whatever')
     assert.equal(res.status, 406)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('Unrecognized target URL for redirect: whatever'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('whatever'), false)
   })
 
   void it('GET rejects a target that merely contains an allow-listed URL', async () => {

@@ -73,9 +73,7 @@ void describe('/rest/user/change-password', () => {
       .get('/rest/user/change-password?new=new-password&repeat=new-password')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('GET password change with passing unrecognized authorization token', async () => {
@@ -84,9 +82,7 @@ void describe('/rest/user/change-password', () => {
       .set({ Authorization: 'Bearer unknown' })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('GET password change for Bender without current password using GET request', async () => {
@@ -197,9 +193,7 @@ void describe('/rest/user/reset-password', () => {
       .post('/rest/user/reset-password')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('POST password reset without new password throws a 401 error', async () => {
@@ -242,9 +236,7 @@ void describe('/rest/user/reset-password', () => {
       })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('POST password reset with no answer to the security question throws a 412 error', async () => {
@@ -258,9 +250,7 @@ void describe('/rest/user/reset-password', () => {
       })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 })
 
