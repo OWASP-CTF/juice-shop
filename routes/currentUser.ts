@@ -25,9 +25,12 @@ export function retrieveLoggedInUser () {
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only those fields, but restrict
+          // selection to a safe allowlist so sensitive attributes (e.g.
+          // password, totpSecret) can never be leaked into the whoami response.
+          const allowedFields = ['id', 'email', 'lastLoginIp', 'profileImage']
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
+            if (allowedFields.includes(field) && user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
           }
