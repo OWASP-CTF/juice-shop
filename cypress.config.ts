@@ -1,5 +1,4 @@
 import { defineConfig } from 'cypress'
-import * as security from './lib/insecurity'
 import config from 'config'
 import type { Memory as MemoryConfig, Product as ProductConfig } from './lib/config.types'
 import * as utils from './lib/utils'
@@ -19,9 +18,6 @@ export default defineConfig({
     supportFile: 'test/cypress/support/e2e.ts',
     setupNodeEvents (on: any) {
       on('task', {
-        GenerateCoupon (discount: number) {
-          return security.generateCoupon(discount)
-        },
         GetBlueprint () {
           for (const product of config.get<ProductConfig[]>('products')) {
             if (product.fileForRetrieveBlueprintChallenge) {

@@ -27,6 +27,12 @@ export function updateUserProfile () {
         return
       }
 
+      const requestOrigin = req.headers.origin ?? req.headers.referer
+      if (requestOrigin && req.headers.host && !requestOrigin.includes(req.headers.host)) {
+        next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+        return
+      }
+
       challengeUtils.solveIf(challenges.csrfChallenge, () => {
         return ((req.headers.origin?.includes('://htmledit.squarefree.com')) ??
           (req.headers.referer?.includes('://htmledit.squarefree.com'))) &&

@@ -5,10 +5,14 @@
 
 import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
+import { isIP } from 'node:net'
 import request from 'supertest'
 import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
+import { challenges } from '../../data/datacache'
+
+const adminPassword = 'R4nd0m-Capybara-7!Quartz'
 
 let app: Express
 
@@ -67,7 +71,9 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('POST login with admin credentials', async () => {
+  void it('POST login rejects the legacy weak admin credentials without solving the challenge', async () => {
+    challenges.weakPasswordChallenge.solved = false
+
     const res = await request(app)
       .post('/rest/user/login')
       .set({ 'content-type': 'application/json' })
@@ -76,9 +82,23 @@ void describe('/rest/user/login', () => {
         password: 'admin123'
       })
 
+    assert.equal(res.status, 401)
+    assert.equal(challenges.weakPasswordChallenge.solved, false)
+  })
+
+  void it('POST login with replacement admin credentials', async () => {
+    const res = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'admin@' + config.get<string>('application.domain'),
+        password: adminPassword
+      })
+
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(challenges.weakPasswordChallenge.solved, false)
   })
 
   void it('POST login with support-team credentials', async () => {
@@ -256,6 +276,30 @@ void describe('/rest/saveLoginIp', () => {
 
     assert.equal(res.status, 200)
     assert.equal(res.body.lastLoginIp, '1.2.3.4')
+  })
+
+  void it('GET ignores a non-IP True-Client-IP header value', async () => {
+    const loginRes = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'bjoern.kimminich@gmail.com',
+        password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+      })
+
+    assert.equal(loginRes.status, 200)
+
+    const payload = '<iframe src="javascript:alert(1)">'
+    const res = await request(app)
+      .get('/rest/saveLoginIp')
+      .set({
+        Authorization: 'Bearer ' + loginRes.body.authentication.token,
+        'true-client-ip': payload
+      })
+
+    assert.equal(res.status, 200)
+    assert.notEqual(res.body.lastLoginIp, payload)
+    assert.notEqual(isIP(res.body.lastLoginIp), 0)
   })
 
   void it('GET last login IP will be saved as remote IP when True-Client-IP is not present', { skip: 'FIXME Started to fail regularly on CI under Linux' }, async () => {

@@ -1,10 +1,10 @@
 describe('/dataerasure', () => {
   beforeEach(() => {
-    cy.login({ email: 'admin', password: 'admin123' })
+    cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
   })
 
   describe('challenge "lfr"', () => {
-    it('should be possible to perform local file read attack using the browser', () => {
+    it('should reject a local file read attack', () => {
       cy.window().then(async () => {
         const params = 'layout=../package.json'
 
@@ -18,12 +18,12 @@ describe('/dataerasure', () => {
           },
           body: params
         })
-        if (response.status === 200) {
-          console.log('Success')
-        }
+        expect(response.status).to.equal(400)
       })
       cy.visit('/')
-      cy.expectChallengeSolved({ challenge: 'Local File Read' })
+      cy.request('/api/Challenges/?name=Local File Read').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 })

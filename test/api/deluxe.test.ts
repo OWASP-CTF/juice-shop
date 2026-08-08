@@ -9,7 +9,8 @@ import request from 'supertest'
 import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
-import { login } from './helpers/auth'
+import { login, register } from './helpers/auth'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 
@@ -52,7 +53,7 @@ void describe('/rest/deluxe-membership', () => {
   void it('GET deluxe membership status for admin throws error', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const authHeader = { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }
 
@@ -180,7 +181,7 @@ void describe('/rest/deluxe-membership', () => {
   void it('POST deluxe membership status for admin throws error', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const authHeader = { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }
 
@@ -211,5 +212,56 @@ void describe('/rest/deluxe-membership', () => {
 
     assert.equal(res.status, 400)
     assert.equal(res.body.error, 'Something went wrong. Please try again!')
+  })
+
+  void it('POST rejects an unsupported payment mode without upgrading the user', async () => {
+    const email = 'unsupported-payment@juice-sh.op'
+    const password = 'correct horse battery staple'
+    await register(app, { email, password })
+    const { token } = await login(app, { email, password })
+    challenges.freeDeluxeChallenge.solved = false
+
+    const res = await request(app)
+      .post('/rest/deluxe-membership')
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
+      .send({ paymentMode: 'free' })
+
+    assert.equal(res.status, 400)
+    assert.equal(res.body.error, 'Unsupported payment mode')
+    assert.equal(challenges.freeDeluxeChallenge.solved, false)
+
+    const status = await request(app)
+      .get('/rest/deluxe-membership')
+      .set({ Authorization: `Bearer ${token}` })
+    assert.equal(status.status, 200)
+  })
+})
+
+void describe('premium reward', () => {
+  const premiumPath = '/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us'
+
+  void it('GET rejects a customer without solving the paywall challenge', async () => {
+    const { token } = await login(app, {
+      email: `amy@${config.get<string>('application.domain')}`,
+      password: 'K1f.....................'
+    })
+    challenges.premiumPaywallChallenge.solved = false
+
+    const res = await request(app).get(premiumPath).set({ Authorization: `Bearer ${token}` })
+
+    assert.equal(res.status, 403)
+    assert.equal(challenges.premiumPaywallChallenge.solved, false)
+  })
+
+  void it('GET serves the reward to a valid deluxe member', async () => {
+    const { token } = await login(app, {
+      email: `ciso@${config.get<string>('application.domain')}`,
+      password: 'mDLx?94T~1CfVfZMzw@sJ9f?s3L6lbMqE70FfI8^54jbNikY5fymx7c!YbJb'
+    })
+
+    const res = await request(app).get(premiumPath).set({ Authorization: `Bearer ${token}` })
+
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.startsWith('image/'))
   })
 })

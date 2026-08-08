@@ -2,7 +2,7 @@ describe('/#/complain', () => {
   beforeEach(() => {
     cy.login({
       email: 'admin',
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     cy.visit('/#/complain')
@@ -146,22 +146,16 @@ describe('/#/complain', () => {
     })
   })
 
-  describe('challenge "videoXssChallenge"', () => {
-    it('should be possible to inject js in subtitles by uploading zip file with filenames having path traversal', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.get('#complaintMessage').type('Here we go!')
-          cy.get('#file').selectFile('test/files/videoExploit.zip')
-          cy.get('#submitButton').click()
-          cy.visit('/promotion')
-
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-          cy.visit('/')
-          cy.expectChallengeSolved({ challenge: 'Video XSS' })
-        }
-      })
+  describe('promotion video subtitles', () => {
+    it('should load subtitles as inert JSON data', () => {
+      cy.visit('/promotion')
+      cy.get('#subtitle')
+        .should('have.attr', 'type', 'application/json')
+        .invoke('text')
+        .then((subtitles) => {
+          expect(JSON.parse(subtitles)).to.contain('WEBVTT')
+        })
+      cy.get('video').should('exist')
     })
   })
 })

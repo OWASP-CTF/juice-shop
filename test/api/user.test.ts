@@ -11,7 +11,7 @@ import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
+import { UserModel } from '../../models/user'
 
 let app: Express
 let authHeader: Record<string, string>
@@ -56,10 +56,13 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.id, 'number')
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
+    assert.equal(res.body.data.email, 'horst@horstma.nn')
     assert.equal(res.body.data.password, undefined)
   })
 
-  void it('POST new admin', async () => {
+  void it('POST ignores an admin role and persists a customer without solving the challenge', async () => {
+    assert.equal(challenges.registerAdminChallenge.solved, false)
+
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -74,10 +77,16 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
     assert.equal(res.body.data.password, undefined)
-    assert.equal(res.body.data.role, 'admin')
+    assert.equal(res.body.data.role, security.roles.customer)
+
+    const persistedUser = await UserModel.findOne({ where: { email: 'horst2@horstma.nn' } })
+    assert.ok(persistedUser)
+    assert.equal(persistedUser.role, security.roles.customer)
+    assert.equal(challenges.registerAdminChallenge.solved, false)
   })
 
-  void it('POST new blank user', async () => {
+  void it('POST rejects a blank user without solving the challenge', async () => {
+    challenges.emptyUserRegistration.solved = false
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -85,31 +94,42 @@ void describe('/api/Users', () => {
         email: ' ',
         password: ' '
       })
-    assert.equal(res.status, 201)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.data.id, 'number')
-    assert.equal(typeof res.body.data.createdAt, 'string')
-    assert.equal(typeof res.body.data.updatedAt, 'string')
-    assert.equal(res.body.data.password, undefined)
+    assert.equal(res.status, 400)
+    assert.equal(challenges.emptyUserRegistration.solved, false)
   })
 
-  void it('POST same blank user in database', async () => {
-    await request(app)
+  void it('POST rejects whitespace-only passwords consistently', async () => {
+    const first = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
       .send({
         email: 'blank-duplicate@test.test',
         password: ' '
       })
+    const second = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: 'blank-duplicate@test.test',
+        password: ' '
+      })
+    assert.equal(first.status, 400)
+    assert.equal(second.status, 400)
+  })
+
+  void it('POST rejects mismatched repeated passwords without solving the challenge', async () => {
+    challenges.passwordRepeatChallenge.solved = false
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
       .send({
-        email: 'blank-duplicate@test.test',
-        password: ' '
+        email: 'repeat-mismatch@test.test',
+        password: 'correct horse battery staple',
+        passwordRepeat: 'different password'
       })
+
     assert.equal(res.status, 400)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(challenges.passwordRepeatChallenge.solved, false)
   })
 
   void it('POST whitespaces user', async () => {
@@ -127,7 +147,7 @@ void describe('/api/Users', () => {
     assert.equal(res.body.data.password, undefined)
   })
 
-  void it('POST new deluxe user', async () => {
+  void it('POST ignores a deluxe role', async () => {
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -142,10 +162,10 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
     assert.equal(res.body.data.password, undefined)
-    assert.equal(res.body.data.role, 'deluxe')
+    assert.equal(res.body.data.role, security.roles.customer)
   })
 
-  void it('POST new accounting user', async () => {
+  void it('POST ignores an accounting role', async () => {
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -160,10 +180,10 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
     assert.equal(res.body.data.password, undefined)
-    assert.equal(res.body.data.role, 'accounting')
+    assert.equal(res.body.data.role, security.roles.customer)
   })
 
-  void it('POST user not belonging to customer, deluxe, accounting, admin is forbidden', async () => {
+  void it('POST ignores an unsupported role', async () => {
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -172,27 +192,38 @@ void describe('/api/Users', () => {
         password: 'hooooorst',
         role: 'accountinguser'
       })
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.message, 'Validation error: Validation isIn on role failed')
-    assert.equal(res.body.errors[0].field, 'role')
-    assert.equal(res.body.errors[0].message, 'Validation isIn on role failed')
+    assert.equal(res.body.data.role, security.roles.customer)
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-    void it('POST new user with XSS attack in email address', async () => {
-      const res = await request(app)
-        .post('/api/Users')
-        .set(jsonHeader)
-        .send({
-          email: '<iframe src="javascript:alert(`xss`)">',
-          password: 'does.not.matter'
-        })
-      assert.equal(res.status, 201)
-      assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.email, '<iframe src="javascript:alert(`xss`)">')
+  void it('POST recursively sanitizes masked XSS in email without solving the challenge', async () => {
+    challenges.persistedXssUserChallenge.solved = false
+    const safeEmail = 'xss-regression@example.test'
+    const res = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: `${safeEmail}<<script>Foo</script>iframe src="javascript:alert(\`xss\`)">`,
+        password: 'does.not.matter'
+      })
+    assert.equal(res.status, 201)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.email, safeEmail)
+    assert.equal(challenges.persistedXssUserChallenge.solved, false)
+  })
+
+  void it('recursively sanitizes masked XSS in usernames', () => {
+    challenges.persistedXssUserChallenge.solved = false
+    const user = UserModel.build({
+      username: 'Picard<<script>Foo</script>iframe src="javascript:alert(`xss`)">',
+      email: 'picard-xss-regression@example.test',
+      password: 'tea-earl-grey-hot'
     })
-  }
+
+    assert.equal(user.username, 'Picard')
+    assert.equal(challenges.persistedXssUserChallenge.solved, false)
+  })
 })
 
 void describe('/api/Users/:id', () => {
@@ -312,11 +343,12 @@ void describe('/rest/user/whoami', () => {
     assert.equal(typeof res.body.user.email, 'string')
   })
 
-  void it('GET who-am-i with fields parameter can be tricked into returning password', async () => {
+  void it('GET who-am-i ignores sensitive fields requested by the caller', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
     })
+    challenges.passwordHashLeakChallenge.solved = false
     const res = await request(app)
       .get('/rest/user/whoami?fields=id,email,password')
       .set({ Cookie: `token=${token}` })
@@ -324,6 +356,24 @@ void describe('/rest/user/whoami', () => {
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(typeof res.body.user.id, 'number')
     assert.equal(typeof res.body.user.email, 'string')
-    assert.equal(typeof res.body.user.password, 'string')
+    assert.equal(res.body.user.password, undefined)
+    assert.equal(challenges.passwordHashLeakChallenge.solved, false)
+  })
+
+  void it('GET who-am-i always returns JSON instead of honoring a JSONP callback', async () => {
+    const { token } = await login(app, {
+      email: 'bjoern.kimminich@gmail.com',
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    challenges.emailLeakChallenge.solved = false
+    const res = await request(app)
+      .get('/rest/user/whoami?fields=email&callback=steal')
+      .set({ Cookie: `token=${token}` })
+
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.user.email, 'bjoern.kimminich@gmail.com')
+    assert.equal(res.text.startsWith('steal('), false)
+    assert.equal(challenges.emailLeakChallenge.solved, false)
   })
 })

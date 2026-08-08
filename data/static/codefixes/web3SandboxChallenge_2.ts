@@ -181,10 +181,7 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  {
-    matcher: tokenMatcher,
-    component: TokenSaleComponent
-  },
+  // Unreleased client routes are intentionally not registered.
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()

@@ -10,7 +10,7 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import type { Product as ProductConfig } from '../../lib/config.types'
-import * as utils from '../../lib/utils'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 
@@ -201,10 +201,14 @@ void describe('Hidden URL', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('GET folder containing access log files for "Access Log" challenge', async () => {
+  void it('GET does not expose access logs or solve the "Access Log" challenge', async () => {
+    challenges.accessLogDisclosureChallenge.solved = false
+
     const res = await request(app)
-      .get('/support/logs/access.log.' + utils.toISO8601(new Date()))
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/octet-stream'))
+      .get('/support/logs/access.log.2019-01-15')
+
+    assert.equal(res.status, 401)
+    assert.ok(!res.headers['content-type']?.includes('application/octet-stream'))
+    assert.equal(challenges.accessLogDisclosureChallenge.solved, false)
   })
 })

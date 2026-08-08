@@ -1,7 +1,7 @@
 describe('/api', () => {
   describe('challenge "restfulXss"', () => {
     beforeEach(() => {
-      cy.login({ email: 'admin', password: 'admin123' })
+      cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
     })
 
     // Cypress alert bug
@@ -75,35 +75,29 @@ describe('/api', () => {
 })
 
 describe('/rest/saveLoginIp', () => {
-  describe('challenge "httpHeaderXss"', () => {
+  describe('HTTP header validation', () => {
     beforeEach(() => {
       cy.login({
         email: 'admin',
-        password: 'admin123'
+        password: 'R4nd0m-Capybara-7!Quartz'
       })
     })
 
-    it('should be possible to save log-in IP when logged in', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.window().then(async () => {
-            const response = await fetch(
-              `${Cypress.config('baseUrl')}/rest/saveLoginIp`,
-              {
-                method: 'GET',
-                cache: 'no-cache',
-                headers: {
-                  Authorization: `Bearer ${localStorage.getItem('token')}`,
-                  'True-Client-IP': '<iframe src="javascript:alert(`xss`)">'
-                }
-              }
-            )
-            if (response.status === 200) {
-              console.log('Success')
-            }
-          })
-          cy.expectChallengeSolved({ challenge: 'HTTP-Header XSS' }) // TODO Add missing check for alert presence
-        }
+    it('should fall back to the connection IP for a non-IP header value', () => {
+      const payload = '<iframe src="javascript:alert(1)">'
+      cy.window().then((win) => {
+        return cy.request({
+          method: 'GET',
+          url: '/rest/saveLoginIp',
+          headers: {
+            Authorization: `Bearer ${win.localStorage.getItem('token')}`,
+            'True-Client-IP': payload
+          }
+        }).then((response) => {
+          expect(response.status).to.equal(200)
+          expect(response.body.lastLoginIp).not.to.equal(payload)
+          expect(response.body.lastLoginIp).to.match(/^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i)
+        })
       })
     })
   })

@@ -162,12 +162,20 @@ describe('OrderSummaryComponent', () => {
 
     it('should remove session details from session storage', () => {
         basketService.checkout.mockReturnValue(of({ orderConfirmationId: '1234123412341234' }))
+        sessionStorage.setItem('bid', '7')
+        sessionStorage.setItem('paymentId', '1')
+        sessionStorage.setItem('addressId', '2')
+        sessionStorage.setItem('deliveryMethodId', '3')
         const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem')
         component.placeOrder()
+        expect(basketService.checkout).toHaveBeenCalledWith(7, {
+            paymentId: '1',
+            addressId: '2',
+            deliveryMethodId: '3'
+        })
         expect(removeItemSpy).toHaveBeenCalledWith('paymentId')
         expect(removeItemSpy).toHaveBeenCalledWith('addressId')
         expect(removeItemSpy).toHaveBeenCalledWith('deliveryMethodId')
-        expect(removeItemSpy).toHaveBeenCalledWith('couponDetails')
         expect(removeItemSpy).toHaveBeenCalledWith('couponDiscount')
     })
 })

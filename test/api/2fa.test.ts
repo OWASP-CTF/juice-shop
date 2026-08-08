@@ -13,6 +13,8 @@ import type { Express } from 'express'
 import * as security from '../../lib/insecurity'
 import { createTestApp } from './helpers/setup'
 import { login, register } from './helpers/auth'
+import { challenges } from '../../data/datacache'
+import { UserModel } from '../../models/user'
 
 const jsonHeader = { 'content-type': 'application/json' }
 
@@ -32,8 +34,35 @@ before(async () => {
   app = result.app
 }, { timeout: 60000 })
 
+void describe('/api/Users TOTP secret', () => {
+  void it('POST ignores a mass-assigned TOTP secret', async () => {
+    const email = 'totp-mass-assignment@bar.com'
+    const plaintextSecret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
+
+    const res = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({ email, password: '123456', totpSecret: plaintextSecret })
+
+    assert.equal(res.status, 201)
+    const user = await UserModel.findOne({ where: { email } })
+    assert.ok(user)
+    assert.equal(user.totpSecret, '')
+  })
+})
+
 void describe('/rest/2fa/verify', () => {
+  void it('stores the seeded TOTP secret encrypted at rest', async () => {
+    const user = await UserModel.findByPk(10)
+
+    assert.ok(user)
+    assert.notEqual(user.totpSecret, 'IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH')
+    assert.match(user.totpSecret, /^v1:/)
+  })
+
   void it('POST should return a valid authentication when a valid tmp token is passed', async () => {
+    assert.equal(challenges.twoFactorAuthUnsafeSecretStorageChallenge.solved, false)
+
     const tmpTokenWurstbrot = security.authorize({
       userId: 10,
       type: 'password_valid_needs_second_factor_token'
@@ -55,6 +84,19 @@ void describe('/rest/2fa/verify', () => {
     assert.equal(typeof res.body.authentication.umail, 'string')
     assert.equal(typeof res.body.authentication.bid, 'number')
     assert.equal(res.body.authentication.umail, `wurstbrot@${config.get<string>('application.domain')}`)
+
+    const token = res.body.authentication.token
+    const tokenPayload = security.decode(token)
+    assert.equal(tokenPayload?.data?.totpSecret, undefined)
+    assert.equal(security.authenticatedUsers.get(token)?.data?.totpSecret, undefined)
+
+    const authenticationDetails = await request(app)
+      .get('/rest/user/authentication-details')
+      .set({ Authorization: `Bearer ${token}` })
+    const user = authenticationDetails.body.data.find((user: { email: string }) => user.email === `wurstbrot@${config.get<string>('application.domain')}`)
+    assert.ok(user)
+    assert.equal(user.totpSecret, undefined)
+    assert.equal(challenges.twoFactorAuthUnsafeSecretStorageChallenge.solved, false)
   })
 
   void it('POST should fail if a invalid totp token is used', async () => {
@@ -162,6 +204,11 @@ void describe('/rest/2fa/setup', () => {
       })
 
     assert.equal(setupRes.status, 200)
+
+    const user = await UserModel.findOne({ where: { email } })
+    assert.ok(user)
+    assert.notEqual(user.totpSecret, secret)
+    assert.match(user.totpSecret, /^v1:/)
 
     const statusRes = await getStatus(token)
 

@@ -5,7 +5,7 @@ ngAfterViewInit () {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
-        this.trustProductDescription(products)
+        products.forEach((product: any) => { product.description = this.sanitizer.bypassSecurityTrustHtml(product.description) })
         for (const product of products) {
           dataTable.push({
             name: product.name,
@@ -38,11 +38,5 @@ ngAfterViewInit () {
         this.cdRef.detectChanges()
       },
       error: (err) => { console.log(err) }
-    })
-  }
-
-  trustProductDescription (tableData: any[]) {
-    tableData.forEach((product: any) => {
-      product.description = this.sanitizer.bypassSecurityTrustHtml(product.description)
     })
   }

@@ -5,6 +5,7 @@ ngAfterViewInit () {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
+        // descriptions are rendered via Angular's built-in sanitization; do not bypass it
         for (const product of products) {
           dataTable.push({
             name: product.name,

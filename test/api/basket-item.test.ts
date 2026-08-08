@@ -9,6 +9,7 @@ import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 let authHeader: { Authorization: string, 'content-type': string }
@@ -72,6 +73,28 @@ void describe('/api/BasketItems', () => {
     assert.equal(res.status, 400)
     assert.equal(res.body.error, 'You can order only up to 5 items of this product.')
   })
+
+  void it('POST a negative quantity is forbidden', async () => {
+    challenges.negativeOrderChallenge.solved = false
+    const res = await request(app)
+      .post('/api/BasketItems')
+      .set(authHeader)
+      .send({ BasketId: 2, ProductId: 2, quantity: -1 })
+
+    assert.equal(res.status, 400)
+    assert.equal(challenges.negativeOrderChallenge.solved, false)
+  })
+
+  void it('POST duplicate basket IDs cannot target another user basket', async () => {
+    challenges.basketManipulateChallenge.solved = false
+    const res = await request(app)
+      .post('/api/BasketItems')
+      .set(authHeader)
+      .send('{"BasketId":2,"ProductId":2,"quantity":1,"BasketId":3}')
+
+    assert.equal(res.status, 403)
+    assert.equal(challenges.basketManipulateChallenge.solved, false)
+  })
 })
 
 void describe('/api/BasketItems/:id', () => {
@@ -132,25 +155,24 @@ void describe('/api/BasketItems/:id', () => {
       .put('/api/BasketItems/' + createRes.body.data.id)
       .set(authHeader)
       .send({ BasketId: 42 })
-    assert.equal(res.status, 400)
-    assert.equal(res.body.message, 'null: `BasketId` cannot be updated due `noUpdate` constraint')
-    assert.deepEqual(res.body.errors, [{ field: 'BasketId', message: '`BasketId` cannot be updated due `noUpdate` constraint' }])
+    assert.equal(res.status, 403)
+    assert.equal(res.body.error, 'Invalid BasketId')
   })
 
-  void it('PUT update basket ID of basket item without basket ID', async () => {
+  void it('POST assigns the authenticated basket when BasketId is omitted', async () => {
     const createRes = await request(app)
       .post('/api/BasketItems')
       .set(authHeader)
-      .send({ ProductId: 8, quantity: 8 })
+      .send({ ProductId: 14, quantity: 1 })
     assert.equal(createRes.status, 200)
-    assert.equal(createRes.body.data.BasketId, undefined)
+    assert.equal(createRes.body.data.BasketId, 2)
 
     const res = await request(app)
       .put('/api/BasketItems/' + createRes.body.data.id)
       .set(authHeader)
       .send({ BasketId: 3 })
-    assert.equal(res.status, 200)
-    assert.equal(res.body.data.BasketId, 3)
+    assert.equal(res.status, 403)
+    assert.equal(res.body.error, 'Invalid BasketId')
   })
 
   void it('PUT update product ID of basket item is forbidden', async () => {
@@ -196,6 +218,21 @@ void describe('/api/BasketItems/:id', () => {
       .send({ quantity: 6 })
     assert.equal(res.status, 400)
     assert.equal(res.body.error, 'You can order only up to 5 items of this product.')
+  })
+
+  void it('PUT update basket item with a negative quantity is forbidden', async () => {
+    const createRes = await request(app)
+      .post('/api/BasketItems')
+      .set(authHeader)
+      .send({ BasketId: 2, ProductId: 15, quantity: 1 })
+    assert.equal(createRes.status, 200)
+
+    const res = await request(app)
+      .put('/api/BasketItems/' + createRes.body.data.id)
+      .set(authHeader)
+      .send({ quantity: -1 })
+    assert.equal(res.status, 400)
+    assert.equal(challenges.negativeOrderChallenge.solved, false)
   })
 
   void it('DELETE newly created basket item', async () => {

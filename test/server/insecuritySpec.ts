@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-// @ts-expect-error FIXME no typescript definitions for z85 :(
-import z85 from 'z85'
 import chai from 'chai'
 import * as security from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
@@ -34,10 +32,11 @@ describe('insecurity', () => {
   })
 
   describe('generateCoupon', () => {
-    it('returns base85-encoded month, year and discount as coupon code', () => {
-      const coupon = security.generateCoupon(20, new Date('1980-01-02'))
-      expect(coupon).to.equal('n<MiifFb4l')
-      expect(z85.decode(coupon).toString()).to.equal('JAN80-20')
+    it('returns a signed coupon containing the month, year and discount', () => {
+      const date = new Date(1980, 0, 2)
+      const coupon = security.generateCoupon(20, date)
+
+      expect(coupon).to.match(/^v1:JAN80:20\.[A-Za-z0-9_-]{43}$/)
     })
 
     it('uses current month and year if not specified', () => {
@@ -50,6 +49,14 @@ describe('insecurity', () => {
       expect(coupon).to.equal(security.generateCoupon(10, new Date('December 01, 1999 01:00:00')))
       expect(coupon).to.equal(security.generateCoupon(10, new Date('December 02, 1999')))
       expect(coupon).to.equal(security.generateCoupon(10, new Date('December 31, 1999 23:59:59')))
+    })
+
+    it('rejects invalid or excessive discounts', () => {
+      expect(() => security.generateCoupon(0)).to.throw(RangeError)
+      expect(() => security.generateCoupon(76)).to.throw(RangeError)
+      expect(() => security.generateCoupon(100)).to.throw(RangeError)
+      expect(() => security.generateCoupon(1.5)).to.throw(RangeError)
+      expect(() => security.generateCoupon(Number.NaN)).to.throw(RangeError)
     })
   })
 
@@ -65,20 +72,28 @@ describe('insecurity', () => {
     })
 
     it('returns undefined for coupon code not according to expected pattern', () => {
-      expect(security.discountFromCoupon(z85.encode('Test'))).to.equal(undefined)
-      expect(security.discountFromCoupon(z85.encode('XXX00-10'))).to.equal(undefined)
-      expect(security.discountFromCoupon(z85.encode('DEC18-999'))).to.equal(undefined)
-      expect(security.discountFromCoupon(z85.encode('DEC18-1'))).to.equal(undefined)
-      expect(security.discountFromCoupon(z85.encode('DEC2018-10'))).to.equal(undefined)
+      expect(security.discountFromCoupon('v1:XXX00:10.' + 'a'.repeat(43))).to.equal(undefined)
+      expect(security.discountFromCoupon('v1:DEC18:100.' + 'a'.repeat(43))).to.equal(undefined)
+      expect(security.discountFromCoupon('v1:DEC18:1.' + 'a'.repeat(43))).to.equal(undefined)
+      expect(security.discountFromCoupon('v1:DEC2018:10.' + 'a'.repeat(43))).to.equal(undefined)
     })
 
     it('returns undefined for expired coupon code', () => {
-      expect(security.discountFromCoupon(z85.encode('SEP14-50'))).to.equal(undefined)
+      const expiredCoupon = security.generateCoupon(50, new Date(2014, 8, 1))
+      expect(security.discountFromCoupon(expiredCoupon)).to.equal(undefined)
+    })
+
+    it('returns undefined when the signed discount is changed', () => {
+      const coupon = security.generateCoupon(10)
+      const tamperedCoupon = coupon.replace(':10.', ':75.')
+
+      expect(security.discountFromCoupon(tamperedCoupon)).to.equal(undefined)
     })
 
     it('returns discount from valid coupon code', () => {
       expect(security.discountFromCoupon(security.generateCoupon(10))).to.equal(10)
-      expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(99)
+      expect(security.discountFromCoupon(security.generateCoupon(15))).to.equal(15)
+      expect(security.discountFromCoupon(security.generateCoupon(75))).to.equal(75)
     })
   })
 
@@ -201,6 +216,26 @@ describe('insecurity', () => {
       expect(security.hmac('admin123')).to.equal('6be13e2feeada221f29134db71c0ab0be0e27eccfc0fb436ba4096ba73aafb20')
       expect(security.hmac('password')).to.equal('da28fc4354f4a458508a461fbae364720c4249c27f10fccf68317fc4bf6531ed')
       expect(security.hmac('')).to.equal('f052179ec5894a2e79befa8060cfcb517f1e14f7f6222af854377b6481ae953e')
+    })
+  })
+
+  describe('TOTP secret encryption', () => {
+    const secret = 'IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH'
+
+    it('encrypts and decrypts a TOTP secret', () => {
+      const encrypted = security.encryptTotpSecret(secret)
+
+      expect(encrypted).not.to.equal(secret)
+      expect(encrypted).to.match(/^v1:/)
+      expect(security.decryptTotpSecret(encrypted)).to.equal(secret)
+    })
+
+    it('rejects ciphertext that fails authentication', () => {
+      const encrypted = security.encryptTotpSecret(secret)
+      const parts = encrypted.split(':')
+      parts[3] = (parts[3][0] === 'A' ? 'B' : 'A') + parts[3].slice(1)
+
+      expect(() => security.decryptTotpSecret(parts.join(':'))).to.throw()
     })
   })
 })

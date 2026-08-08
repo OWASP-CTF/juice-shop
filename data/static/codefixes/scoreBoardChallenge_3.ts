@@ -155,10 +155,7 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  {
-    path: 'web3-sandbox',
-    loadChildren: async () => await loadWeb3SandboxModule()
-  },
+  // Development-only sandbox routes are intentionally not registered.
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -176,10 +173,7 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  {
-    matcher: tokenMatcher,
-    component: TokenSaleComponent
-  },
+  // Unreleased client routes are intentionally not registered.
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()

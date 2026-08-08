@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import config from 'config'
 import { type Request, type Response } from 'express'
 import { BasketModel } from '../models/basket'
 import { UserModel } from '../models/user'
-import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import { generateSecret, verifySync } from 'otplib'
 import * as security from '../lib/insecurity'
 
@@ -28,15 +25,13 @@ export async function verify (req: Request, res: Response) {
       throw new Error('No such user found!')
     }
 
-    const isValid = verifySync({ secret: user.totpSecret, token: totpToken, epochTolerance: 30 }).valid
+    const isValid = verifySync({ secret: security.decryptTotpSecret(user.totpSecret), token: totpToken, epochTolerance: 30 }).valid
 
     const plainUser = utils.queryResultToJson(user)
 
     if (!isValid) {
       return res.status(401).send()
     }
-    challengeUtils.solveIf(challenges.twoFactorAuthUnsafeSecretStorageChallenge, () => { return user.email === 'wurstbrot@' + config.get<string>('application.domain') })
-
     const [basket] = await BasketModel.findOrCreate({ where: { UserId: userId } })
 
     const token = security.authorize(plainUser)
@@ -62,8 +57,12 @@ export async function status (req: Request, res: Response) {
       throw new Error('You need to be logged in to see this')
     }
     const { data: user } = data
+    const userModel = await UserModel.findByPk(user.id)
+    if (userModel == null) {
+      throw new Error('No such user found!')
+    }
 
-    if (user.totpSecret === '') {
+    if (userModel.totpSecret === '') {
       const secret = generateSecret()
 
       res.json({
@@ -108,7 +107,12 @@ export async function setup (req: Request, res: Response) {
       throw new Error('Password doesnt match stored password')
     }
 
-    if (user.totpSecret !== '') {
+    const userModel = await UserModel.findByPk(user.id)
+    if (userModel == null) {
+      throw new Error('No such user found!')
+    }
+
+    if (userModel.totpSecret !== '') {
       throw new Error('User has 2fa already setup')
     }
 
@@ -121,12 +125,7 @@ export async function setup (req: Request, res: Response) {
     }
 
     // Update db model and cached object
-    const userModel = await UserModel.findByPk(user.id)
-    if (userModel == null) {
-      throw new Error('No such user found!')
-    }
-
-    userModel.totpSecret = secret
+    userModel.totpSecret = security.encryptTotpSecret(secret)
     await userModel.save()
     security.authenticatedUsers.updateFrom(req, utils.queryResultToJson(userModel))
 

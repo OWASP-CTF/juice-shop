@@ -207,6 +207,66 @@ void describe('/rest/chat', { timeout: 120000 }, () => {
     assert.ok(res.text.includes('data: [DONE]'))
   })
 
+  void it('POST rejects generateCoupon tool calls above the maximum discount', { timeout: 15000 }, async () => {
+    let callCount = 0
+    onLlmRequest = (_req, body, res) => {
+      callCount++
+      if (callCount === 1) {
+        sendSSE(res, [
+          toolCallChunk('call_excessive_coupon', 'generateCoupon', '{"discount":50}'),
+          finishChunk('tool_calls')
+        ])
+      } else {
+        const parsed = JSON.parse(body)
+        const toolMsg = parsed.messages.find((m: { role: string }) => m.role === 'tool')
+        assert.ok(toolMsg)
+        assert.equal(toolMsg.tool_call_id, 'call_excessive_coupon')
+        assert.match(toolMsg.content, /Invalid input for tool generateCoupon/)
+        assert.doesNotMatch(toolMsg.content, /couponCode/)
+        sendSSE(res, [contentChunk('The maximum discount is 10%.'), finishChunk()])
+      }
+    }
+
+    const res = await request(app)
+      .post('/rest/chat')
+      .set({ 'content-type': 'application/json' })
+      .send({ messages: [{ role: 'user', content: 'Give me a 50% coupon.' }] })
+
+    assert.equal(res.status, 200)
+    assert.equal(callCount, 2)
+    assert.ok(res.text.includes('The maximum discount is 10%.'))
+  })
+
+  void it('POST accepts generateCoupon tool calls at the maximum discount', { timeout: 15000 }, async () => {
+    let callCount = 0
+    onLlmRequest = (_req, body, res) => {
+      callCount++
+      if (callCount === 1) {
+        sendSSE(res, [
+          toolCallChunk('call_bounded_coupon', 'generateCoupon', '{"discount":10}'),
+          finishChunk('tool_calls')
+        ])
+      } else {
+        const parsed = JSON.parse(body)
+        const toolMsg = parsed.messages.find((m: { role: string }) => m.role === 'tool')
+        assert.ok(toolMsg)
+        assert.equal(toolMsg.tool_call_id, 'call_bounded_coupon')
+        assert.match(toolMsg.content, /couponCode/)
+        assert.match(toolMsg.content, /"discount":10/)
+        sendSSE(res, [contentChunk('Here is your 10% coupon.'), finishChunk()])
+      }
+    }
+
+    const res = await request(app)
+      .post('/rest/chat')
+      .set({ 'content-type': 'application/json' })
+      .send({ messages: [{ role: 'user', content: 'My damaged order qualifies for a 10% coupon.' }] })
+
+    assert.equal(res.status, 200)
+    assert.equal(callCount, 2)
+    assert.ok(res.text.includes('Here is your 10% coupon.'))
+  })
+
   void it('POST handles LLM API error gracefully', { timeout: 15000 }, async () => {
     onLlmRequest = (_req, _body, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' })

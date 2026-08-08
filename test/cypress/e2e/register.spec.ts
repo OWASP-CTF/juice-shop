@@ -4,44 +4,22 @@ describe('/#/register', () => {
   })
 
   describe('challenge "persistedXssUser"', () => {
-    beforeEach(() => {
-      cy.login({
-        email: 'admin',
-        password: 'admin123'
-      })
-    })
-
-    it('should be possible to bypass validation by directly using Rest API', async () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.window().then(async () => {
-            const response = await fetch(
-              `${Cypress.config('baseUrl')}/api/Users/`,
-              {
-                method: 'POST',
-                cache: 'no-cache',
-                headers: {
-                  'Content-type': 'application/json'
-                },
-                body: JSON.stringify({
-                  email: '<iframe src="javascript:alert(`xss`)">',
-                  password: 'XSSed',
-                  passwordRepeat: 'XSSed',
-                  role: 'admin'
-                })
-              }
-            )
-            if (response.status === 201) {
-              console.log('Success')
-            }
-          })
-
-          cy.visit('/#/administration')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-          cy.expectChallengeSolved({ challenge: 'Client-side XSS Protection' })
+    it('should recursively sanitize masked XSS sent directly to the REST API', () => {
+      const safeEmail = `xss-regression-${Date.now()}@example.test`
+      cy.request({
+        method: 'POST',
+        url: '/api/Users/',
+        body: {
+          email: `${safeEmail}<<script>Foo</script>iframe src="javascript:alert(\`xss\`)">`,
+          password: 'XSSed',
+          passwordRepeat: 'XSSed'
         }
+      }).then((response) => {
+        expect(response.status).to.equal(201)
+        expect(response.body.data.email).to.equal(safeEmail)
+      })
+      cy.request('/api/Challenges/?name=Client-side XSS Protection').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
       })
     })
   })

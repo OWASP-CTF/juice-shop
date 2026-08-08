@@ -49,7 +49,7 @@ describe('/#/login', () => {
   })
 
   describe('challenge "adminCredentials"', () => {
-    it('should be able to log in with original (weak) admin credentials', () => {
+    it('should reject the original weak admin credentials without solving the challenge', () => {
       cy.task<string>('GetFromConfig', 'application.domain').then(
         (appDomain: string) => {
           cy.get('#email').type(`admin@${appDomain}`)
@@ -57,7 +57,10 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Password Strength' })
+      cy.get('.error').should('contain', 'Invalid email or password.')
+      cy.request('/api/Challenges/?name=Password Strength').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 
@@ -114,11 +117,11 @@ describe('/#/login', () => {
   })
 
   describe('challenge "twoFactorAuthUnsafeSecretStorage"', () => {
-    it('should be able to log into a existing 2fa protected account given the right token', () => {
+    it('should log into a 2fa account without marking unsafe secret storage solved', () => {
       cy.task<string>('GetFromConfig', 'application.domain').then(
         (appDomain: string) => {
-          cy.get('#email').type(`wurstbrot@${appDomain}'--`)
-          cy.get('#password').type('Never mind...')
+          cy.get('#email').type(`wurstbrot@${appDomain}`)
+          cy.get('#password').type('EinBelegtesBrotMitSchinkenSCHINKEN!')
           cy.get('#loginButton').click()
         }
       )
@@ -129,7 +132,9 @@ describe('/#/login', () => {
           void cy.get('#totpSubmitButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Two Factor Authentication' })
+      cy.request('/api/Challenges/?name=Two Factor Authentication').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 

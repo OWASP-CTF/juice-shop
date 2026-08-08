@@ -19,10 +19,17 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('/rest/order-history', () => {
+  void it('GET previous orders requires authentication', async () => {
+    const res = await request(app)
+      .get('/rest/order-history')
+
+    assert.equal(res.status, 401)
+  })
+
   void it('GET own previous orders', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)
@@ -30,6 +37,7 @@ void describe('/rest/order-history', () => {
       .set({ Authorization: 'Bearer ' + token, 'content-type': 'application/json' })
 
     assert.equal(res.status, 200)
+    assert.equal(res.body.data[0].UserId, undefined)
     assert.equal(res.body.data[0].totalPrice, 8.96)
     assert.equal(res.body.data[0].delivered, false)
     assert.equal(res.body.data[0].products[0].quantity, 3)
@@ -66,7 +74,7 @@ void describe('/rest/order-history/orders', () => {
   void it('GET all orders is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)
@@ -94,7 +102,7 @@ void describe('/rest/order-history/:id/delivery-status', () => {
   void it('PUT delivery status is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)

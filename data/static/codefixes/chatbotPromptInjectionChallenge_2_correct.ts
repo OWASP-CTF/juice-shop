@@ -1,7 +1,7 @@
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer with a verified damaged order. Requires a valid order ID.',
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
+          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'),
           orderId: z.string().describe('The order ID of the damaged order (format: xxxx-xxxxxxxxxxxxxxxx)')
         }),
         execute: async ({ discount, orderId, authenticatedUser }) => {

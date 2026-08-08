@@ -11,7 +11,6 @@ import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 
 let app: Express
 const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
@@ -48,28 +47,48 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.body.data.comment, 'I am a harmless comment.')
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-    void it('POST fails to sanitize masked XSS-attack by not applying sanitization recursively', async () => {
-      const captchaRes = await request(app)
-        .get('/rest/captcha')
-      assert.equal(captchaRes.status, 200)
-      assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
+  void it('POST recursively sanitizes masked XSS without solving the challenge', async () => {
+    challenges.persistedXssFeedbackChallenge.solved = false
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+    assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
-      const res = await request(app)
-        .post('/api/Feedbacks')
-        .set(jsonHeader)
-        .send({
-          comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
-          rating: 1,
-          captchaId: captchaRes.body.captchaId,
-          captcha: captchaRes.body.answer
-        })
-      assert.equal(res.status, 201)
-      assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: <iframe src="javascript:alert(`xss`)">')
-    })
-  }
+    const res = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({
+        comment: 'Useful feedback. <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.comment, 'Useful feedback. ')
+    assert.equal(challenges.persistedXssFeedbackChallenge.solved, false)
+  })
 
-  void it('POST feedback in another users name as anonymous user', async () => {
+  void it('POST preserves plain text and allowed formatting in comments', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+
+    const comment = 'Useful <strong>feedback</strong> with <em>emphasis</em>.'
+    const res = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({
+        comment,
+        rating: 5,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.comment, comment)
+  })
+
+  void it('POST anonymous feedback cannot forge another user ID', async () => {
+    challenges.forgedFeedbackChallenge.solved = false
     const captchaRes = await request(app)
       .get('/rest/captcha')
     assert.equal(captchaRes.status, 200)
@@ -87,10 +106,12 @@ void describe('/api/Feedbacks', () => {
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.UserId, 3)
+    assert.equal(res.body.data.UserId, null)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
-  void it('POST feedback in a non-existing users name as anonymous user fails with constraint error', async () => {
+  void it('POST feedback with a zero-star rating is rejected', async () => {
+    challenges.zeroStarsChallenge.solved = false
     const captchaRes = await request(app)
       .get('/rest/captcha')
     assert.equal(captchaRes.status, 200)
@@ -102,13 +123,12 @@ void describe('/api/Feedbacks', () => {
       .send({
         comment: 'Pickle Rick says your express-jwt 0.1.3 has Eurogium Edule and Hueteroneel in it!',
         rating: 0,
-        UserId: 4711,
         captchaId: captchaRes.body.captchaId,
         captcha: captchaRes.body.answer
       })
-    assert.equal(res.status, 500)
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.ok(res.body.errors.includes('SQLITE_CONSTRAINT: FOREIGN KEY constraint failed'))
+    assert.equal(challenges.zeroStarsChallenge.solved, false)
   })
 
   void it('POST feedback is associated with current user', async () => {
@@ -135,9 +155,10 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(res.body.data.UserId, 4)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
-  void it('POST feedback is associated with any passed user ID', async () => {
+  void it('POST feedback ignores a different passed user ID', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
@@ -160,7 +181,8 @@ void describe('/api/Feedbacks', () => {
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.UserId, 3)
+    assert.equal(res.body.data.UserId, 4)
+    assert.equal(challenges.forgedFeedbackChallenge.solved, false)
   })
 
   void it('POST feedback can be created without actually supplying comment', async () => {
@@ -234,6 +256,24 @@ void describe('/api/Feedbacks', () => {
         captcha: 42
       })
     assert.equal(res.status, 401)
+  })
+
+  void it('POST consumes a CAPTCHA so it cannot be replayed', async () => {
+    challenges.captchaBypassChallenge.solved = false
+    const captchaRes = await request(app).get('/rest/captcha')
+    const payload = {
+      comment: 'One-time CAPTCHA regression',
+      rating: 3,
+      captchaId: captchaRes.body.captchaId,
+      captcha: captchaRes.body.answer
+    }
+
+    const first = await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)
+    const replay = await request(app).post('/api/Feedbacks').set(jsonHeader).send(payload)
+
+    assert.equal(first.status, 201)
+    assert.equal(replay.status, 401)
+    assert.equal(challenges.captchaBypassChallenge.solved, false)
   })
 })
 
