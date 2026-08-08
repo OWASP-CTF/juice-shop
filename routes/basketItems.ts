@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -34,23 +35,35 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    const requestedBasketId = basketIds[basketIds.length - 1]
+    challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && requestedBasketId && requestedBasketId !== 'undefined' && user.bid != requestedBasketId }) // eslint-disable-line eqeqeq
+    if (!user?.bid || Number(user.bid) !== Number(requestedBasketId)) {
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
-    } else {
-      const basketItem = {
-        ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
-        quantity: quantities[quantities.length - 1]
-      }
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+      return
+    }
+    const quantity = Number(quantities[quantities.length - 1])
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      res.status(400).json({ error: 'Invalid quantity' })
+      return
+    }
+    const productId = Number(productIds[productIds.length - 1])
+    const liveProduct = await ProductModel.findByPk(productId)
+    if (!liveProduct) {
+      res.status(400).json({ error: 'Invalid product' })
+      return
+    }
+    const basketItem = {
+      ProductId: productId,
+      BasketId: user.bid,
+      quantity
+    }
 
-      const basketItemInstance = BasketItemModel.build(basketItem)
-      try {
-        const addedBasketItem = await basketItemInstance.save()
-        res.json({ status: 'success', data: addedBasketItem })
-      } catch (error) {
-        next(error)
-      }
+    const basketItemInstance = BasketItemModel.build(basketItem)
+    try {
+      const addedBasketItem = await basketItemInstance.save()
+      res.json({ status: 'success', data: addedBasketItem })
+    } catch (error) {
+      next(error)
     }
   }
 }
@@ -68,6 +81,10 @@ export function quantityCheckBeforeBasketItemUpdate () {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+      if (req.body.BasketId != null && (!user?.bid || Number(user.bid) !== Number(req.body.BasketId))) {
+        res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
+        return
+      }
       if (req.body.quantity) {
         if (item == null) {
           throw new Error('No such item found!')
@@ -83,14 +100,19 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  const qty = Number(quantity)
+  if (!Number.isInteger(qty) || qty < 1) {
+    res.status(400).json({ error: 'Invalid quantity' })
+    return
+  }
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')
   }
 
   // is product limited per user and order, except if user is deluxe?
-  if (!product.limitPerUser || (product.limitPerUser && product.limitPerUser >= quantity) || security.isDeluxe(req)) {
-    if (product.quantity >= quantity) { // enough in stock?
+  if (!product.limitPerUser || (product.limitPerUser && product.limitPerUser >= qty) || security.isDeluxe(req)) {
+    if (product.quantity >= qty) { // enough in stock?
       next()
     } else {
       res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })

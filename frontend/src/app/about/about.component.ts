@@ -113,11 +113,13 @@ export class AboutComponent implements OnInit {
       .subscribe((feedbacks) => {
         for (let i = 0; i < feedbacks.length; i++) {
 
-          feedbacks[i].comment = `<figcaption><p class="feedback-comment">${
-            feedbacks[i].comment
-          }</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
+          const safeComment = String(feedbacks[i].comment ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
           feedbacks[i].comment = this.sanitizer.bypassSecurityTrustHtml(
-            feedbacks[i].comment
+            `<figcaption><p class="feedback-comment">${safeComment}</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
           )
 
           this.galleryRef.addImage({

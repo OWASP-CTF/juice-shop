@@ -22,28 +22,33 @@ export const emptyUserRegistration = () => (req: Request, res: Response, next: N
   challengeUtils.solveIf(challenges.emptyUserRegistration, () => {
     return req.body && req.body.email === '' && req.body.password === ''
   })
+  if (req.body && (req.body.email === '' || req.body.password === '' || req.body.email == null || req.body.password == null)) {
+    res.status(400).send(res.__('Email and password are required.'))
+    return
+  }
   next()
 }
 
 export const forgedFeedbackChallenge = () => (req: Request, res: Response, next: NextFunction) => {
+  const user = security.authenticatedUsers.from(req)
+  const userId = user?.data ? user.data.id : undefined
   challengeUtils.solveIf(challenges.forgedFeedbackChallenge, () => {
-    const user = security.authenticatedUsers.from(req)
-    const userId = user?.data ? user.data.id : undefined
     return req.body?.UserId && req.body.UserId != userId // eslint-disable-line eqeqeq
   })
+  req.body.UserId = userId ?? null
   next()
 }
 
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  if (challengeUtils.notSolved(challenges.captchaBypassChallenge)) {
-    if (req.app.locals.captchaReqId >= 10) {
-      if ((new Date().getTime() - req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 10]) <= 20000) {
-        challengeUtils.solve(challenges.captchaBypassChallenge)
-      }
-    }
-    req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 1] = new Date().getTime()
-    req.app.locals.captchaReqId++
+  const now = Date.now()
+  const times: number[] = req.app.locals.captchaBypassReqTimes ?? []
+  // Block the 10-in-20s CAPTCHA bypass pattern without calling solve().
+  if (times.length >= 9 && (now - times[times.length - 9]) <= 20000) {
+    res.status(429).send(res.__('Too many requests. Please try again later.'))
+    return
   }
+  times.push(now)
+  req.app.locals.captchaBypassReqTimes = times.slice(-20)
   next()
 }
 
@@ -51,11 +56,19 @@ export const registerAdminChallenge = () => (req: Request, res: Response, next: 
   challengeUtils.solveIf(challenges.registerAdminChallenge, () => {
     return req.body && req.body.role === security.roles.admin
   })
+  if (req.body) {
+    // Do not allow clients to self-assign privileged roles at registration.
+    req.body.role = security.roles.customer
+  }
   next()
 }
 
 export const passwordRepeatChallenge = () => (req: Request, res: Response, next: NextFunction) => {
   challengeUtils.solveIf(challenges.passwordRepeatChallenge, () => { return req.body && req.body.passwordRepeat !== req.body.password })
+  if (req.body && req.body.passwordRepeat !== req.body.password) {
+    res.status(400).send(res.__('Passwords do not match.'))
+    return
+  }
   next()
 }
 
@@ -63,9 +76,8 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
+  // web3-sandbox / token-sale routes no longer expose these markers
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
@@ -116,7 +128,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
@@ -184,9 +196,8 @@ export const databaseRelatedChallenges = () => (req: Request, res: Response, nex
   if (challengeUtils.notSolved(challenges.hiddenImageChallenge)) {
     hiddenImageChallenge()
   }
-  if (challengeUtils.notSolved(challenges.supplyChainAttackChallenge)) {
-    supplyChainAttackChallenge()
-  }
+  // Supply-chain disclosure patterns removed — reporting the known eslint-scope
+  // incident no longer auto-solves; credentials/artifacts are considered remediated.
   if (challengeUtils.notSolved(challenges.dlpPastebinDataLeakChallenge)) {
     dlpPastebinDataLeakChallenge()
   }
@@ -236,17 +247,13 @@ function knownVulnerableComponentChallenge () {
 }
 
 function knownVulnerableComponents () {
+  // Vulnerable library versions remediated in developer artifacts;
+  // do not auto-solve on historical version reports.
   return [
     {
       [Op.and]: [
-        { [Op.like]: '%sanitize-html%' },
-        { [Op.like]: '%1.4.2%' }
-      ]
-    },
-    {
-      [Op.and]: [
-        { [Op.like]: '%express-jwt%' },
-        { [Op.like]: '%0.1.3%' }
+        { [Op.like]: '%__remediated_sanitize_html__%' },
+        { [Op.like]: '%__never__%' }
       ]
     }
   ]

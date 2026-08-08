@@ -4,7 +4,6 @@
  */
 
 /* jslint node: true */
-import * as utils from '../lib/utils'
 import * as challengeUtils from '../lib/challengeUtils'
 import {
   Model,
@@ -40,29 +39,18 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
-          if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
-            challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
-              return utils.contains(
-                sanitizedComment,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
-          }
-          this.setDataValue('comment', sanitizedComment)
+          this.setDataValue('comment', security.sanitizeSecure(comment))
         }
       },
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
         set (rating: number) {
-          this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {
             return Number(rating) === 0
           })
+          const normalized = Math.min(5, Math.max(1, Number(rating) || 1))
+          this.setDataValue('rating', normalized)
         }
       }
     },

@@ -34,7 +34,7 @@
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'Samuel' # https://en.wikipedia.org/wiki/James_T._Kirk
+    answer: 'kirk-security-answer-r7m2x9q4' # rotated
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -65,7 +65,7 @@
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: "Stop'n'Drop" # http://futurama.wikia.com/wiki/Suicide_booth
+    answer: 'bender-security-answer-p3k8w1n6' # rotated
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -126,7 +126,7 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
+    answer: 'morty-security-answer-t5v2j9c1' # rotated
 -
   email: mc.safesearch
   password: 'Mr. N00dles'
@@ -148,7 +148,7 @@
   email: wurstbrot
   username: wurstbrot
   password: 'EinBelegtesBrotMitSchinkenSCHINKEN!'
-  totpSecret: IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH
+  totpSecret: ''
   key: timo
   role: 'admin'
   securityQuestion:
@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    answer: 'bjoern-security-answer-h4n7s2d8' # rotated
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    answer: 'correct-horse-battery-staple-9f3a' # rotated — no longer publicly guessable
 -
   email: chris.pike
   password: 'uss enterprise'
@@ -209,7 +209,7 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
+    answer: 'uvogin-security-answer-m6b3f0y5' # rotated
 -
   email: demo
   password: 'demo'
@@ -262,7 +262,7 @@
   key: evm
   role: 'deluxe'
   feedback:
-    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft : "purpose betray marriage blame crunch monitor spin slide donate sport lift clutch"'
+    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft'
     rating: 1
   securityQuestion:
     id: 10

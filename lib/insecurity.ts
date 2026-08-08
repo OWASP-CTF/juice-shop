@@ -7,7 +7,6 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -45,17 +44,48 @@ export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
-  if (utils.contains(str, nullByte)) {
-    return str.substring(0, str.indexOf(nullByte))
+  if (utils.contains(str, nullByte) || str.includes('\0')) {
+    return ''
   }
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const isAuthorized = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (!token || !verify(token)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    next()
+  }
+}
+export const denyAll = () => {
+  return (_req: Request, res: Response) => {
+    res.status(401).json({ error: 'Unauthorized' })
+  }
+}
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
-export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const verify = (token: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const decoded = jws.decode(token)
+    if (!decoded || decoded.header?.alg !== 'RS256') {
+      return false
+    }
+    return jws.verify(token, 'RS256', publicKey)
+  } catch {
+    return false
+  }
+}
+export const decode = (token: string) => {
+  if (!verify(token)) {
+    return null
+  }
+  return jws.decode(token)?.payload
+}
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -77,7 +107,14 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const cleaned = utils.unquote(token)
+    if (!verify(cleaned)) {
+      return undefined
+    }
+    return this.tokenMap[cleaned]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -88,7 +125,9 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
-    this.put(token, user)
+    if (token && verify(token)) {
+      this.put(token, user)
+    }
   }
 }
 
@@ -97,7 +136,8 @@ export const userEmailFrom = ({ headers }: any) => {
 }
 
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
+  const capped = Math.min(Math.max(1, Math.floor(discount)), 40)
+  const coupon = utils.toMMMYY(date) + '-' + capped
   return z85.encode(coupon)
 }
 
@@ -110,8 +150,10 @@ export const discountFromCoupon = (coupon?: string) => {
     const parts = decoded.toString().split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
+      const discount = parseInt(parts[1], 10)
+      if (discount > 0 && discount <= 40) {
+        return discount
+      }
     }
   }
 }
@@ -123,9 +165,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +174,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -177,7 +216,12 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      const user = authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -187,15 +231,16 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null) {
-        if (authenticatedUsers.get(token) === undefined) {
-          authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
-        }
+  if (token && verify(token)) {
+    try {
+      const decoded = decode(token)
+      if (decoded && authenticatedUsers.get(token) === undefined) {
+        authenticatedUsers.put(token, decoded)
+        res.cookie('token', token)
       }
-    })
+    } catch {
+      // ignore invalid tokens
+    }
   }
   next()
 }
