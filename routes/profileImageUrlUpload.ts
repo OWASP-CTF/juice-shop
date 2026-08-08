@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs'
+import net from 'node:net'
+import dns from 'node:dns/promises'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -17,40 +19,63 @@ import logger from '../lib/logger'
 // targeting loopback/private/link-local addresses and non-http(s) schemes, which would
 // otherwise turn this into a Server-Side Request Forgery primitive against internal
 // services (including the application's own server-side challenge-solving endpoint).
-function isSafeExternalImageUrl (rawUrl: string): boolean {
-  let parsed: URL
-  try {
-    parsed = new URL(rawUrl)
-  } catch {
-    return false
+//
+// Checking the literal hostname string is not enough on its own: a public-looking hostname
+// can still resolve (via attacker-controlled DNS, i.e. "DNS rebinding") to a private/internal
+// address, so the address actually being connected to has to be resolved and checked too.
+function isPrivateAddress (address: string): boolean {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number)
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return false
-  }
-  const hostname = parsed.hostname.toLowerCase()
-  if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname === '0.0.0.0' ||
-    hostname === '::1'
-  ) {
-    return false
-  }
-  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
-  if (ipv4) {
-    const [a, b] = ipv4.slice(1).map(Number)
-    if (
-      a === 127 || // loopback
-      a === 10 || // RFC1918
-      (a === 172 && b >= 16 && b <= 31) || // RFC1918
-      (a === 192 && b === 168) || // RFC1918
-      (a === 169 && b === 254) || // link-local / cloud metadata
-      a === 0
-    ) {
-      return false
+  if (net.isIPv6(address)) {
+    const normalized = address.toLowerCase()
+    if (normalized.startsWith('::ffff:')) {
+      return isPrivateAddress(normalized.substring('::ffff:'.length))
     }
+    return normalized === '::1' || normalized === '::' ||
+      normalized.startsWith('fc') || normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') || normalized.startsWith('feb')
   }
   return true
+}
+
+async function assertUrlIsSafeToFetch (rawUrl: string): Promise<void> {
+  const parsed = new URL(rawUrl)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only http and https image URLs are supported')
+  }
+  const hostname = parsed.hostname.replace(/^\[|]$/g, '')
+  const { address } = net.isIP(hostname) ? { address: hostname } : await dns.lookup(hostname)
+  if (isPrivateAddress(address)) {
+    throw new Error('Image URLs must point to a publicly reachable host')
+  }
+}
+
+// fetch() follows redirects by default, which would otherwise let a URL that passes the
+// safety check on its first hop 302 the server into a private/internal target anyway. Every
+// hop has to be resolved and validated the same way, not just the URL supplied by the caller.
+async function fetchImageSafely (rawUrl: string) {
+  let currentUrl = rawUrl
+  for (let hop = 0; hop <= 3; hop++) {
+    await assertUrlIsSafeToFetch(currentUrl)
+    const response = await fetch(currentUrl, { redirect: 'manual' })
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location')
+      if (!location) {
+        throw new Error('url responded with a redirect without a target')
+      }
+      currentUrl = new URL(location, currentUrl).toString()
+      continue
+    }
+    return response
+  }
+  throw new Error('url redirected too many times')
 }
 
 export function profileImageUrlUpload () {
@@ -61,13 +86,7 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          if (!isSafeExternalImageUrl(url)) {
-            // Treated the same as any other failure to retrieve the image: fall back to
-            // storing the URL text itself rather than ever letting the server make a
-            // request to a private/internal target on the caller's behalf (SSRF).
-            throw new Error('Refusing to fetch a non-public image URL')
-          }
-          const response = await fetch(url)
+          const response = await fetchImageSafely(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }

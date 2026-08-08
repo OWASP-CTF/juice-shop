@@ -86,7 +86,7 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
         // noent (entity substitution) must stay disabled and network access for external
         // entities/DTDs must be blocked - these are what enable XXE file disclosure and
         // billion-laughs-style entity expansion DoS attacks.
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true, dtdload: false })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
