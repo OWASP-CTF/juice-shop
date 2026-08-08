@@ -17,7 +17,7 @@ import { MatPaginator } from '@angular/material/paginator'
 import { MatIconModule } from '@angular/material/icon'
 import { MatTooltip } from '@angular/material/tooltip'
 import { MatButtonModule } from '@angular/material/button'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { MatCheckboxModule } from '@angular/material/checkbox'
 
 import { TranslateModule } from '@ngx-translate/core'
