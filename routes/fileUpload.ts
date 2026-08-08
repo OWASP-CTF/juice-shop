@@ -85,7 +85,7 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
         vm.createContext(sandbox)
         // Entity substitution, DTD loading and network access stay off, which rules out both
         // external entity file disclosure and entity expansion (billion laughs) attacks
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, dtdload: false, dtdvalid: false, nonet: true, noxincnode: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nocdata: true, noent: false, dtdload: false, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
