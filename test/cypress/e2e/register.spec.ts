@@ -11,7 +11,10 @@ describe('/#/register', () => {
       })
     })
 
-    it('should be possible to bypass validation by directly using Rest API', async () => {
+    // Regression test: email is now always sanitized server-side
+    // (see models/user.ts), so the "Client-side XSS Protection" challenge
+    // can never be solved even when the REST API is called directly.
+    it('should sanitize XSS payloads submitted directly via the REST API', async () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.window().then(async () => {
@@ -31,23 +34,28 @@ describe('/#/register', () => {
                 })
               }
             )
-            if (response.status === 201) {
-              console.log('Success')
-            }
+            const user = await response.json()
+            expect(user.data.email).to.not.contain('<iframe')
           })
 
           cy.visit('/#/administration')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
+
+          cy.request({
+            method: 'GET',
+            url: '/api/Challenges/?name=Client-side XSS Protection',
+            timeout: 60000
+          }).then((res) => {
+            const challenge = res.body.data[0]
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(challenge.solved).to.be.false
           })
-          cy.expectChallengeSolved({ challenge: 'Client-side XSS Protection' })
         }
       })
     })
   })
 
   describe('challenge "registerAdmin"', () => {
-    it('should be possible to register admin user using REST API', () => {
+    it('should not be possible to register admin user using REST API', () => {
       cy.window().then(async () => {
         const response = await fetch(`${Cypress.config('baseUrl')}/api/Users/`, {
           method: 'POST',
@@ -62,11 +70,10 @@ describe('/#/register', () => {
             role: 'admin'
           })
         })
-        if (response.status === 201) {
-          console.log('Success')
-        }
+        const body = await response.json()
+        expect(response.status).to.equal(201)
+        expect(body.data.role).to.equal('customer')
       })
-      cy.expectChallengeSolved({ challenge: 'Admin Registration' })
     })
   })
 
