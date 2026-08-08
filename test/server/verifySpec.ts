@@ -138,13 +138,13 @@ describe('verify', () => {
       expect(challenges.missingEncodingChallenge.solved).to.equal(true)
     })
 
-    it('"accessLogDisclosureChallenge" is solved when any server access log file is requested', () => {
+    it('"accessLogDisclosureChallenge" is not solved by a URL resembling a server access log', () => {
       challenges.accessLogDisclosureChallenge = { solved: false, save } as unknown as Challenge
       req.url = 'http://juice-sh.op/support/logs/access.log.2019-01-15'
 
       verify.accessControlChallenges()(req, res, next)
 
-      expect(challenges.accessLogDisclosureChallenge.solved).to.equal(true)
+      expect(challenges.accessLogDisclosureChallenge.solved).to.equal(false)
     })
   })
 
