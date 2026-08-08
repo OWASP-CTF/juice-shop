@@ -32,24 +32,15 @@ export function likeProductReviews () {
         return res.status(403).json({ error: 'Not allowed' })
       }
 
-      await db.reviewsCollection.update(
-        { _id: id },
-        { $inc: { likesCount: 1 } }
-      )
+      // Atomic update: add email to likedBy and increment count in one operation
+      const updatedLikedBy = [...likedBy, user.data.email]
+      const count = updatedLikedBy.filter(email => email === user.data.email).length
+      challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
 
-      // Artificial wait for timing attack challenge
-      await sleep(150)
       try {
-        const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
-        const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
-
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
-        challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
-
         const result = await db.reviewsCollection.update(
           { _id: id },
-          { $set: { likedBy: updatedLikedBy } }
+          { $inc: { likesCount: 1 }, $set: { likedBy: updatedLikedBy } }
         )
         res.json(result)
       } catch (err) {

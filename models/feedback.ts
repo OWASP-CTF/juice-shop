@@ -49,20 +49,28 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
           }
+          // Always apply secure sanitization to prevent XSS
+          sanitizedComment = security.sanitizeSecure(comment)
           this.setDataValue('comment', sanitizedComment)
         }
       },
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        validate: {
+          min: 1,
+          max: 5
+        },
         set (rating: number) {
+          if (Number(rating) === 0) {
+            challengeUtils.solveIf(challenges.zeroStarsChallenge, () => { return true })
+            // Block zero-star ratings: reject by keeping current/default value
+            // The Sequelize min:1 validation will reject this on save
+            this.setDataValue('rating', rating)
+            return
+          }
           this.setDataValue('rating', rating)
-          challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {
-            return Number(rating) === 0
-          })
         }
       }
     },

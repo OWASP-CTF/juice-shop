@@ -58,6 +58,7 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
+          // Always detect XSS attempt before sanitizing
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
             challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
               return utils.contains(
@@ -65,9 +66,9 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            email = security.sanitizeSecure(email)
           }
+          // Always sanitize to prevent stored XSS regardless of challenge state
+          email = security.sanitizeSecure(email)
           this.setDataValue('email', email)
         }
       }, // vuln-code-snippet hide-end

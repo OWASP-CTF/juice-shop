@@ -55,6 +55,8 @@ export const promotionVideo = () => {
       const subs = getSubsFromFile()
 
       challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
+      // Prevent script tag injection from subtitle file by escaping </script>
+      const safeSubs = subs.replace(/<\/script>/gi, '<\\/script>')
 
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
@@ -68,7 +70,7 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + safeSubs + '</script>')
       res.send(compiledTemplate)
     })
   }

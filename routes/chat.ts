@@ -144,7 +144,7 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          return await db.reviewsCollection.find({ product: String(productId) }) as Review[]
         }
       }),
 
@@ -174,13 +174,15 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          discount: z.number().min(1).max(10).describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
         execute: async ({ discount }) => {
+          // Clamp discount to policy maximum of 10%
+          const clampedDiscount = Math.min(discount, 10)
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
           challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
-          const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
-          return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
+          const couponCode = security.generateCoupon(clampedDiscount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
+          return { couponCode, discount: clampedDiscount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
         }
       })
     } // vuln-code-snippet end chatbotGreedyInjectionChallenge chatbotPromptInjectionChallenge
@@ -223,17 +225,25 @@ export function chat () {
               return req.cookies.show_tool_calls === 'true' && role !== roles.admin
             })
             metricToolCalls.labels({ tool: event.toolName }).inc()
-            res.write(`data: ${JSON.stringify({
-              choices: [{
-                delta: {
-                  tool_calls: [{
-                    id: event.toolCallId,
-                    type: 'function',
-                    function: { name: event.toolName, arguments: JSON.stringify(event.input) }
+            // Only show tool calls to admin users
+            {
+              const token = utils.jwtFrom(req)
+              const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
+              const role = decoded?.data?.role
+              if (role === roles.admin) {
+                res.write(`data: ${JSON.stringify({
+                  choices: [{
+                    delta: {
+                      tool_calls: [{
+                        id: event.toolCallId,
+                        type: 'function',
+                        function: { name: event.toolName, arguments: JSON.stringify(event.input) }
+                      }]
+                    }
                   }]
-                }
-              }]
-            })}\n\n`)
+                })}\n\n`)
+              }
+            }
             break
           case 'finish':
             res.write(`data: ${JSON.stringify({ choices: [{ finish_reason: event.finishReason }] })}\n\n`)

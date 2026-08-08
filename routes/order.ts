@@ -138,6 +138,10 @@ export function placeOrder () {
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
+          if (totalPrice < 0) {
+            res.status(400).json({ error: 'Order total cannot be negative.' })
+            return
+          }
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
@@ -194,6 +198,10 @@ function calculateApplicableDiscount (basket: BasketModel, req: Request) {
 
     if (campaign && couponDate == campaign.validOn) { // eslint-disable-line eqeqeq
       challengeUtils.solveIf(challenges.manipulateClockChallenge, () => { return campaign.validOn < new Date().getTime() })
+      // Reject expired campaign coupons
+      if (campaign.validOn < new Date().getTime()) {
+        return 0
+      }
       return campaign.discount
     }
   }

@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -43,6 +44,22 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      // Detect christmas special challenge before blocking deleted products
+      const productId = basketItem.ProductId
+      let isDeleted = false
+      try {
+        const product = await ProductModel.findOne({ where: { id: productId }, paranoid: false })
+        if (product && product.deletedAt) {
+          challengeUtils.solveIf(challenges.christmasSpecialChallenge, () => { return true })
+          isDeleted = true
+        }
+      } catch (_) { /* continue */ }
+
+      if (isDeleted) {
+        res.status(404).json({ error: 'Product not found.' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
@@ -83,6 +100,11 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  // Reject non-positive quantities to prevent negative order totals
+  if (!quantity || quantity < 1 || !Number.isInteger(Number(quantity))) {
+    res.status(400).json({ error: 'Quantity must be a positive integer.' })
+    return
+  }
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')

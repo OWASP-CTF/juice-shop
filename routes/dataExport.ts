@@ -22,8 +22,10 @@ export function dataExport () {
         const updatedEmail = email.replace(/[aeiou]/gi, '*')
 
         let memories, orders, reviews
+        // Use authenticated user's ID instead of user-supplied UserId
+        const ownUserId = loggedInUser.data.id
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          memories = await MemoryModel.findAll({ where: { UserId: ownUserId } })
         } catch (error) {
           next(error)
           return

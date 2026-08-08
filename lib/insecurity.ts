@@ -51,8 +51,8 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const isAuthorized = () => expressJwt(({ secret: publicKey, algorithms: ['RS256'] }) as any)
+export const denyAll = () => expressJwt({ secret: '' + Math.random(), algorithms: ['HS256'] } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
 export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
@@ -98,7 +98,8 @@ export const userEmailFrom = ({ headers }: any) => {
 
 export const generateCoupon = (discount: number, date = new Date()) => {
   const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const sig = crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(coupon).digest('hex').slice(0, 8)
+  return z85.encode(coupon + '-' + sig)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
@@ -108,9 +109,17 @@ export const discountFromCoupon = (coupon?: string) => {
   const decoded = z85.decode(coupon)
   if (decoded && (hasValidFormat(decoded.toString()) != null)) {
     const parts = decoded.toString().split('-')
+    // parts: [MMMYY, discount, sig]
     const validity = parts[0]
+    const discount = parts[1]
+    const providedSig = parts[2]
+    const expectedPayload = validity + '-' + discount
+    const expectedSig = crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(expectedPayload).digest('hex').slice(0, 8)
+    // Verify signature to prevent coupon forgery
+    if (providedSig !== expectedSig) {
+      return undefined
+    }
     if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
       return parseInt(discount)
     }
   }
@@ -135,7 +144,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge (fixed: use strict equality, not startsWith)
   }
   return allowed
 }
