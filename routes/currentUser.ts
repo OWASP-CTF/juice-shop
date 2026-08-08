@@ -56,8 +56,8 @@ export function retrieveLoggedInUser () {
     if (req.query.callback === undefined) {
       res.json(response)
     } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
+      // Do not honor JSONP callbacks — prevents email enumeration via callback wrapping.
+      res.json(response)
     }
   }
 }
