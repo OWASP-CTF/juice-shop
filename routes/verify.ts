@@ -97,9 +97,6 @@ export const databaseRelatedChallenges = () => (req: Request, res: Response, nex
   if (challengeUtils.notSolved(challenges.knownVulnerableComponentChallenge)) {
     knownVulnerableComponentChallenge()
   }
-  if (challengeUtils.notSolved(challenges.weirdCryptoChallenge)) {
-    weirdCryptoChallenge()
-  }
   if (challengeUtils.notSolved(challenges.typosquattingNpmChallenge)) {
     typosquattingNpmChallenge()
   }
@@ -174,23 +171,6 @@ function knownVulnerableComponents () {
         { [Op.like]: '%0.1.3%' }
       ]
     }
-  ]
-}
-
-function weirdCryptoChallenge () {
-  void checkPatternInFeedbackAndComplaints(
-    challenges.weirdCryptoChallenge,
-    { [Op.or]: weirdCryptos() }
-  )
-}
-
-function weirdCryptos () {
-  return [
-    { [Op.like]: '%z85%' },
-    { [Op.like]: '%base85%' },
-    { [Op.like]: '%hashids%' },
-    { [Op.like]: '%md5%' },
-    { [Op.like]: '%base64%' }
   ]
 }
 
