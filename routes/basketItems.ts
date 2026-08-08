@@ -34,12 +34,12 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    if (!user?.bid || basketIds.some((basketId) => Number(user.bid) !== Number(basketId))) {
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        BasketId: user.bid,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -65,8 +65,8 @@ export function quantityCheckBeforeBasketItemAddition () {
 export function quantityCheckBeforeBasketItemUpdate () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
+      const item = await BasketItemModel.findOne({ where: { id: req.params.id, BasketId: user?.bid } })
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
         if (item == null) {
