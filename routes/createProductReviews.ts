@@ -19,11 +19,17 @@ export function createProductReviews () {
       () => user?.data?.email !== req.body.author
     )
 
+    /* The author came from the request body, so a review could be posted in
+       anybody's name — and by anonymous callers. */
+    if (!user?.data?.email) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
     try {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        author: user.data.email,
         likesCount: 0,
         likedBy: []
       })
