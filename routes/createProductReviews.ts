@@ -14,16 +14,21 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+    // A review is always attributed to the authenticated user, never to whoever the request claims
+    const author = user.data.email
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
+      () => user?.data?.email !== author
     )
 
     try {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        author,
         likesCount: 0,
         likedBy: []
       })
