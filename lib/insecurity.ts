@@ -44,6 +44,7 @@ interface IAuthenticatedUsers {
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
+  invalidate: (token: string) => void
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
@@ -59,6 +60,10 @@ export const cutOffPoisonNullByte = (str: string) => {
 
 const tokenAlgorithm = 'RS256'
 
+// Sessions live in an in-memory map, so a token stays usable until it is explicitly revoked here.
+const invalidatedTokens = new Set<string>()
+export const isInvalidated = (token?: string) => !!token && invalidatedTokens.has(utils.unquote(token))
+
 // express-jwt@0.1.3 forwards no algorithm restriction, so the header has to be pinned here.
 const isSignedWithTokenAlgorithm = (token: string) => {
   try {
@@ -72,7 +77,7 @@ export const isAuthorized = () => {
   const requireValidToken = expressJwt(({ secret: publicKey }) as any)
   return (req: Request, res: Response, next: NextFunction) => {
     const token = utils.jwtFrom(req)
-    if (token && !isSignedWithTokenAlgorithm(token)) {
+    if (token && (!isSignedWithTokenAlgorithm(token) || isInvalidated(token))) {
       res.status(401).json({ error: 'Unauthorized' })
       return
     }
@@ -103,7 +108,7 @@ export const denyAll = () => (req: Request, res: Response) => {
 }
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: tokenAlgorithm })
 export const verify = (token: string) => {
-  if (!token) {
+  if (!token || isInvalidated(token)) {
     return false
   }
   try {
@@ -135,7 +140,10 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token || !verify(utils.unquote(token))) {
+      return undefined
+    }
+    return this.tokenMap[utils.unquote(token)]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -147,6 +155,15 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
     this.put(token, user)
+  },
+  invalidate: function (token: string) {
+    const key = utils.unquote(token)
+    const session = this.tokenMap[key]
+    if (session && this.idMap[session.data.id] === key) {
+      delete this.idMap[session.data.id]
+    }
+    delete this.tokenMap[key]
+    invalidatedTokens.add(key)
   }
 }
 
@@ -246,7 +263,7 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      req.body.UserId = authenticatedUsers.get(utils.jwtFrom(req))!.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -256,7 +273,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = tokenFrom(req)
-  if (token) {
+  if (token && !isInvalidated(token)) {
     jwt.verify(token, publicKey, { algorithms: [tokenAlgorithm] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
