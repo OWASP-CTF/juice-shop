@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import path from 'node:path'
 import chai from 'chai'
 import { challenges } from '../../data/datacache'
 import { type Challenge } from 'data/types'
-import { checkUploadSize, checkFileType } from '../../routes/fileUpload'
+import { checkUploadSize, checkFileType, isPathWithinDirectory } from '../../routes/fileUpload'
 
 const expect = chai.expect
 
@@ -62,5 +63,21 @@ describe('fileUpload', () => {
     checkFileType(req, res, () => {})
 
     expect(challenges.uploadTypeChallenge.solved).to.equal(false)
+  })
+
+  describe('isPathWithinDirectory', () => {
+    const uploadRoot = path.resolve('uploads/complaints')
+
+    it('allows files below the upload directory', () => {
+      expect(isPathWithinDirectory(uploadRoot, path.join(uploadRoot, 'complaint.pdf'))).to.equal(true)
+    })
+
+    it('rejects paths escaping the upload directory', () => {
+      expect(isPathWithinDirectory(uploadRoot, path.resolve(uploadRoot, '../../ftp/legal.md'))).to.equal(false)
+    })
+
+    it('rejects sibling directories with the same path prefix', () => {
+      expect(isPathWithinDirectory(uploadRoot, `${uploadRoot}-backup/complaint.pdf`)).to.equal(false)
+    })
   })
 })
