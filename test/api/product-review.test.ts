@@ -11,6 +11,7 @@ import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 import { type Product } from '../../data/types'
+import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
 
 let app: Express
@@ -49,14 +50,60 @@ void describe('/rest/products/:id/reviews', () => {
   })
 
   void it('PUT single product review can be created', async () => {
+    const message = 'Anonymous review with server-owned author'
     const res = await request(app)
       .put('/rest/products/1/reviews')
       .send({
-        message: 'Lorem Ipsum',
+        message,
         author: 'Anonymous'
       })
     assert.equal(res.status, 201)
     assert.ok(res.headers['content-type']?.includes('application/json'))
+
+    const reviews = await request(app).get('/rest/products/1/reviews')
+    const createdReview = reviews.body.data.find((review: { message: string }) => review.message === message)
+    assert.ok(createdReview)
+    assert.equal(createdReview.author, 'Anonymous')
+  })
+
+  void it('PUT anonymous product review ignores a forged author', async () => {
+    const message = 'Anonymous review with forged author'
+    const res = await request(app)
+      .put('/rest/products/1/reviews')
+      .send({
+        message,
+        author: 'admin@juice-sh.op'
+      })
+    assert.equal(res.status, 201)
+
+    const reviews = await request(app).get('/rest/products/1/reviews')
+    const createdReview = reviews.body.data.find((review: { message: string }) => review.message === message)
+    assert.ok(createdReview)
+    assert.equal(createdReview.author, 'Anonymous')
+    assert.equal(challenges.forgedReviewChallenge.solved, false)
+  })
+
+  void it('PUT authenticated product review ignores a forged author', async () => {
+    const email = 'bjoern.kimminich@gmail.com'
+    const message = 'Authenticated review with forged author'
+    const { token } = await login(app, {
+      email,
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    const res = await request(app)
+      .put('/rest/products/1/reviews')
+      .set({ Authorization: `Bearer ${token}` })
+      .send({
+        message,
+        author: 'admin@juice-sh.op'
+      })
+    assert.equal(res.status, 201)
+
+    const reviews = await request(app).get('/rest/products/1/reviews')
+    const createdReview = reviews.body.data.find((review: { message: string }) => review.message === message)
+    assert.ok(createdReview)
+    assert.equal(createdReview.author, email)
+    assert.equal(challenges.forgedReviewChallenge.solved, false)
   })
 })
 
