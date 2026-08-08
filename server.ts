@@ -390,26 +390,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
-  /* Captcha Bypass challenge verification */
-  /* User registration challenge verifications before finale takes over */
+  /* Validate and normalize user registration before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body && typeof req.body === 'object') {
-      req.body.role = security.roles.customer
-      delete req.body.totpSecret
+    if (!req.body || typeof req.body !== 'object' || typeof req.body.email !== 'string' || typeof req.body.password !== 'string' || req.body.email.trim() === '' || req.body.password.trim() === '') {
+      res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      return
     }
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
-      if (req.body.email.length !== 0 && req.body.password.length !== 0) {
-        req.body.email = req.body.email.trim()
-        req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
-      } else {
-        res.status(400).send(res.__('Invalid email/password cannot be empty'))
-      }
+
+    if (req.body.passwordRepeat !== undefined && (typeof req.body.passwordRepeat !== 'string' || req.body.passwordRepeat !== req.body.password)) {
+      res.status(400).send(res.__('New and repeated password do not match.'))
+      return
     }
+
+    req.body.email = req.body.email.trim()
+    req.body.role = security.roles.customer
+    delete req.body.totpSecret
     next()
   })
-  app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
-  app.post('/api/Users', verify.emptyUserRegistration())
+  // vuln-code-snippet hide-end
   /* Unauthorized users are not allowed to access B2B API */
   app.use('/b2b/v2', security.isAuthorized())
   /* Check if the quantity is available in stock and limit per user not exceeded, then add item to basket */

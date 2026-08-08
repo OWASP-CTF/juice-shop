@@ -16,13 +16,6 @@ import { FeedbackModel } from '../models/feedback'
 import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
-export const emptyUserRegistration = () => (req: Request, res: Response, next: NextFunction) => {
-  challengeUtils.solveIf(challenges.emptyUserRegistration, () => {
-    return req.body && req.body.email === '' && req.body.password === ''
-  })
-  next()
-}
-
 export const forgedFeedbackChallenge = () => (req: Request, res: Response, next: NextFunction) => {
   if (req.body && typeof req.body === 'object') {
     const user = security.authenticatedUsers.from(req)
@@ -35,11 +28,6 @@ export const registerAdminChallenge = () => (req: Request, res: Response, next: 
   challengeUtils.solveIf(challenges.registerAdminChallenge, () => {
     return req.body && req.body.role === security.roles.admin
   })
-  next()
-}
-
-export const passwordRepeatChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  challengeUtils.solveIf(challenges.passwordRepeatChallenge, () => { return req.body && req.body.passwordRepeat !== req.body.password })
   next()
 }
 

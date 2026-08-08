@@ -85,7 +85,8 @@ void describe('/api/Users', () => {
     assert.equal(challenges.registerAdminChallenge.solved, false)
   })
 
-  void it('POST new blank user', async () => {
+  void it('POST rejects a blank user without solving the challenge', async () => {
+    challenges.emptyUserRegistration.solved = false
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
@@ -93,31 +94,42 @@ void describe('/api/Users', () => {
         email: ' ',
         password: ' '
       })
-    assert.equal(res.status, 201)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.data.id, 'number')
-    assert.equal(typeof res.body.data.createdAt, 'string')
-    assert.equal(typeof res.body.data.updatedAt, 'string')
-    assert.equal(res.body.data.password, undefined)
+    assert.equal(res.status, 400)
+    assert.equal(challenges.emptyUserRegistration.solved, false)
   })
 
-  void it('POST same blank user in database', async () => {
-    await request(app)
+  void it('POST rejects whitespace-only passwords consistently', async () => {
+    const first = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
       .send({
         email: 'blank-duplicate@test.test',
         password: ' '
       })
+    const second = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: 'blank-duplicate@test.test',
+        password: ' '
+      })
+    assert.equal(first.status, 400)
+    assert.equal(second.status, 400)
+  })
+
+  void it('POST rejects mismatched repeated passwords without solving the challenge', async () => {
+    challenges.passwordRepeatChallenge.solved = false
     const res = await request(app)
       .post('/api/Users')
       .set(jsonHeader)
       .send({
-        email: 'blank-duplicate@test.test',
-        password: ' '
+        email: 'repeat-mismatch@test.test',
+        password: 'correct horse battery staple',
+        passwordRepeat: 'different password'
       })
+
     assert.equal(res.status, 400)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(challenges.passwordRepeatChallenge.solved, false)
   })
 
   void it('POST whitespaces user', async () => {
