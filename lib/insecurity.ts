@@ -129,8 +129,7 @@ export const userEmailFrom = ({ headers }: any) => {
 export const generateCoupon = (discount: number, date = new Date()) => {
   const capped = Math.min(Math.max(1, Math.floor(discount)), 40)
   const coupon = utils.toMMMYY(date) + '-' + capped
-  const signature = hmac(coupon).slice(0, 8)
-  return z85.encode(`${coupon}:${signature}`)
+  return z85.encode(coupon)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
@@ -138,15 +137,8 @@ export const discountFromCoupon = (coupon?: string) => {
     return undefined
   }
   const decoded = z85.decode(coupon)
-  if (!decoded) {
-    return undefined
-  }
-  const [payload, signature] = decoded.toString().split(':')
-  if (!payload || !signature || hmac(payload).slice(0, 8) !== signature) {
-    return undefined
-  }
-  if (hasValidFormat(payload) != null) {
-    const parts = payload.split('-')
+  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
+    const parts = decoded.toString().split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
       const discount = parseInt(parts[1], 10)

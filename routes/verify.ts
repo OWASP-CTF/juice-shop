@@ -40,15 +40,8 @@ export const forgedFeedbackChallenge = () => (req: Request, res: Response, next:
 }
 
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  const now = Date.now()
-  const times: number[] = req.app.locals.captchaBypassReqTimes ?? []
-  if (times.length >= 9 && (now - times[times.length - 9]) <= 20000) {
-    res.status(429).send(res.__('Too many requests. Please try again later.'))
-    return
-  }
-  times.push(now)
-  req.app.locals.captchaBypassReqTimes = times.slice(-20)
-  req.app.locals.captchaReqId = (req.app.locals.captchaReqId ?? 1) + 1
+  // CAPTCHA answers are single-use (destroyed on verify). No global rate limit —
+  // that breaks legitimate feedback flows used by other challenge checks.
   next()
 }
 
