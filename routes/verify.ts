@@ -5,9 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { Op } from 'sequelize'
-import jwt from 'jsonwebtoken'
 import config from 'config'
-import jws from 'jws'
 
 import { products, challenges, retrieveBlueprintChallengeFile } from '../data/datacache'
 import type { Product as ProductConfig } from '../lib/config.types'
@@ -77,16 +75,6 @@ export const errorHandlingChallenge = () => (err: unknown, req: Request, { statu
   next(err)
 }
 
-export const jwtChallenges = () => (req: Request, res: Response, next: NextFunction) => {
-  if (challengeUtils.notSolved(challenges.jwtUnsignedChallenge)) {
-    jwtChallenge(challenges.jwtUnsignedChallenge, req, 'none', /jwtn3d@/)
-  }
-  if (utils.isChallengeEnabled(challenges.jwtForgedChallenge) && challengeUtils.notSolved(challenges.jwtForgedChallenge)) {
-    jwtChallenge(challenges.jwtForgedChallenge, req, 'HS256', /rsa_lord@/)
-  }
-  next()
-}
-
 export const serverSideChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   if (req.query.key === 'tRy_H4rd3r_n0thIng_iS_Imp0ssibl3') {
     if (challengeUtils.notSolved(challenges.sstiChallenge) && req.app.locals.abused_ssti_bug === true) {
@@ -102,34 +90,6 @@ export const serverSideChallenges = () => (req: Request, res: Response, next: Ne
     }
   }
   next()
-}
-
-function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, email: string | RegExp) {
-  const token = utils.jwtFrom(req)
-  if (token) {
-    const decoded = jws.decode(token) ? jwt.decode(token) : null
-
-    if (decoded === null || typeof decoded === 'string') {
-      return
-    }
-
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
-      if (err === null) {
-        challengeUtils.solveIf(challenge, () => {
-          return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
-        })
-      }
-    })
-  }
-}
-
-function hasAlgorithm (token: string, algorithm: string) {
-  const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
-  return token && header && header.alg === algorithm
-}
-
-function hasEmail (token: { data: { email: string } }, email: string | RegExp) {
-  return token?.data?.email?.match(email)
 }
 
 async function checkPatternInFeedbackAndComplaints (

@@ -43,6 +43,51 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+const jwtAlgorithm = 'RS256'
+const verifyJws = jws.verify as unknown as ((signature: string, secretOrKey: string) => boolean)
+
+const hasExpectedJwtAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    return jws.decode(token)?.header?.alg === jwtAlgorithm
+  } catch (error) {
+    return false
+  }
+}
+
+const verifiedJwtPayload = (token?: string) => {
+  if (!token || !hasExpectedJwtAlgorithm(token)) {
+    return undefined
+  }
+
+  try {
+    if (!verifyJws(token, publicKey)) {
+      return undefined
+    }
+
+    const payload = jws.decode(token)?.payload
+    if (payload?.exp && Math.round(Date.now()) / 1000 >= payload.exp) {
+      return undefined
+    }
+    return payload
+  } catch (error) {
+    return undefined
+  }
+}
+
+const jwtAuthentication = (secret: string) => {
+  const authenticate = expressJwt({ secret, algorithms: [jwtAlgorithm] })
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!hasExpectedJwtAlgorithm(utils.jwtFrom(req))) {
+      res.status(401).json({ status: 'error', message: 'Invalid authentication token' })
+      return
+    }
+    authenticate(req, res, next)
+  }
+}
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
@@ -51,11 +96,11 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const isAuthorized = () => jwtAuthentication(publicKey)
+export const denyAll = () => jwtAuthentication('' + Math.random())
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
-export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const verify = (token?: string) => verifiedJwtPayload(token) !== undefined
+export const decode = (token?: string) => verifiedJwtPayload(token)
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -196,14 +241,11 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null) {
-        if (authenticatedUsers.get(token) === undefined) {
-          authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
-        }
-      }
-    })
+    const decoded = decode(token)
+    if (decoded && authenticatedUsers.get(token) === undefined) {
+      authenticatedUsers.put(token, decoded)
+      res.cookie('token', token)
+    }
   }
   next()
 }
