@@ -24,6 +24,7 @@ export interface StaticUser {
   lastLoginIp?: string
   deletedFlag?: boolean
   totpSecret?: string
+  totpSecretEnv?: string
   customDomain?: boolean
   securityQuestion?: StaticUserSecurityQuestion
   feedback?: StaticUserFeedback

@@ -147,8 +147,8 @@
 -
   email: wurstbrot
   username: wurstbrot
-  password: 'EinBelegtesBrotMitSchinkenSCHINKEN!'
-  totpSecret: IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH
+  passwordEnv: JUICE_SHOP_2FA_ADMIN_PASSWORD
+  totpSecretEnv: JUICE_SHOP_2FA_ADMIN_TOTP_SECRET
   key: timo
   role: 'admin'
   securityQuestion:
