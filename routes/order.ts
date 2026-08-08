@@ -35,6 +35,14 @@ export function placeOrder () {
     BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
+          const hasInvalidQuantity = basket.Products?.some(({ BasketItem }) => {
+            return BasketItem != null && (!Number.isInteger(BasketItem.quantity) || BasketItem.quantity <= 0)
+          })
+          if (hasInvalidQuantity) {
+            res.status(400).json({ error: res.__('Quantity must be a positive integer.') })
+            return
+          }
+
           const customer = security.authenticatedUsers.from(req)
           const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
@@ -136,8 +144,6 @@ export function placeOrder () {
           doc.moveDown()
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
-
-          challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {

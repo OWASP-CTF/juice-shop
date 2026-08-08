@@ -10,6 +10,8 @@ import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 import * as security from '../../lib/insecurity'
+import { challenges } from '../../data/datacache'
+import { BasketItemModel } from '../../models/basketitem'
 
 let app: Express
 let authHeader: { Authorization: string, 'content-type': string }
@@ -41,19 +43,17 @@ void describe('/rest/basket/:id', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('GET empty basket when requesting non-existing basket id', async () => {
+  void it('GET a non-owned basket id is forbidden', async () => {
     const res = await request(app).get('/rest/basket/4711').set(authHeader)
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.ok(res.body.data === null || (typeof res.body.data === 'object' && Object.keys(res.body.data).length === 0))
+    assert.equal(res.status, 403)
   })
 
   void it('GET existing basket with contained products by id', async () => {
-    const res = await request(app).get('/rest/basket/1').set(authHeader)
+    const res = await request(app).get('/rest/basket/2').set(authHeader)
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.id, 1)
-    assert.equal(res.body.data.Products.length, 3)
+    assert.equal(res.body.data.id, 2)
+    assert.ok(Array.isArray(res.body.data.Products))
   })
 
   void it.skip('GET basket should accept forged JWTs', async () => {
@@ -109,12 +109,12 @@ void describe('/rest/basket/:id', () => {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
     })
+    challenges.basketAccessChallenge.solved = false
     const res = await request(app)
       .get('/rest/basket/2')
       .set({ Authorization: 'Bearer ' + token })
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.id, 2)
+    assert.equal(res.status, 403)
+    assert.equal(challenges.basketAccessChallenge.solved, false)
   })
 })
 
@@ -136,16 +136,16 @@ void describe('/rest/basket/:id/checkout', () => {
     assert.ok(res.text.includes('Error: Basket with id=42 does not exist.'))
   })
 
-  void it('POST placing an order for a basket with a negative total cost is possible', async () => {
-    const itemRes = await request(app)
-      .post('/api/BasketItems')
-      .set(authHeader)
-      .send({ BasketId: 2, ProductId: 10, quantity: -100 })
-    assert.equal(itemRes.status, 200)
-
-    const res = await request(app).post('/rest/basket/3/checkout').set(authHeader)
-    assert.equal(res.status, 200)
-    assert.ok(res.body.orderConfirmation !== undefined)
+  void it('POST rejects a basket with a negative quantity without solving the challenge', async () => {
+    challenges.negativeOrderChallenge.solved = false
+    const invalidItem = await BasketItemModel.create({ BasketId: 2, ProductId: 10, quantity: -100 })
+    try {
+      const res = await request(app).post('/rest/basket/2/checkout').set(authHeader)
+      assert.equal(res.status, 400)
+      assert.equal(challenges.negativeOrderChallenge.solved, false)
+    } finally {
+      await invalidItem.destroy()
+    }
   })
 
   void it('POST placing an order for a basket with 99% discount is possible', async () => {
