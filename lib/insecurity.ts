@@ -188,20 +188,13 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
-export const hasAdminRole = (req: Request) => {
-  const token = utils.jwtFrom(req) || req.cookies?.token
-  const decodedToken = verify(token) && decode(token)
-  return decodedToken?.data?.role === roles.admin
-}
-
-/* Access control that leaves the endpoint answering normally: a caller without the administrator
-   role gets a well formed but empty response instead of the administrative data. */
-export const isAdmin = (emptyResponse: any = {}) => {
+export const isAdmin = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (hasAdminRole(req)) {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
-      res.status(200).json(emptyResponse)
+      res.status(403).json({ error: 'Malicious activity detected' })
     }
   }
 }

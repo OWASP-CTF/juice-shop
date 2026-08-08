@@ -1,6 +1,7 @@
 import { type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
+import logger from '../lib/logger'
 import { challenges } from '../data/datacache'
 
 interface JuicyWallet {
@@ -33,19 +34,20 @@ export function checkKeys () {
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
+      /* Whatever is submitted, the wallet answers. A key that does not belong to it simply gets
+         told so instead of the request being refused. */
       if (req.body.privateKey === privateKey) {
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftUnlockChallenge })
+      } else if (req.body.privateKey === address) {
+        res.status(200).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
+      } else if (req.body.privateKey === publicKey) {
+        res.status(200).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
       } else {
-        if (req.body.privateKey === address) {
-          res.status(401).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else if (req.body.privateKey === publicKey) {
-          res.status(401).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else {
-          res.status(401).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })
-        }
+        res.status(200).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })
       }
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      logger.warn(`Could not check the submitted key: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })
     }
   }
 }
@@ -54,7 +56,8 @@ export function nftUnlocked () {
     try {
       res.status(200).json({ status: challenges.nftUnlockChallenge.solved })
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      logger.warn(`Could not read the unlock status: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ status: false })
     }
   }
 }
