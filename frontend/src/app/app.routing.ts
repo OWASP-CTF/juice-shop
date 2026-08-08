@@ -4,7 +4,6 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -13,7 +12,6 @@ import { RegisterComponent } from './register/register.component'
 import { ForgotPasswordComponent } from './forgot-password/forgot-password.component'
 import { SearchResultComponent } from './search-result/search-result.component'
 import { LoginComponent } from './login/login.component'
-import { AdministrationComponent } from './administration/administration.component'
 import { ChangePasswordComponent } from './change-password/change-password.component'
 import { ComplaintComponent } from './complaint/complaint.component'
 import { RouterModule, type Routes, type UrlMatchResult, type UrlSegment } from '@angular/router'
@@ -37,7 +35,7 @@ import { OrderHistoryComponent } from './order-history/order-history.component'
 import { DeliveryMethodComponent } from './delivery-method/delivery-method.component'
 import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
-import { AccountingGuard, AdminGuard, LoginGuard } from './app.guard'
+import { AccountingGuard, LoginGuard } from './app.guard'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
 import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
@@ -51,11 +49,6 @@ const loadFaucetModule = async () => {
 const loadWeb3WalletModule = async () => {
   const module = await import('./wallet-web3/wallet-web3.module')
   return module.WalletWeb3Module
-}
-
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
 }
 
 const loadCodingChallenge = async () => {
@@ -75,11 +68,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // { // vuln-code-snippet neutral-line adminSectionChallenge
+  //   path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
+  //   component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
+  //   canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+  // }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -235,10 +231,6 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -257,10 +249,6 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
-  }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
