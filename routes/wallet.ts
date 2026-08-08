@@ -21,6 +21,11 @@ export function getWalletBalance () {
 export function addWalletBalance () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const cardId = req.body.paymentId
+    /* An unvalidated amount allowed a negative or non-numeric top-up. */
+    const amount = Number(req.body.balance)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ status: 'error', error: 'Invalid amount' })
+    }
     const card = cardId ? await CardModel.findOne({ where: { id: cardId, UserId: req.body.UserId } }) : null
     if (card != null) {
       try {

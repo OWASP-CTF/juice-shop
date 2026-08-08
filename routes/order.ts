@@ -32,7 +32,16 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
-    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+    /* The basket was fetched by id alone, so an order could be placed against
+       another customer's basket. */
+    const orderingUser = security.authenticatedUsers.from(req)
+    if (!orderingUser?.bid || String(orderingUser.bid) !== String(id)) {
+      res.status(401).send('Malicious activity detected.')
+      return
+    }
+    /* paranoid: false pulled in soft-deleted products, letting withdrawn items
+       be ordered. */
+    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: true, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)

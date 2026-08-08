@@ -21,14 +21,21 @@ export function upgradeToDeluxe () {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
+      /* Any paymentMode other than wallet or card fell through both branches
+         below without taking payment, yet still granted the membership. */
+      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
+        res.status(400).json({ status: 'error', error: 'Invalid payment mode' })
+        return
+      }
       if (req.body.paymentMode === 'wallet') {
         const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
-        if ((wallet != null) && wallet.balance < 49) {
+        /* A missing wallet took the else branch and was decremented regardless,
+           so the membership could be bought with no wallet at all. */
+        if (wallet == null || wallet.balance < 49) {
           res.status(400).json({ status: 'error', error: 'Insuffienct funds in Wallet' })
           return
-        } else {
-          await WalletModel.decrement({ balance: 49 }, { where: { UserId: req.body.UserId } })
         }
+        await WalletModel.decrement({ balance: 49 }, { where: { UserId: req.body.UserId } })
       }
 
       if (req.body.paymentMode === 'card') {
