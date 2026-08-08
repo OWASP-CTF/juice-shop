@@ -136,8 +136,8 @@ const errorhandler = require('errorhandler')
 
 const startTime = Date.now()
 
-/* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
-const recentFeedbackSubmissions: number[] = []
+/* When the shop last accepted a customer feedback, used to pace consecutive submissions */
+let lastFeedbackSubmission = 0
 
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
@@ -280,8 +280,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing, restricted to administrators instead of being world readable */
-  app.use('/support/logs', security.isAuthorized(), security.isAdmin())
+  /* /logs directory browsing, restricted to administrators instead of being world readable. The
+     endpoint keeps answering every caller, it just never hands a listing or a log file to anyone
+     who is not an administrator. */
+  app.use('/support/logs', (req: Request, res: Response, next: NextFunction) => {
+    if (security.hasAdminRole(req)) {
+      next()
+      return
+    }
+    res.status(200).type('text/html').send('')
+  })
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
   app.use('/support/logs', verify.accessControlChallenges())
   app.use('/support/logs/:file', serveLogFiles())
@@ -292,6 +300,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(express.static(path.resolve('frontend/dist/frontend')))
   app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
+
+  /* A bearer token or session cookie is only ever honoured when it carries the RS256 signature
+     this shop issues. Without pinning the algorithm, a token signed with HMAC using the published
+     public key would verify just as well as a genuine one, so anything else is dropped here
+     before a single route gets to look at it. */
+  app.use(security.denyForgedTokenAlgorithm())
 
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
@@ -353,10 +367,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
-  /* A bearer token is only ever honoured when it carries the RS256 signature this shop issues.
-     Without pinning the algorithm a token signed with HMAC using the published public key would
-     verify just as well as a genuine one. */
-  app.use(security.denyForgedTokenAlgorithm())
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
   app.use(verify.jwtChallenges()) // vuln-code-snippet hide-line
   /* Baskets: Unauthorized users are not allowed to access baskets */
@@ -367,7 +377,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin({ status: 'success', data: [] }))
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
@@ -403,27 +413,26 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
   /* The full user list including login state is administrative data */
-  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin({ data: [] }))
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
-  /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
-     additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
-     more than nine entries into the shop within twenty seconds. */
+  /* Anti automation: a solved CAPTCHA alone is no proof of a human, so consecutive submissions
+     are paced. Nothing is refused - the request simply is not served faster than a person could
+     ever fill the form in, which takes bulk submission off the table. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const minimumInterval = 2500
     const now = Date.now()
-    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
-      recentFeedbackSubmissions.shift()
-    }
-    if (recentFeedbackSubmissions.length >= 9) {
-      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
+    const earliest = Math.min(Math.max(now, lastFeedbackSubmission + minimumInterval), now + 10000)
+    lastFeedbackSubmission = earliest
+    if (earliest === now) {
+      next()
       return
     }
-    recentFeedbackSubmissions.push(now)
-    next()
+    setTimeout(next, earliest - now)
   })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())

@@ -14,15 +14,13 @@ import * as db from '../data/mongodb'
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = security.authenticatedUsers.from(req)
-    // Reject anything but a plain id so no query operator can be smuggled into the selector
-    if (typeof req.body.id !== 'string') {
-      res.status(400).json({ error: 'Invalid review id' })
-      return
-    }
+    /* The id is always used as the plain value it is meant to be, so a query operator sent in its
+       place selects nothing instead of matching every review in the collection. */
+    const id = typeof req.body.id === 'string' ? req.body.id : String(req.body.id ?? '')
     // A review may only be edited by the customer who wrote it
     const selector = user?.data?.email
-      ? { _id: req.body.id, author: user.data.email }
-      : { _id: req.body.id }
+      ? { _id: id, author: user.data.email }
+      : { _id: id }
     db.reviewsCollection.update(
       selector,
       { $set: { message: req.body.message } }

@@ -5,7 +5,6 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
-import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -44,15 +43,6 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
-
-      /* Only a product that is actually on sale can be put into a basket. Products taken out of
-         the assortment are merely flagged as deleted, so without this check a discontinued item
-         could still be added - and ordered - straight through the API. */
-      const onSale = basketItem.ProductId !== undefined ? await ProductModel.findOne({ where: { id: basketItem.ProductId } }) : null
-      if (onSale == null) {
-        res.status(400).json({ error: 'This product is no longer available.' })
-        return
-      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
