@@ -11,7 +11,6 @@ import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 import { UserModel } from '../../models/user'
 
 let app: Express
@@ -57,6 +56,7 @@ void describe('/api/Users', () => {
     assert.equal(typeof res.body.data.id, 'number')
     assert.equal(typeof res.body.data.createdAt, 'string')
     assert.equal(typeof res.body.data.updatedAt, 'string')
+    assert.equal(res.body.data.email, 'horst@horstma.nn')
     assert.equal(res.body.data.password, undefined)
   })
 
@@ -197,20 +197,33 @@ void describe('/api/Users', () => {
     assert.equal(res.body.data.role, security.roles.customer)
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-    void it('POST new user with XSS attack in email address', async () => {
-      const res = await request(app)
-        .post('/api/Users')
-        .set(jsonHeader)
-        .send({
-          email: '<iframe src="javascript:alert(`xss`)">',
-          password: 'does.not.matter'
-        })
-      assert.equal(res.status, 201)
-      assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.email, '<iframe src="javascript:alert(`xss`)">')
+  void it('POST recursively sanitizes masked XSS in email without solving the challenge', async () => {
+    challenges.persistedXssUserChallenge.solved = false
+    const safeEmail = 'xss-regression@example.test'
+    const res = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: `${safeEmail}<<script>Foo</script>iframe src="javascript:alert(\`xss\`)">`,
+        password: 'does.not.matter'
+      })
+    assert.equal(res.status, 201)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.email, safeEmail)
+    assert.equal(challenges.persistedXssUserChallenge.solved, false)
+  })
+
+  void it('recursively sanitizes masked XSS in usernames', () => {
+    challenges.persistedXssUserChallenge.solved = false
+    const user = UserModel.build({
+      username: 'Picard<<script>Foo</script>iframe src="javascript:alert(`xss`)">',
+      email: 'picard-xss-regression@example.test',
+      password: 'tea-earl-grey-hot'
     })
-  }
+
+    assert.equal(user.username, 'Picard')
+    assert.equal(challenges.persistedXssUserChallenge.solved, false)
+  })
 })
 
 void describe('/api/Users/:id', () => {

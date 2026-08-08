@@ -49,28 +49,22 @@ describe('/#/contact', () => {
       solveNextCaptcha()
     })
 
-    // Cypress alert bug
-    // The challenge also passes but its just that cypress freezes and is unable to perform any action
-    xit('should be possible to trick the sanitization with a masked XSS attack', () => {
-      cy.task('isDocker').then((isDocker) => {
-        if (!isDocker) {
-          cy.get('#rating').type('{rightarrow}{rightarrow}{rightarrow}')
-          cy.get('#comment').type(
-            '<<script>Foo</script>iframe src="javascript:alert(`xss`)">'
-          )
-          cy.get('#submitButton').should('not.be.disabled').click()
+    it('should recursively sanitize a masked XSS attack', () => {
+      cy.intercept('POST', '/api/Feedbacks').as('createFeedback')
+      cy.get('#rating').type('{rightarrow}{rightarrow}{rightarrow}')
+      cy.get('#comment').type(
+        'Useful feedback. <<script>Foo</script>iframe src="javascript:alert(`xss`)">'
+      )
+      cy.get('#submitButton').should('not.be.disabled').click()
 
-          cy.visit('/#/about')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-
-          cy.visit('/#/administration')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-          cy.expectChallengeSolved({ challenge: 'Server-side XSS Protection' })
-        }
+      cy.wait('@createFeedback').then(({ response }) => {
+        expect(response?.statusCode).to.equal(201)
+        expect(response?.body.data.comment).to.match(/^Useful feedback\. /)
+        expect(response?.body.data.comment).not.to.include('<iframe')
+        expect(response?.body.data.comment).not.to.include('javascript:')
+      })
+      cy.request('/api/Challenges/?name=Server-side XSS Protection').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
       })
     })
   })
