@@ -136,6 +136,10 @@ const errorhandler = require('errorhandler')
 
 const startTime = Date.now()
 
+/* Timestamps of recently accepted customer feedback submissions, used to throttle bulk/scripted
+   submission (see the /api/Feedbacks rate limit below). */
+const recentFeedbackSubmissions: number[] = []
+
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
 const appName = config.get<string>('application.customMetricsPrefix')
@@ -353,6 +357,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
+  /* A bearer/cookie token is only ever honoured when it carries the RS256 signature this shop
+     issues. Without pinning the algorithm here, a token signed with HMAC using the published
+     RSA public key as the "secret" would be treated the same as a genuine one by any handler
+     that reads the token directly instead of going through isAuthorized(). */
+  app.use(security.denyForgedTokenAlgorithm())
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
   app.use(verify.jwtChallenges()) // vuln-code-snippet hide-line
   /* Baskets: Unauthorized users are not allowed to access baskets */
@@ -401,13 +410,31 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  /* The full user list including current login state is administrative data - it is what
+     AdministrationComponent is actually built on (UserService.find() calls this endpoint, not
+     /api/Users), so gating only /api/Users left it fully exposed to any authenticated user. */
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti-automation: a solved CAPTCHA alone is not proof of a human since it only verifies a
+     single request, not the request rate. Cap submissions over a sliding window so answering
+     the CAPTCHA in a scripted loop cannot grind out unlimited feedback entries. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+      recentFeedbackSubmissions.shift()
+    }
+    if (recentFeedbackSubmissions.length >= 9) {
+      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
+      return
+    }
+    recentFeedbackSubmissions.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
