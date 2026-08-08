@@ -211,6 +211,9 @@ export const deluxeToken = (email: string) => {
 // Browser-driven pages (e.g. /support/logs) send the session as a cookie, not an Authorization header.
 const tokenFrom = (req: Request) => req.cookies?.token || utils.jwtFrom(req)
 
+// 'secure' is omitted on purpose: the shop is also served over plain HTTP.
+export const sessionCookieOptions = { httpOnly: true, sameSite: 'strict' } as const
+
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(tokenFrom(req)) && decode(tokenFrom(req))
@@ -261,7 +264,7 @@ export const updateAuthenticatedUsers = () => (req: Request, res: Response, next
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          res.cookie('token', token, sessionCookieOptions)
         }
       }
     })
