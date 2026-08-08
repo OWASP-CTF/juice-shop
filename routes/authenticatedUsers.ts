@@ -9,6 +9,11 @@ import * as security from '../lib/insecurity'
 
 async function retrieveUserList (req: Request, res: Response, next: NextFunction) {
   try {
+    const loggedInUser = security.authenticatedUsers.from(req)
+    if (!loggedInUser || loggedInUser.data.role !== 'admin') {
+      res.status(403).json({ status: 'error', data: 'Forbidden' })
+      return
+    }
     const users = await UserModel.findAll()
 
     res.json({
