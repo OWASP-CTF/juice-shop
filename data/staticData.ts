@@ -13,7 +13,8 @@ export async function loadStaticData (file: string) {
 
 export interface StaticUser {
   email: string
-  password: string
+  password?: string
+  passwordEnv?: string
   key: string
   role: 'admin' | 'customer' | 'deluxe' | 'accounting'
 

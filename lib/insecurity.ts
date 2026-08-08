@@ -100,7 +100,16 @@ export const isAuthorized = () => {
   }
 }
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: expectedJwtAlgorithm })
+export const authorize = (payload: any = {}) => {
+  if (payload?.data && typeof payload.data === 'object') {
+    const exposableFields = ['id', 'username', 'email', 'role', 'deluxeToken', 'lastLoginIp', 'profileImage', 'isActive']
+    const data = Object.fromEntries(exposableFields
+      .filter(field => payload.data[field] !== undefined)
+      .map(field => [field, payload.data[field]]))
+    payload = { ...payload, data }
+  }
+  return jwt.sign(payload, privateKey, { expiresIn: '6h', algorithm: expectedJwtAlgorithm })
+}
 export const verify = (token: string) => hasExpectedJwtAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 

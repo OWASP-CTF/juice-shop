@@ -7,7 +7,7 @@ import sinon from 'sinon'
 import chai from 'chai'
 import sinonChai from 'sinon-chai'
 import { retrieveLoggedInUser } from '../../routes/currentUser'
-import { authenticatedUsers, authorize } from '../../lib/insecurity'
+import { authenticatedUsers, authorize, decode } from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
 const expect = chai.expect
 chai.use(sinonChai)
@@ -49,5 +49,12 @@ describe('currentUser', () => {
     retrieveLoggedInUser()(req, res)
 
     expect(res.json).to.have.been.calledWith({ user: { id: 1 } })
+  })
+
+  it('does not include password hashes or second-factor secrets in user tokens', () => {
+    const token = authorize({ data: { id: 1, email: 'admin@juice-sh.op', password: 'sensitive', totpSecret: 'sensitive' } })
+    const payload = decode(token)
+
+    expect(payload.data).to.deep.equal({ id: 1, email: 'admin@juice-sh.op' })
   })
 })

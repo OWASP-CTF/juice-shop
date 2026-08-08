@@ -24,6 +24,7 @@ void describe('/rest/memories', () => {
     const res = await request(app)
       .get('/rest/memories')
     assert.equal(res.status, 200)
+    assert.equal(res.body.data.every((memory: any) => memory.User?.password === undefined && memory.User?.totpSecret === undefined && memory.User?.email === undefined), true)
   })
 
   void it('GET memories via a valid authorization token', async () => {

@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The assessment confirmed three high-confidence canonical vulnerabilities and a set of related web-security weaknesses. The remediation removes directly reachable SQL injection, cross-account basket access, ZIP traversal, unsafe evaluation/deserialization, weak credential and token handling, several authorization gaps, stored/reflected injection paths, SSRF to private networks, and input-validation flaws. Later source-derived passes additionally gate operational artifacts and premium/Web3 routes, disable legacy knowledge-based recovery by default, remove an embedded Web3 challenge secret, make review likes atomic, reject expired coupons and active SVG profile images, constrain chatbot tools, sign progress codes, remove Angular trust bypasses, and replace verbose error responses. Focused and full native regression suites exercise both expected behavior and adversarial inputs; dependency risk and residual defense-in-depth gaps remain explicitly tracked below.
+The assessment confirmed three high-confidence canonical vulnerabilities and a set of related web-security weaknesses. The remediation removes directly reachable SQL injection, cross-account basket access, ZIP traversal, unsafe evaluation/deserialization, weak credential and token handling, several authorization gaps, stored/reflected injection paths, SSRF to private networks, and input-validation flaws. Later source-derived passes additionally gate operational artifacts and premium/Web3 routes, disable legacy knowledge-based recovery by default, remove embedded production seed credentials and a Web3 challenge secret, make review likes atomic, reject expired coupons and active SVG profile images, constrain chatbot tools, sign progress codes, remove Angular trust bypasses, and replace verbose error responses. Focused and full native regression suites exercise both expected behavior and adversarial inputs; dependency risk and residual defense-in-depth gaps remain explicitly tracked below.
 
 ## Findings Summary
 
@@ -85,8 +85,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A02:2021 Cryptographic Failures; A07:2021 Identification and Authentication Failures
 - **Location**: `lib/insecurity.ts`, `models/user.ts`, `routes/checkKeys.ts`, authentication and recovery routes
 - **Impact**: Repository readers could forge tokens and coupons, crack unsalted MD5 passwords cheaply, and exploit JWT algorithm confusion.
-- **Evidence**: Current-file secret-pattern scanning found zero API-token, private-key, or embedded-URL-credential pattern files. Unit and API tests verify salted password hashes, incorrect passwords, repeated-password validation, minimum change/reset length, signed coupon and progress-code bounds, forged/unknown progress-code rejection, unsigned/wrong-algorithm JWT rejection, default-disabled security-question recovery, and complete 2FA setup/disable flows.
-- **Remediation**: Private JWT and application HMAC keys are environment-backed with per-process safe fallbacks, the embedded Web3 mnemonic/private-key derivation was removed in favor of an environment-backed challenge key, RSA is at least 2048 bits, accepted JWTs are pinned to RS256, passwords use salted scrypt with constant-time comparison, and coupons and continue codes carry scoped HMACs. Restore endpoints accept only authenticated codes containing known challenge IDs. Legacy knowledge-based recovery requires an explicit compatibility opt-in.
+- **Evidence**: Current-file secret-pattern scanning found zero API-token, private-key, or embedded-URL-credential pattern files. Unit and API tests verify salted password hashes, incorrect passwords, repeated-password validation, minimum change/reset length, signed coupon and progress-code bounds, forged/unknown progress-code rejection, unsigned/wrong-algorithm JWT rejection, secret-free user tokens, default-disabled security-question recovery, complete 2FA setup/disable flows, and rejection of seven formerly repository-known production seed passwords.
+- **Remediation**: Private JWT and application HMAC keys are environment-backed with per-process safe fallbacks; sensitive seed accounts now use deployment environment variables with cryptographically random fallbacks; the embedded Web3 mnemonic/private-key derivation was removed in favor of an environment-backed challenge key; RSA is at least 2048 bits; accepted JWTs are pinned to RS256 and contain only an allowlisted user projection; passwords use salted scrypt with constant-time comparison; and coupons and continue codes carry scoped HMACs. Restore endpoints accept only authenticated codes containing known challenge IDs. Legacy knowledge-based recovery requires an explicit compatibility opt-in.
 - **Confidence**: HIGH
 
 ### HIGH — Profile image retrieval allowed server-side requests to internal hosts
@@ -177,6 +177,9 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - Focused Angular search suite: 9 passed, 0 failed.
 - Third-pass full API suite: 460 tests, 447 passed, 2 failed, 11 skipped. Both failures were external-resource connection timeouts (Disqus and Stack Overflow); all repository-owned API tests passed.
 - Third-pass full frontend suite: 120 files, 938 tests passed, 0 failed.
+- Seed-credential and memory-response API regressions: 15 passed, 0 failed; user-token unit regressions: 4 passed, 0 failed.
+- Credential-pass full API suite: 467 tests, 452 passed, 4 failed, 11 skipped. All four failures were live-site DNS/timeout/HTTP failures (Pastebin, Stack Overflow, GitHub, and the external profile-image host); all repository-owned API tests passed.
+- Credential-pass full frontend suite: 120 files, 938 tests passed, 0 failed.
 - `test/api/2fa.test.ts`: 13 passed, 0 failed.
 - Focused security API batch: 51 tests, 49 passed, 0 failed, 2 pre-existing skips.
 - Focused server unit batch: 98 tests, 96 passed, 0 failed, 2 pending; `test/server/insecuritySpec.ts` separately passed 37/37.
@@ -184,7 +187,7 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - `npm run build:server`: passed.
 - `npm run lint`: passed, including frontend TypeScript and SCSS lint.
 - `npm run rsn:update && npm run rsn`: reviewed deltas locked; all codefix files match the locked state.
-- Official PR scorer after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched. The second signed-off batch improved this to 118/141 points (84%), 32/38 challenges patched. The third pass has not yet been scored at the time of this report update.
+- Official PR scorer after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched. The second signed-off batch improved this to 118/141 points (84%), 32/38 challenges patched. The third signed-off batch remained at 118/141 and 32/38; the seed-credential pass has not yet been scored at the time of this report update.
 - Current-file manual secret-pattern scan: 1,166 files examined; 0 API-token pattern files, 0 private-key pattern files, and 0 embedded URL-credential pattern files (dependencies, build output, and Git metadata excluded). Five high-risk-named files were contextually reviewed: npm policy files, test-compose configuration, and static CTF/training key material rather than active service credentials. No trufflehog/gitleaks/detect-secrets binary, CI secret-scanning control, or broad `.env`/`*.key`/`*.pem` ignore coverage was present; these are preventive-control gaps.
 
 ## Out of Scope
