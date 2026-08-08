@@ -129,6 +129,7 @@
     "jsonwebtoken": "^9.0.2",
     "jws": "^4.0.0",
     "libxmljs2": "~0.37.0",
+    "marsdb": "^0.6.11",
     "material-icons": "^1.13.14",
     "median": "^0.0.2",
     "morgan": "^1.10.0",

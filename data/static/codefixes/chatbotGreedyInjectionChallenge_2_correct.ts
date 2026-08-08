@@ -61,7 +61,7 @@ const chatTools = {
     }),
     execute: async ({ id }) => {
       const productId = Number(Id)
-      return await db.reviewsCollection.find({ product: productId }) as Review[]
+      return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
     }
   }),
 
