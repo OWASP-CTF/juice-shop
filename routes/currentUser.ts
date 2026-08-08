@@ -8,6 +8,9 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+// Fields that may ever be exposed through this endpoint, no matter what the client asks for
+const SELECTABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -27,7 +30,7 @@ export function retrieveLoggedInUser () {
         if (requestedFields.length > 0) {
           // When fields are specified, return only those fields
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
+            if (SELECTABLE_FIELDS.includes(field) && user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
           }
