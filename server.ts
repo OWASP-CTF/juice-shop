@@ -128,10 +128,6 @@ import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType
 const app = express()
 const server = new http.Server(app)
 
-// errorhandler requires us from overwriting a string property on it's module which is a big no-no with esmodules :/
-
-const errorhandler = require('errorhandler')
-
 const startTime = Date.now()
 
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
@@ -689,7 +685,26 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  /* The errorhandler package is development-only middleware: it renders the
+     failing stack frame, the source around it and the request context straight
+     into the response, disclosing internal paths, queries and library versions
+     to anyone who can trigger an error. Errors are now logged server-side and
+     the client only receives the status and a generic message. */
+  app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    logger.error(utils.getErrorMessage(err))
+    if (res.headersSent) {
+      next(err)
+      return
+    }
+    /* Errors such as express-jwt's UnauthorizedError carry their own status;
+       honour it so an authorization failure stays a 401 rather than becoming a
+       generic 500. */
+    const carried = (err as { status?: unknown, statusCode?: unknown })?.status ?? (err as { statusCode?: unknown })?.statusCode
+    const status = typeof carried === 'number' && carried >= 400 && carried < 600
+      ? carried
+      : (res.statusCode >= 400 ? res.statusCode : 500)
+    res.status(status).json({ error: 'An error occurred. Please try again later.' })
+  })
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.
@@ -737,7 +752,6 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
 app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
-errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
   const datacreatorEnd = startupGauge.startTimer({ task: 'datacreator' })
