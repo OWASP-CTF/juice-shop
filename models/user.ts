@@ -13,9 +13,6 @@ import {
   type CreationOptional,
   type Sequelize
 } from 'sequelize'
-import * as challengeUtils from '../lib/challengeUtils'
-import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 class User extends Model<
@@ -54,12 +51,6 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-            return utils.contains(
-              email,
-              '<iframe src="javascript:alert(`xss`)">'
-            )
-          })
           email = security.sanitizeSecure(email)
           this.setDataValue('email', email)
         }

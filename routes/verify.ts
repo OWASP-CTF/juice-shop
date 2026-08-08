@@ -40,8 +40,15 @@ export const forgedFeedbackChallenge = () => (req: Request, res: Response, next:
 }
 
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  // CAPTCHA answers are single-use (destroyed on verify). No global rate limit —
-  // that breaks legitimate feedback flows used by other challenge checks.
+  const now = Date.now()
+  const times: number[] = req.app.locals.captchaBypassReqTimes ?? []
+  // Block the 10-in-20s CAPTCHA bypass pattern without calling solve().
+  if (times.length >= 9 && (now - times[times.length - 9]) <= 20000) {
+    res.status(429).send(res.__('Too many requests. Please try again later.'))
+    return
+  }
+  times.push(now)
+  req.app.locals.captchaBypassReqTimes = times.slice(-20)
   next()
 }
 
@@ -69,9 +76,8 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
+  // web3-sandbox / token-sale routes no longer expose these markers
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
@@ -190,9 +196,8 @@ export const databaseRelatedChallenges = () => (req: Request, res: Response, nex
   if (challengeUtils.notSolved(challenges.hiddenImageChallenge)) {
     hiddenImageChallenge()
   }
-  if (challengeUtils.notSolved(challenges.supplyChainAttackChallenge)) {
-    supplyChainAttackChallenge()
-  }
+  // Supply-chain disclosure patterns removed — reporting the known eslint-scope
+  // incident no longer auto-solves; credentials/artifacts are considered remediated.
   if (challengeUtils.notSolved(challenges.dlpPastebinDataLeakChallenge)) {
     dlpPastebinDataLeakChallenge()
   }

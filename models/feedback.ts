@@ -4,7 +4,6 @@
  */
 
 /* jslint node: true */
-import * as utils from '../lib/utils'
 import * as challengeUtils from '../lib/challengeUtils'
 import {
   Model,
@@ -40,12 +39,6 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
-            return utils.contains(
-              comment,
-              '<iframe src="javascript:alert(`xss`)"'
-            )
-          })
           this.setDataValue('comment', security.sanitizeSecure(comment))
         }
       },

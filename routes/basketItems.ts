@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -45,8 +46,14 @@ export function addBasketItem () {
       res.status(400).json({ error: 'Invalid quantity' })
       return
     }
+    const productId = Number(productIds[productIds.length - 1])
+    const liveProduct = await ProductModel.findByPk(productId)
+    if (!liveProduct) {
+      res.status(400).json({ error: 'Invalid product' })
+      return
+    }
     const basketItem = {
-      ProductId: productIds[productIds.length - 1],
+      ProductId: productId,
       BasketId: user.bid,
       quantity
     }
