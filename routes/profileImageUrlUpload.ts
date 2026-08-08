@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs'
+import net from 'node:net'
+import dns from 'node:dns/promises'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -13,15 +15,57 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
+function isInternalAddress (address: string): boolean {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number)
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 198 && (b === 18 || b === 19))
+  }
+  const ip = address.toLowerCase().split('%')[0]
+  if (ip.startsWith('::ffff:')) {
+    const mapped = ip.substring(7)
+    if (net.isIPv4(mapped)) return isInternalAddress(mapped)
+    const [high, low] = mapped.split(':').map((group) => parseInt(group, 16))
+    return isInternalAddress([high >> 8, high & 255, low >> 8, low & 255].join('.'))
+  }
+  return ip === '::' || ip === '::1' || /^f[cd]/.test(ip) || /^fe[89ab]/.test(ip)
+}
+
+async function isPubliclyFetchable (imageUrl: unknown): Promise<boolean> {
+  let url: URL
+  try {
+    url = new URL(imageUrl as string)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  const hostname = url.hostname.replace(/^\[|\]$/g, '')
+  if (net.isIP(hostname)) return !isInternalAddress(hostname)
+  try {
+    const addresses = await dns.lookup(hostname, { all: true })
+    return addresses.length > 0 && addresses.every(({ address }) => !isInternalAddress(address))
+  } catch {
+    return false
+  }
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+      const fetchable = await isPubliclyFetchable(url)
+      if (fetchable && url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          const response = await fetch(url)
+          if (!fetchable) {
+            throw new Error('imageUrl must be an http(s) URL resolving to a public address')
+          }
+          const response = await fetch(url, { redirect: 'manual' })
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
