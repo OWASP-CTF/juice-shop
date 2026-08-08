@@ -24,13 +24,20 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
+    const cutOffFile = file ? security.cutOffPoisonNullByte(file) : file
+    if (cutOffFile && (endsWithAllowlistedFileType(cutOffFile) || (cutOffFile === 'incident-support.kdbx'))) {
+      const ftpDir = path.resolve('ftp')
+      const resolved = path.resolve(ftpDir, cutOffFile)
+      if (!resolved.startsWith(ftpDir + path.sep)) {
+        res.status(403)
+        next(new Error('Access to this file is forbidden!'))
+        return
+      }
 
-      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
-      verifySuccessfulPoisonNullByteExploit(file)
+      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return cutOffFile.toLowerCase() === 'acquisitions.md' })
+      verifySuccessfulPoisonNullByteExploit(cutOffFile)
 
-      res.sendFile(path.resolve('ftp/', file))
+      res.sendFile(resolved)
     } else {
       res.status(403)
       next(new Error('Only .md and .pdf files are allowed!'))
