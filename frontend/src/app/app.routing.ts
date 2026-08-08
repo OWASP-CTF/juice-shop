@@ -75,11 +75,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  {
-    path: 'administration',
-    component: AdministrationComponent,
-    canActivate: [AdminGuard]
-  },
+  /* TODO: Externalize admin functions into a separate application
+           that is only accessible inside the corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -235,13 +238,11 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  {
-    /* The sandbox used to rely on an unguessable path alone. It now needs a real authorisation
-       check, so being able to guess or read the route no longer grants access. */
-    path: 'web3-sandbox',
-    loadChildren: async () => await loadWeb3SandboxModule(),
-    canActivate: [AdminGuard]
-  },
+  /* The smart contract sandbox was never meant to be reachable from the shop */
+  // {
+  //   path: 'web3-sandbox',
+  //   loadChildren: async () => await loadWeb3SandboxModule()
+  // },
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -260,13 +261,12 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  {
-    /* Obfuscating the route was never an access restriction. The unannounced token sale page is
-       now behind a real authorisation check until it is officially launched. */
-    matcher: tokenMatcher,
-    component: TokenSaleComponent,
-    canActivate: [AdminGuard]
-  },
+  /* An obfuscated route matcher is no access restriction, so the unannounced token sale page
+     is not routable until it is officially launched */
+  // {
+  //   matcher: tokenMatcher,
+  //   component: TokenSaleComponent
+  // },
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()

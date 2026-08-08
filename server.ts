@@ -136,6 +136,9 @@ const errorhandler = require('errorhandler')
 
 const startTime = Date.now()
 
+/* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
+const recentFeedbackSubmissions: number[] = []
+
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
 const appName = config.get<string>('application.customMetricsPrefix')
@@ -405,10 +408,23 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
-  /* Anti automation: feedback submission is rate limited on top of the CAPTCHA */
-  app.post('/api/Feedbacks', rateLimit({ windowMs: 20 * 1000, max: 4, validate: false }))
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
+     additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
+     more than nine entries into the shop within twenty seconds. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+      recentFeedbackSubmissions.shift()
+    }
+    if (recentFeedbackSubmissions.length >= 9) {
+      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
+      return
+    }
+    recentFeedbackSubmissions.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */

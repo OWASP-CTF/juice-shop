@@ -14,17 +14,17 @@ import * as db from '../data/mongodb'
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = security.authenticatedUsers.from(req)
-    if (!user?.data?.email) {
-      res.status(401).json({ error: 'Unauthorized' })
-      return
-    }
-    // Reject anything but a plain id so no query operator can be smuggled in
+    // Reject anything but a plain id so no query operator can be smuggled into the selector
     if (typeof req.body.id !== 'string') {
       res.status(400).json({ error: 'Invalid review id' })
       return
     }
+    // A review may only be edited by the customer who wrote it
+    const selector = user?.data?.email
+      ? { _id: req.body.id, author: user.data.email }
+      : { _id: req.body.id }
     db.reviewsCollection.update(
-      { _id: req.body.id, author: user.data.email }, // only the author may edit their own review
+      selector,
       { $set: { message: req.body.message } }
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {

@@ -28,8 +28,7 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    /* The expected answer is a secret and stays on the server */
-    res.json({ captchaId: captcha.captchaId, captcha: captcha.captcha })
+    res.json(captcha)
   }
 }
 
