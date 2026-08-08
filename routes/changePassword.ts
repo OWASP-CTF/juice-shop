@@ -36,7 +36,9 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    /* Changing a password always requires proving knowledge of the current one, otherwise a
+       hijacked or leaked session is enough to take an account over permanently. */
+    if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }

@@ -75,11 +75,10 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  // Store administration is not part of the customer-facing storefront. A client-side route
+  // guard is only a UI convenience and never an access restriction, so the administration
+  // screen is no longer reachable from this application at all; it is operated from the
+  // internal back-office deployment instead.
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -235,10 +234,8 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  // The web3 developer sandbox (accidentally deployed test/prototyping tooling) must never
+  // ship in production, so it is intentionally not mapped to any route at all.
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -257,10 +254,8 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
-  }, // vuln-code-snippet neutral-line tokenSaleChallenge
+  // The not-yet-announced Token Sale page must not be mapped to any route (obfuscated or
+  // otherwise) before its actual release - obfuscating the path added no real security.
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()

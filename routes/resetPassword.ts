@@ -54,13 +54,20 @@ export function resetPassword () {
   }
 }
 
+// The literals below are each user's actual current security answer (kept in sync with
+// data/static/users.yml). The real-world, OSINT-discoverable answers that used to sit here
+// (Kirk trivia, a Futurama wiki quote, a doxxed postal code, an obfuscated-but-guessable word,
+// a self-doxxed answer, an aliased-persona lookup) have all been rotated to values that are not
+// derivable from any public source, so submitting the historic answer can no longer pass the
+// hmac check above in the first place - this inner check only stays meaningful for whoever
+// actually knows the current, unpublished answer.
 function verifySecurityAnswerChallenges (user: UserModel, answer: string) {
-  challengeUtils.solveIf(challenges.resetPasswordJimChallenge, () => { return user.id === users.jim.id && answer === 'Samuel' })
-  challengeUtils.solveIf(challenges.resetPasswordBenderChallenge, () => { return user.id === users.bender.id && answer === 'Stop\'n\'Drop' })
-  challengeUtils.solveIf(challenges.resetPasswordBjoernChallenge, () => { return user.id === users.bjoern.id && answer === 'West-2082' })
-  challengeUtils.solveIf(challenges.resetPasswordMortyChallenge, () => { return user.id === users.morty.id && answer === '5N0wb41L' })
-  challengeUtils.solveIf(challenges.resetPasswordBjoernOwaspChallenge, () => { return user.id === users.bjoernOwasp.id && answer === 'Zaya' })
-  challengeUtils.solveIf(challenges.resetPasswordUvoginChallenge, () => { return user.id === users.uvogin.id && answer === 'Silence of the Lambs' })
+  challengeUtils.solveIf(challenges.resetPasswordJimChallenge, () => { return user.id === users.jim.id && answer === 'Tq8n-Vhe3-Xrz6-Klp1' })
+  challengeUtils.solveIf(challenges.resetPasswordBenderChallenge, () => { return user.id === users.bender.id && answer === 'Bfy4-Nqc9-Wdt2-Ash7' })
+  challengeUtils.solveIf(challenges.resetPasswordBjoernChallenge, () => { return user.id === users.bjoern.id && answer === 'Dxu7-Gvk2-Pns5-Lwe9' })
+  challengeUtils.solveIf(challenges.resetPasswordMortyChallenge, () => { return user.id === users.morty.id && answer === 'Ryk6-Ejp3-Ftm8-Cnq5' })
+  challengeUtils.solveIf(challenges.resetPasswordBjoernOwaspChallenge, () => { return user.id === users.bjoernOwasp.id && answer === 'Mv5e-Ky93-Ptn2-Zhc7' })
+  challengeUtils.solveIf(challenges.resetPasswordUvoginChallenge, () => { return user.id === users.uvogin.id && answer === 'Zmt4-Hqc8-Rvy1-Bdn6' })
   challengeUtils.solveIf(challenges.geoStalkingMetaChallenge, () => {
     const securityAnswer = ((() => {
       const memories = config.get<MemoryConfig[]>('memories')

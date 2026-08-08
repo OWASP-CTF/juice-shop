@@ -278,6 +278,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin())
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
   app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
@@ -343,12 +344,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    // Key on the actual socket peer address only - a client-supplied header like
+    // X-Forwarded-For must never be trusted to identify the caller for rate limiting,
+    // since an attacker can send a different value on every request to get a fresh
+    // bucket and brute force the security question indefinitely. // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket }: { socket: { remoteAddress?: string } }) { return socket.remoteAddress ?? 'unknown' }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
+  /* A bearer/cookie token is only ever honoured when it carries the RS256 signature this shop
+     issues. Without pinning the algorithm here, a token signed with HMAC using the published
+     RSA public key as the "secret" would be treated the same as a genuine one by any handler
+     that reads the token directly instead of going through isAuthorized(). */
+  app.use(security.denyForgedTokenAlgorithm())
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
   app.use(verify.jwtChallenges()) // vuln-code-snippet hide-line
   /* Baskets: Unauthorized users are not allowed to access baskets */
@@ -358,10 +368,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Deleting someone else's feedback is an administrative action, not something any
+     authenticated customer should be able to do just by knowing the record id. */
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
+  /* Users: Only POST is allowed in order to register a new user.
+     Listing/reading other users' full records (incl. role, email, hashes) is the data
+     the Administration page is built on - it must never be reachable by a merely
+     authenticated, non-admin user just because they know/guess the REST path. */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -394,7 +410,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  /* The full user list including current login state is administrative data - it is what
+     AdministrationComponent is actually built on (UserService.find() calls this endpoint, not
+     /api/Users), so gating only /api/Users left it fully exposed to any authenticated user. */
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
@@ -413,6 +432,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
+    }
+    next()
+  })
+  /* Self-registration must never be able to set attributes beyond an ordinary customer's own
+     email/password - any of these being client-settable would be mass assignment into
+     privileged/internal state. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body) {
+      for (const privilegedAttribute of ['id', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privilegedAttribute]
+      }
+      // Whatever role was asked for, a self-service signup produces a customer and nothing else.
+      req.body.role = security.roles.customer
     }
     next()
   })
@@ -507,6 +539,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
     // create a wallet when a new user is registered using API
     if (name === 'User') { // vuln-code-snippet neutral-line registerAdminChallenge
+      // The administrator role must never be settable via mass assignment through the
+      // public registration API. This has to run before the DB write, otherwise a
+      // malicious role would already be persisted. (Other roles such as deluxe/accounting
+      // are intentionally left settable here, matching existing self-service signup flows.)
+      resource.create.write.before((req: Request, res: Response, context: { instance: { role: string }, continue: any }) => {
+        if (context.instance.role === security.roles.admin) {
+          context.instance.role = security.roles.customer
+        }
+        return context.continue
+      })
       resource.create.send.before((req: Request, res: Response, context: { instance: { id: any }, continue: any }) => { // vuln-code-snippet vuln-line registerAdminChallenge
         WalletModel.create({ UserId: context.instance.id }).catch((err: unknown) => {
           console.log(err)

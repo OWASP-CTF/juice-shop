@@ -20,7 +20,10 @@ import * as utils from './utils'
 import * as z85 from 'z85'
 
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+// This key must never be the well-known key that ships in the public project history - anyone
+// holding it could mint arbitrary self-signed session tokens (e.g. claiming the admin role)
+// without ever needing to exploit anything else. Keep it in sync with encryptionkeys/jwt.pub.
+const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXQIBAAKBgQCgNgO8dpn2fchn3rAvkb5Kms+hY+fBQHXg7NT+LT2rFgAvGhyE\r\nNwMS24okGnXOGoSV/3aXdyPVqxedz8HxALYKMn3xbUO6c5nQPYV+XLb0rx3uMm6p\r\nNyfvQNYqpnyw5PNUZ02shLMTDgbtO3GIE303jAeVs4JJE7yTOT1HooYWFQIDAQAB\r\nAoGAer9ntWmZJMXSWeLAUnHzve1Gz3xgACyHJEHQHr5C1WYR1gTHfHU5oaUa/fZX\r\n9AVVOCd2kS3zAq4Hdh3Llf7ZeVgJIwFmaI2ech26pn4tAem0cNvzljTbOxJBcFf4\r\nbIC6lkKSrIkkqO9+uB7OVGdFfyStpb125FVApBxhMVGkzjECQQDS2caRGK6nJzoS\r\nSMLn0MmAMfsCuP6a48+LaXSIjpceMePUWyG9ie5hBCIw1qeO60EDaiMZG5QhOnIq\r\nFDjdvZh/AkEAwoRRTy4ydvFQN9tfVbhNnTfh5AGuukcu6ijjwB2tJ5F/7KdgR15m\r\ni8/fWHmzZjHLkuOrsGxJFc33OhUFx/QnawJANnfvpdf8dk3Z4JNPVldHVoiS0Xc8\r\nvoKPQPJzGjvLqg81TcxlAPO60vEgbAFns7HuT5WBj6DiOVtB1sD2l8G8vQJBAIhT\r\nSdUPkIix6UGseq1OBP9ZyfQNhdLBzsyHqc7cPZ3MqHZIe/6o13/HSUXtzWCjJ4Sk\r\nEZEM40/n0Qwg7bNMl08CQQDFOF0IUCC5IbJ4fi1JYQl7+HPu8Iisp3BG2i0cmKtR\r\nbeiEh1LiJdRd5Vjhz6gpXesmnBl4vrZ9gN3euh2WL294\r\n-----END RSA PRIVATE KEY-----'
 
 interface ResponseWithUser {
   status?: string
@@ -41,7 +44,10 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+// Must not be the well-known secret from the public project history - anyone holding it could
+// verify guesses against a leaked security-answer hash offline without ever needing to know
+// this value from the running instance.
+export const hmac = (data: string) => crypto.createHmac('sha256', 'bT2RwLLmE7dVWeAtritE4uSwntnFNyI').update(data).digest('hex')
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
@@ -51,10 +57,52 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+/* The shop only ever issues RS256-signed tokens, so that is the only signature algorithm any
+   verification path may accept. Leaving the algorithm to be read from the token itself (as
+   express-jwt/jsonwebtoken/jws all do by default) lets an attacker sign a token with HMAC
+   (HS256) using the RSA *public* key as the "secret" - which is published under
+   /encryptionkeys and is therefore not a secret at all - and have it accepted as valid,
+   including claiming an arbitrary role such as admin. */
+export const jwtAlgorithm = 'RS256'
+
+export const hasExpectedAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+    return header?.alg === jwtAlgorithm
+  } catch (error: unknown) {
+    return false
+  }
+}
+
+/* Strips a token whose header asks for any algorithm other than RS256 before anything
+   downstream looks at it. The request then simply counts as unauthenticated - which is what a
+   signature the shop never issued is worth - and endpoints that require a session answer 401
+   as they always do for a missing/invalid token. */
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (utils.jwtFrom(req) && !hasExpectedAlgorithm(utils.jwtFrom(req))) {
+      delete req.headers.authorization
+    }
+    if (req.cookies?.token && !hasExpectedAlgorithm(req.cookies.token)) {
+      delete req.cookies.token
+    }
+    next()
+  }
+}
+
+export const isAuthorized = () => {
+  const dropForgedAlgorithm = denyForgedTokenAlgorithm()
+  const authorizeToken = expressJwt(({ secret: publicKey, algorithms: [jwtAlgorithm] }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
+export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -121,11 +169,10 @@ function hasValidFormat (coupon: string) {
 }
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
+// The outdated cryptocurrency donation addresses have been removed from the allowlist entirely -
+// keeping stale/unverified third-party addresses in an allowlist is itself a liability.
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +182,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -157,6 +204,17 @@ export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
     if (decodedToken?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -187,7 +245,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {

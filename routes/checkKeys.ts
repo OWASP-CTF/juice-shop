@@ -1,17 +1,37 @@
 import { type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
+import logger from '../lib/logger'
 import { challenges } from '../data/datacache'
+
+interface ShopWalletKeys {
+  privateKey: string
+  publicKey: string
+  address: string
+}
+
+// The unlock wallet was previously reconstructed on every request from a hardcoded BIP-39
+// mnemonic - a phrase that also ended up quoted in plaintext in one of the seeded feedback
+// entries. Anyone who read either the source or that feedback comment could derive the exact
+// same private key. Instead, mint a fresh keypair the first time it is needed and cache it in
+// memory for the life of the process: no mnemonic, seed, or key is ever stored, logged or
+// shipped anywhere an attacker could read it back.
+let shopWalletKeys: Promise<ShopWalletKeys> | null = null
+
+async function getShopWalletKeys (): Promise<ShopWalletKeys> {
+  if (shopWalletKeys === null) {
+    shopWalletKeys = import('ethers').then(({ Wallet }) => {
+      const generated = Wallet.createRandom()
+      return { privateKey: generated.privateKey, publicKey: generated.publicKey, address: generated.address }
+    })
+  }
+  return await shopWalletKeys
+}
 
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
+      const { privateKey, publicKey, address } = await getShopWalletKeys()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
@@ -27,6 +47,7 @@ export function checkKeys () {
         }
       }
     } catch (error) {
+      logger.warn(`Could not check the submitted key: ${utils.getErrorMessage(error)}`)
       res.status(500).json(utils.getErrorMessage(error))
     }
   }
