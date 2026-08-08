@@ -8,6 +8,8 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
+import { challenges } from '../../data/datacache'
+import * as db from '../../data/mongodb'
 
 let app: Express
 
@@ -17,31 +19,49 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('/rest/track-order/:id', () => {
-  void it('GET tracking results for the order id', async () => {
+  void it('GET tracking results for an exact valid order id', async () => {
+    const orders = await db.ordersCollection.find()
+    const order = orders[0]
+
     const res = await request(app)
-      .get('/rest/track-order/5267-f9cd5882f54c75a3')
+      .get(`/rest/track-order/${order.orderId}`)
+
     assert.equal(res.status, 200)
+    assert.equal(res.body.data.length, 1)
+    assert.equal(res.body.data[0].orderId, order.orderId)
+    assert.equal(challenges.noSqlOrdersChallenge.solved, false)
+    assert.equal(challenges.reflectedXssChallenge.solved, false)
   })
 
-  void it('GET all orders by injecting into orderId', async () => {
+  void it('rejects a NoSQL injection string without returning orders', async () => {
     const res = await request(app)
       .get('/rest/track-order/%27%20%7C%7C%20true%20%7C%7C%20%27')
-    assert.equal(res.status, 200)
+
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.ok(Array.isArray(res.body.data))
-    for (const item of res.body.data) {
-      assert.equal(typeof item.orderId, 'string')
-      assert.equal(typeof item.email, 'string')
-      assert.equal(typeof item.totalPrice, 'number')
-      assert.ok(Array.isArray(item.products))
-      for (const product of item.products) {
-        assert.equal(typeof product.quantity, 'number')
-        assert.equal(typeof product.name, 'string')
-        assert.equal(typeof product.price, 'number')
-        assert.equal(typeof product.total, 'number')
-      }
-      assert.equal(typeof item.eta, 'string')
-      assert.equal(typeof item._id, 'string')
-    }
+    assert.deepEqual(res.body, { error: 'Wrong Param' })
+    assert.equal(challenges.noSqlOrdersChallenge.solved, false)
+    assert.equal(challenges.reflectedXssChallenge.solved, false)
+  })
+
+  void it('rejects a serialized query operator object', async () => {
+    const res = await request(app)
+      .get('/rest/track-order/%7B%22%24ne%22%3Anull%7D')
+
+    assert.equal(res.status, 400)
+    assert.deepEqual(res.body, { error: 'Wrong Param' })
+    assert.equal(challenges.noSqlOrdersChallenge.solved, false)
+    assert.equal(challenges.reflectedXssChallenge.solved, false)
+  })
+
+  void it('rejects the reflected XSS payload without echoing it', async () => {
+    const payload = '<iframe src="javascript:alert(`xss`)">'
+    const res = await request(app)
+      .get(`/rest/track-order/${encodeURIComponent(payload)}`)
+
+    assert.equal(res.status, 400)
+    assert.equal(JSON.stringify(res.body).includes(payload), false)
+    assert.equal(challenges.noSqlOrdersChallenge.solved, false)
+    assert.equal(challenges.reflectedXssChallenge.solved, false)
   })
 })
