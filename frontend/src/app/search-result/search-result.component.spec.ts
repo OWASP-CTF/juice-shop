@@ -18,10 +18,8 @@ import { MatTableModule } from '@angular/material/table'
 import { MatPaginatorModule } from '@angular/material/paginator'
 import { MatDialog, MatDialogModule } from '@angular/material/dialog'
 import { of, throwError } from 'rxjs'
-import { DomSanitizer } from '@angular/platform-browser'
 import { BasketService } from '../Services/basket.service'
 import { EventEmitter } from '@angular/core'
-import { SocketIoService } from '../Services/socket-io.service'
 import { QuantityService } from '../Services/quantity.service'
 import { DeluxeGuard } from '../app.guard'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
@@ -32,16 +30,6 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
         unobserve () {}
         disconnect () {}
     } as any
-}
-
-class MockSocket {
-    on(str: string, callback: any) {
-        callback(str)
-    }
-
-    emit() {
-        return null
-    }
 }
 
 class MockActivatedRoute {
@@ -60,9 +48,6 @@ describe('SearchResultComponent', () => {
     let translateService: any
     let activatedRoute: MockActivatedRoute
     let dialog: any
-    let sanitizer: any
-    let socketIoService: any
-    let mockSocket: MockSocket
     let quantityService: any
     let deluxeGuard: any
     let snackBar: any
@@ -105,18 +90,7 @@ describe('SearchResultComponent', () => {
         Object.defineProperty(translateService, 'onTranslationChange', { value: new EventEmitter() })
         Object.defineProperty(translateService, 'onFallbackLangChange', { value: new EventEmitter() })
         Object.defineProperty(translateService, 'onDefaultLangChange', { value: new EventEmitter() })
-        sanitizer = {
-            bypassSecurityTrustHtml: vi.fn().mockName("DomSanitizer.bypassSecurityTrustHtml"),
-            sanitize: vi.fn().mockName("DomSanitizer.sanitize")
-        }
-        sanitizer.bypassSecurityTrustHtml.mockReturnValue(of({}))
-        sanitizer.sanitize.mockReturnValue('')
         activatedRoute = new MockActivatedRoute()
-        mockSocket = new MockSocket()
-        socketIoService = {
-            socket: vi.fn().mockName("SocketIoService.socket")
-        }
-        socketIoService.socket.mockReturnValue(mockSocket as unknown as ReturnType<SocketIoService['socket']>)
         deluxeGuard = {
             isDeluxe: vi.fn()
         }
@@ -139,9 +113,7 @@ describe('SearchResultComponent', () => {
                 { provide: MatSnackBar, useValue: snackBar },
                 { provide: BasketService, useValue: basketService },
                 { provide: ProductService, useValue: productService },
-                { provide: DomSanitizer, useValue: sanitizer },
                 { provide: ActivatedRoute, useValue: activatedRoute },
-                { provide: SocketIoService, useValue: socketIoService },
                 { provide: QuantityService, useValue: quantityService },
                 { provide: DeluxeGuard, useValue: deluxeGuard },
                 provideHttpClient(withInterceptorsFromDi()),
@@ -162,11 +134,12 @@ describe('SearchResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should render product descriptions as trusted HTML', () => {
-        productService.search.mockReturnValue(of([{ description: '<script>alert("XSS")</script>' }]))
+    it('should keep product descriptions as plain strings for Angular sanitization', () => {
+        const description = '<strong>Safe formatting</strong>'
+        productService.search.mockReturnValue(of([{ description }]))
         component.ngAfterViewInit()
         fixture.detectChanges()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>alert("XSS")</script>')
+        expect(component.dataSource.data[0].description).toBe(description)
     })
 
     it('should hold no products when product search API call fails', () => {
@@ -201,12 +174,13 @@ describe('SearchResultComponent', () => {
         expect(console.log).toHaveBeenCalledWith('Error')
     })
 
-    it('should notify socket if search query includes DOM XSS payload while filtering table', () => {
-        activatedRoute.setQueryParameter('<iframe src="javascript:alert(`xss`)"> Payload')
-        vi.spyOn(mockSocket, 'emit')
+    it('should let Angular sanitize the DOM XSS payload while filtering the table', () => {
+        activatedRoute.setQueryParameter('<iframe src="javascript:alert(`xss`)"></iframe>')
         component.filterTable()
-        expect(vi.mocked(mockSocket.emit as any).mock.lastCall[0]).toBe('verifyLocalXssChallenge')
-        expect(vi.mocked(mockSocket.emit as any).mock.lastCall[1]).toBe(activatedRoute.snapshot.queryParams.q)
+        fixture.detectChanges()
+        const searchValue = fixture.nativeElement.querySelector('#searchValue') as HTMLElement
+        expect(searchValue.querySelector('iframe')).toBeNull()
+        expect(searchValue.innerHTML).not.toContain('javascript:')
     })
 
     it('should trim the queryparameter while filtering the datasource', () => {
@@ -215,9 +189,12 @@ describe('SearchResultComponent', () => {
         expect(component.dataSource.filter).toEqual('product search')
     })
 
-    it('should pass the search query as trusted HTML', () => {
-        activatedRoute.setQueryParameter('<script>scripttag</script>')
+    it('should let Angular sanitize the bonus XSS payload while filtering the table', () => {
+        activatedRoute.setQueryParameter('<iframe src="https://w.soundcloud.com/player/"></iframe>')
         component.filterTable()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>scripttag</script>')
+        fixture.detectChanges()
+        const searchValue = fixture.nativeElement.querySelector('#searchValue') as HTMLElement
+        expect(searchValue.querySelector('iframe')).toBeNull()
+        expect(searchValue.innerHTML).not.toContain('soundcloud.com')
     })
 })

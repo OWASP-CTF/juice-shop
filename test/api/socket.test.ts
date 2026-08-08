@@ -8,8 +8,10 @@ import assert from 'node:assert/strict'
 import type { Express } from 'express'
 import * as http from 'http'
 import ioClient from 'socket.io-client'
+import config from 'config'
 import { createTestApp } from './helpers/setup'
 import registerWebsocketEvents from '../../lib/startup/registerWebsocketEvents'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 let server: http.Server
@@ -81,5 +83,17 @@ void describe('WebSocket', () => {
   void it('server handles empty confirmation message', () => {
     socket.emit('notification received', undefined)
     assert.ok(true)
+  })
+
+  void it('ignores legacy XSS verification messages without solving challenges', async () => {
+    assert.equal(challenges.localXssChallenge.solved, false)
+    assert.equal(challenges.xssBonusChallenge.solved, false)
+
+    socket.emit('verifyLocalXssChallenge', '<iframe src="javascript:alert(`xss`)">')
+    socket.emit('verifyLocalXssChallenge', config.get<string>('challenges.xssBonusPayload'))
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    assert.equal(challenges.localXssChallenge.solved, false)
+    assert.equal(challenges.xssBonusChallenge.solved, false)
   })
 })

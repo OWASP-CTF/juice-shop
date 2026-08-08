@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import config from 'config'
-import * as utils from '../utils'
 import { Server } from 'socket.io'
 import { notifications, challenges } from '../../data/datacache'
 import * as challengeUtils from '../challengeUtils'
@@ -36,11 +34,6 @@ const registerWebsocketEvents = (server: any) => {
       if (i > -1) {
         notifications.splice(i, 1)
       }
-    })
-
-    socket.on('verifyLocalXssChallenge', (data: any) => {
-      challengeUtils.solveIf(challenges.localXssChallenge, () => { return utils.contains(data, '<iframe src="javascript:alert(`xss`)">') })
-      challengeUtils.solveIf(challenges.xssBonusChallenge, () => { return utils.contains(data, config.get('challenges.xssBonusPayload')) })
     })
 
     socket.on('verifySvgInjectionChallenge', (data: any) => {
