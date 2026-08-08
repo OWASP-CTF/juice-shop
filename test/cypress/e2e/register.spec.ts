@@ -47,7 +47,7 @@ describe('/#/register', () => {
   })
 
   describe('challenge "registerAdmin"', () => {
-    it('should be possible to register admin user using REST API', () => {
+    it('should ignore privileged roles submitted through the registration API', () => {
       cy.window().then(async () => {
         const response = await fetch(`${Cypress.config('baseUrl')}/api/Users/`, {
           method: 'POST',
@@ -62,11 +62,10 @@ describe('/#/register', () => {
             role: 'admin'
           })
         })
-        if (response.status === 201) {
-          console.log('Success')
-        }
+        expect(response.status).to.equal(201)
+        const user = await response.json()
+        expect(user.data.role).to.equal('customer')
       })
-      cy.expectChallengeSolved({ challenge: 'Admin Registration' })
     })
   })
 
