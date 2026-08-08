@@ -17,6 +17,14 @@ export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
     if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
       const orderLinesData = body.orderLinesData || ''
+      // Validate orderLinesData is a valid JSON array (not executable code)
+      try {
+        JSON.parse(orderLinesData)
+      } catch {
+        // Not valid JSON - reject without evaluating
+        res.status(400).json({ error: 'Invalid orderLinesData format' })
+        return
+      }
       try {
         const sandbox = { safeEval, orderLinesData }
         vm.createContext(sandbox)

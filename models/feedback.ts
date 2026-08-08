@@ -49,15 +49,19 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
           }
+          // Always apply secure sanitization to prevent XSS
+          sanitizedComment = security.sanitizeSecure(comment)
           this.setDataValue('comment', sanitizedComment)
         }
       },
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        validate: {
+          min: 1,
+          max: 5
+        },
         set (rating: number) {
           this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {

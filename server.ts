@@ -366,7 +366,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
   app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.put('/api/Products/:id', security.isAuthorized(), (req: Request, res: Response, next: NextFunction) => {
+    // Only admin can modify products
+    const token = utils.jwtFrom(req)
+    const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
+    if (decoded?.data?.role !== security.roles.admin) {
+      res.status(403).json({ error: 'Admin role required' })
+      return
+    }
+    next()
+  }) // vuln-code-snippet vuln-line changeProductChallenge
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -399,6 +408,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    // Enforce UserId from authenticated user to prevent forged feedback
+    const user = security.authenticatedUsers.from(req)
+    if (user?.data?.id) {
+      req.body.UserId = user.data.id
+    }
+    next()
+  })
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
@@ -417,6 +434,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
   app.post('/api/Users', verify.registerAdminChallenge())
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    // Prevent privilege escalation via role field in registration
+    if (req.body.role !== undefined) {
+      delete req.body.role
+    }
+    next()
+  })
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
   /* Unauthorized users are not allowed to access B2B API */
@@ -430,6 +454,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
   /* Feedbacks: Do not allow changes of existing feedback */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
+    if (decoded?.data?.role !== security.roles.admin) {
+      res.status(403).json({ error: 'Admin role required to delete feedback' })
+      return
+    }
+    next()
+  })
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())
@@ -685,7 +718,7 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   console.error(err)
 })
 
-const uploadToMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200000 } })
+const uploadToMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100000 } })
 const mimeTypeMap: any = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
