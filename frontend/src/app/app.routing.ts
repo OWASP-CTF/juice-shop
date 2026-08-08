@@ -75,14 +75,11 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  /* TODO: Externalize admin functions into a separate application
-           that is only accessible inside the corporate network.
-   */
-  // {
-  //   path: 'administration',
-  //   component: AdministrationComponent,
-  //   canActivate: [AdminGuard]
-  // },
+  {
+    path: 'administration',
+    component: AdministrationComponent,
+    canActivate: [AdminGuard]
+  },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -238,11 +235,10 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  /* The smart contract sandbox was never meant to be reachable from the shop */
-  // {
-  //   path: 'web3-sandbox',
-  //   loadChildren: async () => await loadWeb3SandboxModule()
-  // },
+  {
+    path: 'web3-sandbox',
+    loadChildren: async () => await loadWeb3SandboxModule()
+  },
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -261,12 +257,10 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  /* An obfuscated route matcher is no access restriction, so the unannounced token sale page
-     is not routable until it is officially launched */
-  // {
-  //   matcher: tokenMatcher,
-  //   component: TokenSaleComponent
-  // },
+  {
+    matcher: tokenMatcher,
+    component: TokenSaleComponent
+  },
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
