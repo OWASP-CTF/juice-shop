@@ -224,7 +224,10 @@
     "typescript-eslint": "^8.57.1"
   },
   "overrides": {
-    "eslint-scope": ">=3.7.3"
+    "eslint-scope": "3.7.3"
+  },
+  "resolutions": {
+    "eslint-scope": "3.7.3"
   },
   "engines": {
     "node": "22 - 25"
