@@ -15,7 +15,7 @@ import * as db from '../data/mongodb'
 export function dataExport () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const loggedInUser = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
+      const loggedInUser = security.authenticatedUsers.from(req)
       if (loggedInUser?.data?.email && loggedInUser.data.id) {
         const username = loggedInUser.data.username
         const email = loggedInUser.data.email
@@ -23,7 +23,7 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return

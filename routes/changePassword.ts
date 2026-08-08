@@ -4,19 +4,18 @@
  */
 
 import { type Request, type Response, type NextFunction } from 'express'
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
+import * as utils from '../lib/utils'
 import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
 
 export function changePassword () {
-  return async ({ query, headers, connection }: Request, res: Response, next: NextFunction) => {
-    const currentPassword = query.current as string
-    const newPassword = query.new as string
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const currentPassword = req.body.current as string
+    const newPassword = req.body.new as string
     const newPasswordInString = newPassword?.toString()
-    const repeatPassword = query.repeat
+    const repeatPassword = req.body.repeat
 
-    if (!newPassword || newPassword === 'undefined') {
+    if (!currentPassword || !newPassword || newPassword === 'undefined') {
       res.status(401).send(res.__('Password cannot be empty.'))
       return
     } else if (newPassword !== repeatPassword) {
@@ -24,19 +23,13 @@ export function changePassword () {
       return
     }
 
-    const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
-    if (token === null) {
-      next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
-      return
-    }
-
-    const loggedInUser = security.authenticatedUsers.get(token)
+    const loggedInUser = security.authenticatedUsers.from(req)
     if (!loggedInUser) {
-      next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
+      res.status(401).send(res.__('You need to be logged in to change your password.'))
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    if (security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }
@@ -49,11 +42,16 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
-      challengeUtils.solveIf(
-        challenges.changePasswordBenderChallenge,
-        () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
-      )
-      res.json({ user })
+      security.authenticatedUsers.updateFrom(req, utils.queryResultToJson(user))
+      res.json({
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          profileImage: user.profileImage
+        }
+      })
     } catch (error) {
       next(error)
     }

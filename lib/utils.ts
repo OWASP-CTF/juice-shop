@@ -123,7 +123,7 @@ export const downloadToFile = async (url: string, dest: string) => {
   }
 }
 
-export const jwtFrom = ({ headers }: { headers: any }) => {
+export const jwtFrom = ({ headers, cookies }: { headers: any, cookies?: Record<string, string> }) => {
   if (headers?.authorization) {
     const parts = headers.authorization.split(' ')
     if (parts.length === 2) {
@@ -135,7 +135,7 @@ export const jwtFrom = ({ headers }: { headers: any }) => {
       }
     }
   }
-  return undefined
+  return cookies?.token
 }
 
 export const randomHexString = (length: number): string => {

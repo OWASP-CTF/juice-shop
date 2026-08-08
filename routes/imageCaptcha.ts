@@ -28,7 +28,7 @@ export function imageCaptchas () {
       }
       const imageCaptchaInstance = ImageCaptchaModel.build(imageCaptcha)
       await imageCaptchaInstance.save()
-      res.json(imageCaptcha)
+      res.json({ image: imageCaptcha.image })
     } catch (error) {
       res.status(400).send(res.__('Unable to create CAPTCHA. Please try again.'))
     }
@@ -38,7 +38,11 @@ export function imageCaptchas () {
 export const verifyImageCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = security.authenticatedUsers.from(req)
-    const UserId = user ? user.data ? user.data.id : undefined : undefined
+    if (!user) {
+      res.status(401).send(res.__('You need to be logged in to submit a CAPTCHA.'))
+      return
+    }
+    const UserId = user.data.id
     const captchas = await ImageCaptchaModel.findAll({
       limit: 1,
       where: {
