@@ -7,7 +7,6 @@ import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as utils from '../lib/utils'
-import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -24,8 +23,9 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
+    if (file &&
+      !/%00|\0/i.test(file) &&
+      (endsWithAllowlistedFileType(file) || file === 'incident-support.kdbx')) {
 
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
