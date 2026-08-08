@@ -139,6 +139,39 @@ describe('insecurity', () => {
     })
   })
 
+  describe('coupons', () => {
+    it('generates and validates signed coupons', () => {
+      const coupon = security.generateCoupon(15)
+
+      expect(security.discountFromCoupon(coupon)).to.equal(15)
+    })
+
+    it('rejects expired coupons', () => {
+      const coupon = security.generateCoupon(20, new Date(2001, 0, 1))
+
+      expect(security.discountFromCoupon(coupon)).to.equal(undefined)
+    })
+
+    it('rejects tampered coupons', () => {
+      const coupon = security.generateCoupon(15)
+      const [payload, signature] = coupon.split('.')
+      const tamperedPayload = `${payload.slice(0, -1)}${payload.endsWith('A') ? 'B' : 'A'}`
+
+      expect(security.discountFromCoupon(`${tamperedPayload}.${signature}`)).to.equal(undefined)
+    })
+
+    it('rejects malformed coupons', () => {
+      expect(security.discountFromCoupon('not-a-coupon')).to.equal(undefined)
+      expect(security.discountFromCoupon('a.b.c')).to.equal(undefined)
+    })
+
+    it('rejects invalid discounts', () => {
+      expect(() => security.generateCoupon(0)).to.throw('Coupon discount must be an integer between 1 and 99')
+      expect(() => security.generateCoupon(100)).to.throw('Coupon discount must be an integer between 1 and 99')
+      expect(() => security.generateCoupon(1.5)).to.throw('Coupon discount must be an integer between 1 and 99')
+    })
+  })
+
   describe('sanitizeLegacy', () => {
     it('returns empty string for undefined input', () => {
       expect(security.sanitizeLegacy()).to.equal('')

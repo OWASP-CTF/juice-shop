@@ -157,7 +157,6 @@
     "unzipper": "0.9.15",
     "winston": "^3.16.0",
     "yaml-schema-validator": "^1.2.3",
-    "z85": "^0.0.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {
