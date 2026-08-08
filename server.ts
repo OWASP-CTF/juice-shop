@@ -397,6 +397,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Feedbacks: Rate limit submissions per client to block rapid-fire automation (anti-CAPTCHA-bypass) */
+  app.post('/api/Feedbacks', rateLimit({ windowMs: 25 * 1000, max: 4, skipFailedRequests: true, validate: false }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
