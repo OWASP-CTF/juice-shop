@@ -28,7 +28,10 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // The solution must stay server-side only. Echoing it back in the response lets a client
+    // solve any CAPTCHA it is given without ever evaluating the expression itself, which
+    // defeats the whole point of proving a human solved it.
+    res.json({ captchaId: captcha.captchaId, captcha: captcha.captcha })
   }
 }
 

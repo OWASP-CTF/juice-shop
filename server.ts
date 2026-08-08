@@ -371,6 +371,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  /* Deleting someone else's feedback is an administrative action, not something any
+     authenticated customer should be able to do just by knowing the record id. */
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
   /* Users: Only POST is allowed in order to register a new user.
      Listing/reading other users' full records (incl. role, email, hashes) is the data
      the Administration page is built on - it must never be reachable by a merely
