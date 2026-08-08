@@ -11,7 +11,7 @@ export function checkKeys () {
          rotated to a key that is only ever held server-side and never derived from shared words. */
       const wallet = new Wallet('0x3ac4f1d90b78e2561c0a9f47d5e83b62710fa4d8c93e05b16d2748af9c30e5b1')
       const privateKey = wallet.privateKey
-      const publicKey = wallet.signingKey.publicKey
+      const publicKey = wallet.signingKey?.publicKey
       const address = wallet.address
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
