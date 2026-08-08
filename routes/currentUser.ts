@@ -17,6 +17,11 @@ export function retrieveLoggedInUser () {
       if (security.verify(req.cookies.token)) {
         user = security.authenticatedUsers.get(req.cookies.token)
 
+        // Only non-sensitive attributes may ever be selected via the fields
+        // parameter; sensitive columns like password or totpSecret must never
+        // be echoed back to the client.
+        const allowedFields = ['id', 'email', 'lastLoginIp', 'profileImage']
+
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
@@ -25,8 +30,8 @@ export function retrieveLoggedInUser () {
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
-          for (const field of requestedFields) {
+          // When fields are specified, return only those that are allowlisted
+          for (const field of requestedFields.filter(f => allowedFields.includes(f))) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
