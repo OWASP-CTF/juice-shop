@@ -31,10 +31,12 @@ const PrivacyRequestModelInit = (sequelize: Sequelize) => {
         autoIncrement: true
       },
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
       deletionRequested: {
         type: DataTypes.BOOLEAN,
+        allowNull: false,
         defaultValue: false
       }
     },

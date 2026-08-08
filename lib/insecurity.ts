@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
@@ -19,8 +18,25 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const normalizePem = (key: string) => key.replace(/\\n/g, '\n')
+const configuredPrivateKey = process.env.JWT_PRIVATE_KEY ? normalizePem(process.env.JWT_PRIVATE_KEY) : undefined
+const configuredPublicKey = process.env.JWT_PUBLIC_KEY ? normalizePem(process.env.JWT_PUBLIC_KEY) : undefined
+
+if (configuredPublicKey && !configuredPrivateKey) {
+  throw new Error('JWT_PUBLIC_KEY requires JWT_PRIVATE_KEY')
+}
+
+const generatedKeyPair = configuredPrivateKey
+  ? undefined
+  : crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+      publicKeyEncoding: { type: 'pkcs1', format: 'pem' }
+    })
+const privateKey = configuredPrivateKey ?? generatedKeyPair!.privateKey
+export const publicKey = configuredPublicKey ?? (configuredPrivateKey
+  ? crypto.createPublicKey(configuredPrivateKey).export({ type: 'pkcs1', format: 'pem' }).toString()
+  : generatedKeyPair!.publicKey)
 
 interface ResponseWithUser {
   status?: string
@@ -43,6 +59,37 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+const passwordHashAlgorithm = 'scrypt'
+const passwordKeyLength = 64
+
+export const passwordHash = (password: string) => {
+  const salt = crypto.randomBytes(16)
+  const key = crypto.scryptSync(password, salt, passwordKeyLength)
+  return `${passwordHashAlgorithm}$${salt.toString('base64url')}$${key.toString('base64url')}`
+}
+
+export const verifyPassword = (password: string, storedHash: string) => {
+  if (typeof password !== 'string' || typeof storedHash !== 'string') return false
+
+  const [algorithm, saltString, keyString] = storedHash.split('$')
+  if (algorithm === passwordHashAlgorithm && saltString && keyString) {
+    try {
+      const salt = Buffer.from(saltString, 'base64url')
+      const expectedKey = Buffer.from(keyString, 'base64url')
+      const actualKey = crypto.scryptSync(password, salt, expectedKey.length)
+      return actualKey.length === expectedKey.length && crypto.timingSafeEqual(actualKey, expectedKey)
+    } catch {
+      return false
+    }
+  }
+
+  const legacyHash = Buffer.from(hash(password), 'hex')
+  const expectedLegacyHash = Buffer.from(storedHash, 'hex')
+  return expectedLegacyHash.length === legacyHash.length && crypto.timingSafeEqual(legacyHash, expectedLegacyHash)
+}
+
+export const needsPasswordRehash = (storedHash: string) => typeof storedHash !== 'string' || !storedHash.startsWith(`${passwordHashAlgorithm}$`)
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
@@ -51,10 +98,31 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+export const isAuthorized = () => expressJwt(({ secret: publicKey, algorithms: ['RS256'] }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const isAdmin = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  const decoded = token && verify(token) ? decode(token) as { data?: { role?: string } } : undefined
+  if (decoded?.data?.role === 'admin') {
+    next()
+  } else {
+    res.status(403).json({ error: 'Forbidden' })
+  }
+}
+export const authorize = (user = {}) => jwt.sign(
+  JSON.parse(JSON.stringify(user, (key, value) => key === 'password' || key === 'totpSecret' || key === 'deluxeToken' ? undefined : value)),
+  privateKey,
+  { expiresIn: '6h', algorithm: 'RS256' }
+)
+export const verify = (token: string) => {
+  if (!token) return false
+  try {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] })
+    return true
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -84,7 +152,7 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   },
   from: function (req: Request) {
     const token = utils.jwtFrom(req)
-    return token ? this.get(token) : undefined
+    return token && verify(token) ? this.get(token) : undefined
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
@@ -133,11 +201,7 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
-  }
-  return allowed
+  return typeof url === 'string' && redirectAllowlist.has(url)
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -166,7 +230,7 @@ export const isAccounting = () => {
 
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
+  return decodedToken?.data?.role === roles.deluxe
 }
 
 export const isCustomer = (req: Request) => {
@@ -177,7 +241,12 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      const user = authenticatedUsers.from(req)
+      if (!user) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -188,11 +257,15 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          res.cookie('token', token, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: req.secure
+          })
         }
       }
     })

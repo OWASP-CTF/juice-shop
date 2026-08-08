@@ -3,36 +3,33 @@
  * SPDX-License-Identifier: MIT
  */
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { type Request, type Response } from 'express'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
-    let response: any
     const emptyUser = { id: undefined, email: undefined, lastLoginIp: undefined, profileImage: undefined }
     try {
-      if (security.verify(req.cookies.token)) {
-        user = security.authenticatedUsers.get(req.cookies.token)
+      const loggedInUser = security.authenticatedUsers.from(req)
+      if (loggedInUser) {
+        user = loggedInUser
 
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
         const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
 
-        let baseUser: any = {}
+        const allowedFields = new Set(['id', 'email', 'lastLoginIp', 'profileImage'])
+        let baseUser: Record<string, unknown> = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
-              baseUser[field] = user?.data[field as keyof typeof user.data]
+            if (allowedFields.has(field) && user?.data[field as keyof typeof user.data] !== undefined) {
+              baseUser[field] = user.data[field as keyof typeof user.data]
             }
           }
         } else {
-          // If no fields parameter, return standard fields (not password field)
           baseUser = {
             id: user?.data?.id,
             email: user?.data?.email,
@@ -41,21 +38,12 @@ export function retrieveLoggedInUser () {
           }
         }
 
-        response = { user: baseUser }
+        res.json({ user: baseUser })
       } else {
-        response = { user: emptyUser }
+        res.json({ user: emptyUser })
       }
     } catch (err) {
-      response = { user: emptyUser }
-    }
-    // Solve passwordHashLeakChallenge when password field is included in response
-    challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
-
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
+      res.json({ user: emptyUser })
     }
   }
 }

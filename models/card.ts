@@ -22,22 +22,33 @@ InferCreationAttributes<Card>
   declare cardNum: number
   declare expMonth: number
   declare expYear: number
+
+  toJSON () {
+    const values = { ...this.get() }
+    delete values.cardNum
+    return values
+  }
 }
 
 const CardModelInit = (sequelize: Sequelize) => {
   Card.init(
     {
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
       id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
       },
-      fullName: DataTypes.STRING,
+      fullName: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
       cardNum: {
         type: DataTypes.INTEGER,
+        allowNull: false,
         validate: {
           isInt: true,
           min: 1000000000000000,
@@ -46,6 +57,7 @@ const CardModelInit = (sequelize: Sequelize) => {
       },
       expMonth: {
         type: DataTypes.INTEGER,
+        allowNull: false,
         validate: {
           isInt: true,
           min: 1,
@@ -54,6 +66,7 @@ const CardModelInit = (sequelize: Sequelize) => {
       },
       expYear: {
         type: DataTypes.INTEGER,
+        allowNull: false,
         validate: {
           isInt: true,
           min: 2080,
@@ -63,6 +76,14 @@ const CardModelInit = (sequelize: Sequelize) => {
     },
     {
       tableName: 'Cards',
+      defaultScope: {
+        attributes: { exclude: ['cardNum'] }
+      },
+      scopes: {
+        withCardNumber: {
+          attributes: { include: ['cardNum'] }
+        }
+      },
       sequelize
     }
   )

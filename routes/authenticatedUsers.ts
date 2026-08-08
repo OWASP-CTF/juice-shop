@@ -9,7 +9,15 @@ import * as security from '../lib/insecurity'
 
 async function retrieveUserList (req: Request, res: Response, next: NextFunction) {
   try {
-    const users = await UserModel.findAll()
+    const currentUser = security.authenticatedUsers.from(req)
+    if (currentUser?.data?.role !== security.roles.admin) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+
+    const users = await UserModel.findAll({
+      attributes: ['id', 'username', 'email', 'role', 'profileImage', 'lastLoginIp', 'isActive']
+    })
 
     res.json({
       status: 'success',
@@ -18,13 +26,11 @@ async function retrieveUserList (req: Request, res: Response, next: NextFunction
         let lastLoginTime: number | null = null
         if (userToken) {
           const parsedToken = decode(userToken, { json: true })
-          lastLoginTime = parsedToken ? Math.floor(new Date(parsedToken?.iat ?? 0 * 1000).getTime()) : null
+          lastLoginTime = parsedToken ? Math.floor(new Date((parsedToken?.iat ?? 0) * 1000).getTime()) : null
         }
 
         return {
           ...user.dataValues,
-          password: user.password?.replace(/./g, '*'),
-          totpSecret: user.totpSecret?.replace(/./g, '*'),
           lastLoginTime
         }
       })

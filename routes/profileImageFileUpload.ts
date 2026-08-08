@@ -32,7 +32,7 @@ export function profileImageFileUpload () {
       next(new Error(`Profile image upload does not accept this file type${uploadedFileType ? (': ' + uploadedFileType.mime) : '.'}`))
       return
     }
-    const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
+    const loggedInUser = security.authenticatedUsers.from(req)
     if (!loggedInUser) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
       return

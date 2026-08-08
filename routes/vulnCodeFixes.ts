@@ -16,8 +16,12 @@ interface codeFix {
 type cache = Record<string, codeFix>
 
 const CodeFixes: cache = {}
+const isSafeChallengeKey = (key: unknown): key is ChallengeKey => typeof key === 'string' && /^[A-Za-z][A-Za-z0-9]*$/.test(key)
 
 export const readFixes = (key: string) => {
+  if (!isSafeChallengeKey(key)) {
+    return { fixes: [], correct: -1 }
+  }
   if (CodeFixes[key]) {
     return CodeFixes[key]
   }
@@ -55,6 +59,10 @@ interface VerdictRequestBody {
 
 export const serveCodeFixes = () => (req: Request<FixesRequestParams, Record<string, unknown>, Record<string, unknown>>, res: Response, next: NextFunction) => {
   const key = req.params.key
+  if (!isSafeChallengeKey(key)) {
+    res.status(404).json({ error: 'No fixes found for the snippet!' })
+    return
+  }
   const fixData = readFixes(key)
   if (fixData.fixes.length === 0) {
     res.status(404).json({
@@ -70,6 +78,10 @@ export const serveCodeFixes = () => (req: Request<FixesRequestParams, Record<str
 export const checkCorrectFix = () => async (req: Request<Record<string, unknown>, Record<string, unknown>, VerdictRequestBody>, res: Response, next: NextFunction) => {
   const key = req.body.key
   const selectedFix = req.body.selectedFix
+  if (!isSafeChallengeKey(key)) {
+    res.status(404).json({ error: 'No fixes found for the snippet!' })
+    return
+  }
   const fixData = readFixes(key)
   if (fixData.fixes.length === 0) {
     res.status(404).json({

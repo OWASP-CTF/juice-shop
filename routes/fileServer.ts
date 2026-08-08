@@ -3,53 +3,28 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
+import path from 'node:path'
 
-import * as utils from '../lib/utils'
-import * as security from '../lib/insecurity'
-import { challenges } from '../data/datacache'
-import * as challengeUtils from '../lib/challengeUtils'
+const ftpRoot = path.resolve('ftp')
+const publicFilePattern = /^(?:legal\.md|order_[a-f\d]{4}-[a-f\d]{16}\.pdf)$/i
 
 export function servePublicFiles () {
-  return ({ params, query }: Request, res: Response, next: NextFunction) => {
+  return ({ params }: Request, res: Response, next: NextFunction) => {
     const file = params.file
 
-    if (!file.includes('/')) {
-      verify(file, res, next)
-    } else {
+    if (!file || /[\\/\0]/.test(file) || !publicFilePattern.test(file)) {
       res.status(403)
-      next(new Error('File names cannot contain forward slashes!'))
+      next(new Error('File is not publicly accessible.'))
+      return
     }
-  }
 
-  function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
-
-      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
-      verifySuccessfulPoisonNullByteExploit(file)
-
-      res.sendFile(path.resolve('ftp/', file))
-    } else {
+    const filePath = path.resolve(ftpRoot, file)
+    if (!filePath.startsWith(ftpRoot + path.sep)) {
       res.status(403)
-      next(new Error('Only .md and .pdf files are allowed!'))
+      next(new Error('File is not publicly accessible.'))
+      return
     }
-  }
-
-  function verifySuccessfulPoisonNullByteExploit (file: string) {
-    challengeUtils.solveIf(challenges.easterEggLevelOneChallenge, () => { return file.toLowerCase() === 'eastere.gg' })
-    challengeUtils.solveIf(challenges.forgottenDevBackupChallenge, () => { return file.toLowerCase() === 'package.json.bak' })
-    challengeUtils.solveIf(challenges.forgottenBackupChallenge, () => { return file.toLowerCase() === 'coupons_2013.md.bak' })
-    challengeUtils.solveIf(challenges.misplacedSignatureFileChallenge, () => { return file.toLowerCase() === 'suspicious_errors.yml' })
-
-    challengeUtils.solveIf(challenges.nullByteChallenge, () => {
-      return challenges.easterEggLevelOneChallenge.solved || challenges.forgottenDevBackupChallenge.solved || challenges.forgottenBackupChallenge.solved ||
-        challenges.misplacedSignatureFileChallenge.solved || file.toLowerCase() === 'encrypt.pyc'
-    })
-  }
-
-  function endsWithAllowlistedFileType (param: string) {
-    return utils.endsWith(param, '.md') || utils.endsWith(param, '.pdf')
+    res.sendFile(filePath)
   }
 }

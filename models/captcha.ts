@@ -18,19 +18,41 @@ InferCreationAttributes<Captcha>
   declare captchaId: number
   declare captcha: string
   declare answer: string
+
+  toJSON () {
+    const values = { ...this.get() }
+    delete values.answer
+    return values
+  }
 }
 
 const CaptchaModelInit = (sequelize: Sequelize) => {
   Captcha.init(
     {
       captchaId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        unique: true
       },
-      captcha: DataTypes.STRING,
-      answer: DataTypes.STRING
+      captcha: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      answer: {
+        type: DataTypes.STRING,
+        allowNull: false
+      }
     },
     {
       tableName: 'Captchas',
+      defaultScope: {
+        attributes: { exclude: ['answer'] }
+      },
+      scopes: {
+        withAnswer: {
+          attributes: { include: ['answer'] }
+        }
+      },
       sequelize
     }
   )

@@ -68,7 +68,15 @@ export class DataExportComponent implements OnInit {
         this.error = null
         this.confirmation = data.confirmation
         this.userData = data.userData
-        window.open('', '_blank', 'width=500')?.document.write(this.userData)
+        const htmlEscapes: Record<string, string> = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }
+        const escapedUserData = String(this.userData).replace(/[&<>"']/g, (character) => htmlEscapes[character])
+        window.open('', '_blank', 'width=500')?.document.write(`<pre>${escapedUserData}</pre>`)
         this.lastSuccessfulTry = new Date()
         localStorage.setItem('lstdtxprt', JSON.stringify(this.lastSuccessfulTry))
         this.ngOnInit()

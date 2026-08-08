@@ -13,7 +13,20 @@ import * as utils from '../lib/utils'
 
 export function updateUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
+    const expectedOrigin = `${req.protocol}://${req.get('host')}`
+    const requestOrigin = req.get('origin') ?? req.get('referer')
+    let sameOrigin = false
+    try {
+      sameOrigin = requestOrigin !== undefined && new URL(requestOrigin).origin === expectedOrigin
+    } catch {
+      sameOrigin = false
+    }
+    if (!sameOrigin) {
+      res.status(403).json({ error: 'Cross-site requests are not allowed.' })
+      return
+    }
+
+    const loggedInUser = security.authenticatedUsers.from(req)
 
     if (!loggedInUser) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
@@ -21,7 +34,7 @@ export function updateUserProfile () {
     }
 
     try {
-      const user = await UserModel.findByPk(loggedInUser.data.id)
+      const user = await UserModel.scope('withSensitive').findByPk(loggedInUser.data.id)
       if (!user) {
         next(new Error('User not found'))
         return

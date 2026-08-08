@@ -32,18 +32,28 @@ export function resetPassword () {
       return
     }
     try {
-      const data = await SecurityAnswerModel.findOne({
+      const data = await SecurityAnswerModel.scope('withAnswer').findOne({
         include: [{
           model: UserModel,
           where: { email }
         }]
       })
-      if ((data != null) && security.hmac(answer) === data.answer) {
+      if ((data != null) && security.verifyPassword(answer, data.answer)) {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
           verifySecurityAnswerChallenges(updatedUser, answer)
-          res.json({ user: updatedUser })
+          res.json({
+            user: {
+              id: updatedUser.id,
+              username: updatedUser.username,
+              email: updatedUser.email,
+              role: updatedUser.role,
+              profileImage: updatedUser.profileImage
+            }
+          })
+        } else {
+          res.status(401).send(res.__('Wrong answer to security question.'))
         }
       } else {
         res.status(401).send(res.__('Wrong answer to security question.'))

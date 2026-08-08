@@ -32,6 +32,14 @@ InferCreationAttributes<User>
   declare profileImage: CreationOptional<string>
   declare totpSecret: CreationOptional<string>
   declare isActive: CreationOptional<boolean>
+
+  toJSON () {
+    const values = { ...this.get() }
+    delete values.password
+    delete values.totpSecret
+    delete values.deluxeToken
+    return values
+  }
 }
 
 const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start weakPasswordChallenge
@@ -44,6 +52,7 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       },
       username: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: '',
         set (username: string) {
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
@@ -56,7 +65,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       },
       email: {
         type: DataTypes.STRING,
+        allowNull: false,
         unique: true,
+        validate: {
+          isEmail: true
+        },
         set (email: string) {
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
             challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
@@ -73,12 +86,20 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       }, // vuln-code-snippet hide-end
       password: {
         type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          notEmpty: true
+        },
         set (clearTextPassword: string) {
-          this.setDataValue('password', security.hash(clearTextPassword)) // vuln-code-snippet vuln-line weakPasswordChallenge
+          if (typeof clearTextPassword !== 'string' || clearTextPassword.length === 0 || clearTextPassword.length > 1024) {
+            throw new Error('Password must contain between 1 and 1024 characters.')
+          }
+          this.setDataValue('password', security.passwordHash(clearTextPassword))
         }
       }, // vuln-code-snippet end weakPasswordChallenge
       role: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: 'customer',
         validate: {
           isIn: [['customer', 'deluxe', 'accounting', 'admin']]
@@ -100,28 +121,41 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       },
       deluxeToken: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: ''
       },
       lastLoginIp: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: '0.0.0.0'
       },
       profileImage: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: '/assets/public/images/uploads/default.svg'
       },
       totpSecret: {
         type: DataTypes.STRING,
+        allowNull: false,
         defaultValue: ''
       },
       isActive: {
         type: DataTypes.BOOLEAN,
+        allowNull: false,
         defaultValue: true
       }
     },
     {
       tableName: 'Users',
       paranoid: true,
+      defaultScope: {
+        attributes: { exclude: ['password', 'totpSecret', 'deluxeToken'] }
+      },
+      scopes: {
+        withSensitive: {
+          attributes: { include: ['password', 'totpSecret', 'deluxeToken'] }
+        }
+      },
       sequelize
     }
   )

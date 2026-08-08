@@ -32,11 +32,29 @@ const DeliveryModelInit = (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true
       },
-      name: DataTypes.STRING,
-      price: DataTypes.FLOAT,
-      deluxePrice: DataTypes.FLOAT,
-      eta: DataTypes.FLOAT,
-      icon: DataTypes.STRING
+      name: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      price: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        validate: { min: 0 }
+      },
+      deluxePrice: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        validate: { min: 0 }
+      },
+      eta: {
+        type: DataTypes.FLOAT,
+        allowNull: false,
+        validate: { min: 0 }
+      },
+      icon: {
+        type: DataTypes.STRING,
+        allowNull: false
+      }
     },
     {
       tableName: 'Deliveries',

@@ -28,15 +28,16 @@ const MemoryModelInit = (sequelize: Sequelize) => {
   Memory.init(
     {
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
       id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
       },
-      caption: DataTypes.STRING,
-      imagePath: DataTypes.STRING
+      caption: { type: DataTypes.STRING, allowNull: false },
+      imagePath: { type: DataTypes.STRING, allowNull: false }
     },
     {
       tableName: 'Memories',

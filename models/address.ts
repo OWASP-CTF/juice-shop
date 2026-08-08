@@ -31,7 +31,8 @@ const AddressModelInit = (sequelize: Sequelize) => {
   Address.init(
     {
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
       id: {
         type: DataTypes.INTEGER,
@@ -39,10 +40,12 @@ const AddressModelInit = (sequelize: Sequelize) => {
         autoIncrement: true
       },
       fullName: {
-        type: DataTypes.STRING
+        type: DataTypes.STRING,
+        allowNull: false
       },
       mobileNum: {
         type: DataTypes.INTEGER,
+        allowNull: false,
         validate: {
           isInt: true,
           min: 1000000,
@@ -51,19 +54,21 @@ const AddressModelInit = (sequelize: Sequelize) => {
       },
       zipCode: {
         type: DataTypes.STRING,
+        allowNull: false,
         validate: {
           len: [1, 8]
         }
       },
       streetAddress: {
         type: DataTypes.STRING,
+        allowNull: false,
         validate: {
           len: [1, 160]
         }
       },
-      city: DataTypes.STRING,
+      city: { type: DataTypes.STRING, allowNull: false },
       state: DataTypes.STRING,
-      country: DataTypes.STRING
+      country: { type: DataTypes.STRING, allowNull: false }
     },
     {
       tableName: 'Addresses',

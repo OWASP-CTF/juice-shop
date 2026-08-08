@@ -40,10 +40,7 @@ const botName = config.get<string>('application.chatBot.name')
 const appName = config.get<string>('application.name')
 
 async function getUserId (req: Request): Promise<number | undefined> {
-  const token = utils.jwtFrom(req)
-  if (!token) return undefined
-  const decoded = security.decode(token) as { data?: { id?: number } } | undefined
-  return decoded?.data?.id
+  return security.authenticatedUsers.from(req)?.data?.id
 }
 
 async function getUserNameFromToken (req: Request): Promise<string | undefined> {
@@ -144,7 +141,8 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          if (!Number.isInteger(productId) || productId < 1) return []
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 
@@ -174,13 +172,12 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          discount: z.number().int().min(0).max(10).describe('The discount percentage for the coupon (maximum 10)')
         }),
         execute: async ({ discount }) => {
-          challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
-          challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
-          const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
-          return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
+          if (!(await getUserId(req))) return { error: 'Customer not authenticated' }
+          const couponCode = security.generateCoupon(discount)
+          return { couponCode, discount }
         }
       })
     } // vuln-code-snippet end chatbotGreedyInjectionChallenge chatbotPromptInjectionChallenge

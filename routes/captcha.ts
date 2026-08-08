@@ -19,7 +19,7 @@ export function captchas () {
     const secondOperator = operators[Math.floor((Math.random() * 3))]
 
     const expression = firstTerm.toString() + firstOperator + secondTerm.toString() + secondOperator + thirdTerm.toString()
-    const answer = eval(expression).toString() // eslint-disable-line no-eval
+    const answer = calculateAnswer(firstTerm, firstOperator, secondTerm, secondOperator, thirdTerm).toString()
 
     const captcha = {
       captchaId,
@@ -28,13 +28,24 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    res.json({ captchaId, captcha: expression })
   }
+}
+
+function calculateAnswer (firstTerm: number, firstOperator: string, secondTerm: number, secondOperator: string, thirdTerm: number): number {
+  const apply = (left: number, operator: string, right: number) => operator === '*' ? left * right : operator === '+' ? left + right : left - right
+  if (firstOperator === '*') {
+    return apply(apply(firstTerm, firstOperator, secondTerm), secondOperator, thirdTerm)
+  }
+  if (secondOperator === '*') {
+    return apply(firstTerm, firstOperator, apply(secondTerm, secondOperator, thirdTerm))
+  }
+  return apply(apply(firstTerm, firstOperator, secondTerm), secondOperator, thirdTerm)
 }
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
+    const captcha = await CaptchaModel.scope('withAnswer').findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
       next()
     } else {

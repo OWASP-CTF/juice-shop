@@ -22,9 +22,21 @@ export const getVideo = () => {
     const fileSize = stat.size
     const range = req.headers.range
     if (range) {
-      const parts = range.replace(/bytes=/, '').split('-')
-      const start = parseInt(parts[0], 10)
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+      if (!match || (match[1] === '' && match[2] === '')) {
+        res.status(416).set('Content-Range', `bytes */${fileSize}`).end()
+        return
+      }
+
+      const requestedStart = match[1] === '' ? undefined : Number(match[1])
+      const requestedEnd = match[2] === '' ? undefined : Number(match[2])
+      const start = requestedStart ?? Math.max(fileSize - (requestedEnd ?? 0), 0)
+      const end = Math.min(requestedEnd ?? fileSize - 1, fileSize - 1)
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= fileSize || end < start) {
+        res.status(416).set('Content-Range', `bytes */${fileSize}`).end()
+        return
+      }
+
       const chunksize = (end - start) + 1
       const file = fs.createReadStream(path, { start, end })
       const head = {
@@ -78,7 +90,7 @@ export const promotionVideo = () => {
 }
 
 function getSubsFromFile () {
-  const subtitles = config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt'
+  const subtitles = utils.extractFilename(config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt')
   const data = fs.readFileSync('frontend/dist/frontend/assets/public/videos/' + subtitles, 'utf8')
   return data.toString()
 }

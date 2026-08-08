@@ -14,7 +14,6 @@ import http from 'node:http'
 import path from 'node:path'
 import express from 'express'
 import colors from 'colors/safe'
-import serveIndex from 'serve-index'
 import bodyParser from 'body-parser'
 // @ts-expect-error FIXME due to non-existing type definitions for finale-rest
 import * as finale from 'finale-rest'
@@ -83,7 +82,6 @@ import { retrieveBasket } from './routes/basket'
 import { searchProducts } from './routes/search'
 import { trackOrder } from './routes/trackOrder'
 import { saveLoginIp } from './routes/saveLoginIp'
-import { serveKeyFiles } from './routes/keyServer'
 import * as basketItems from './routes/basketItems'
 import { performRedirect } from './routes/redirect'
 import { serveEasterEgg } from './routes/easterEgg'
@@ -91,7 +89,6 @@ import { getLanguageList } from './routes/languages'
 import { getUserProfile } from './routes/userProfile'
 import { serveAngularClient } from './routes/angular'
 import { resetPassword } from './routes/resetPassword'
-import { serveLogFiles } from './routes/logfileServer'
 import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
@@ -109,7 +106,6 @@ import { updateUserProfile } from './routes/updateUserProfile'
 import { getVideo, promotionVideo } from './routes/videoHandler'
 import { likeProductReviews } from './routes/likeProductReviews'
 import { repeatNotification } from './routes/repeatNotification'
-import { serveQuarantineFiles } from './routes/quarantineServer'
 import { showProductReviews } from './routes/showProductReviews'
 import { nftMintListener, walletNFTVerify } from './routes/nftMint'
 import { createProductReviews } from './routes/createProductReviews'
@@ -237,57 +233,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Checks for challenges solved by abusing SSTi and SSRF bugs */
   app.use('/solve/challenges/server-side', verify.serverSideChallenges())
 
-  /* Create middleware to change paths from the serve-index plugin from absolute to relative */
-  const serveIndexMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    const origEnd = res.end
-    // @ts-expect-error FIXME assignment broken due to seemingly void return value
-    res.end = function () {
-      if (arguments.length) {
-        const reqPath = req.originalUrl.replace(/\?.*$/, '')
+  /* Public order confirmations and legal information */
+  app.use('/ftp(?!/quarantine)/:file', servePublicFiles())
 
-        const currentFolder = reqPath.split('/').pop()!
-        arguments[0] = arguments[0].replace(/a href="([^"]+?)"/gi, function (matchString: string, matchedUrl: string) {
-          let relativePath = path.relative(reqPath, matchedUrl)
-          if (relativePath === '') {
-            relativePath = currentFolder
-          } else if (!relativePath.startsWith('.') && currentFolder !== '') {
-            relativePath = currentFolder + '/' + relativePath
-          } else {
-            relativePath = relativePath.replace('..', '.')
-          }
-          return 'a href="' + relativePath + '"'
-        })
-      }
-      // @ts-expect-error FIXME passed argument has wrong type
-      origEnd.apply(this, arguments)
-    }
-    next()
-  }
-
-  // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
-
-  app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
-  /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
-  app.use('/encryptionkeys/:file', serveKeyFiles())
-
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
-  app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* Logs and encryption keys are server-only resources. */
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
-  // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
+  app.use(cookieParser())
 
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
@@ -320,7 +277,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body = {}
       }
       if (req.body !== Object(req.body)) { // Expensive workaround for 500 errors during Frisby test run (see #640)
-        req.body = JSON.parse(req.body)
+        try {
+          const parsedBody = JSON.parse(req.body)
+          if (parsedBody === null || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+            res.status(400).json({ error: 'JSON request body must be an object.' })
+            return
+          }
+          req.body = parsedBody
+        } catch {
+          res.status(400).json({ error: 'Malformed JSON request body.' })
+          return
+        }
       }
     }
     next()
@@ -343,7 +310,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ ip }: { ip: any }) { return ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -394,7 +361,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
@@ -405,6 +372,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    const { username, email, password, passwordRepeat } = req.body
+    req.body = { username, email, password, passwordRepeat }
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
@@ -480,7 +449,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   finale.initialize({ app, sequelize: seq })
 
   const autoModels = [
-    { name: 'User', exclude: ['password', 'totpSecret'], model: UserModel },
+    { name: 'User', exclude: ['password', 'totpSecret', 'deluxeToken'], model: UserModel },
     { name: 'Product', exclude: [], model: ProductModel },
     { name: 'Feedback', exclude: [], model: FeedbackModel },
     { name: 'BasketItem', exclude: [], model: BasketItemModel },
@@ -593,7 +562,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Custom Restful API */
   app.post('/rest/user/login', login())
-  app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
+  app.post('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
   app.get('/rest/user/whoami', security.updateAuthenticatedUsers(), utils.asyncHandler(retrieveLoggedInUser()))
@@ -629,7 +598,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/rest/memories', utils.asyncHandler(getMemories()))
   /* NoSQL API endpoints */
   app.get('/rest/products/:id/reviews', showProductReviews())
-  app.put('/rest/products/:id/reviews', utils.asyncHandler(createProductReviews()))
+  app.put('/rest/products/:id/reviews', security.isAuthorized(), utils.asyncHandler(createProductReviews()))
   app.patch('/rest/products/reviews', security.isAuthorized(), updateProductReviews())
   app.post('/rest/products/reviews', security.isAuthorized(), utils.asyncHandler(likeProductReviews()))
 
@@ -722,7 +691,7 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics()))
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

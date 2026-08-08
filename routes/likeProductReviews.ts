@@ -3,22 +3,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Request, type Response, type NextFunction } from 'express'
+import { type Request, type Response } from 'express'
 
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
-import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
-const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
-
 export function likeProductReviews () {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    const id = req.body.id
+  return async (req: Request, res: Response) => {
+    const id = typeof req.body.id === 'string' ? req.body.id : ''
     const user = security.authenticatedUsers.from(req)
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
+    }
+    if (!id || id.length > 100) {
+      return res.status(400).json({ error: 'Wrong Params' })
     }
 
     try {
@@ -37,15 +35,13 @@ export function likeProductReviews () {
         { $inc: { likesCount: 1 } }
       )
 
-      // Artificial wait for timing attack challenge
-      await sleep(150)
       try {
-        const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
-        const updatedLikedBy = updatedReview.likedBy
+        const updatedReview = await db.reviewsCollection.findOne({ _id: id })
+        if (!updatedReview) {
+          return res.status(404).json({ error: 'Not found' })
+        }
+        const updatedLikedBy = [...updatedReview.likedBy]
         updatedLikedBy.push(user.data.email)
-
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
-        challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
 
         const result = await db.reviewsCollection.update(
           { _id: id },

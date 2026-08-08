@@ -23,7 +23,7 @@ export async function verify (req: Request, res: Response) {
       throw new Error('Invalid token type')
     }
 
-    const user = await UserModel.findByPk(userId)
+    const user = await UserModel.scope('withSensitive').findByPk(userId)
     if (user == null) {
       throw new Error('No such user found!')
     }
@@ -104,7 +104,7 @@ export async function setup (req: Request, res: Response) {
 
     const { password, setupToken, initialToken } = req.body
 
-    if (user.password !== security.hash(password)) {
+    if (!security.verifyPassword(password, user.password)) {
       throw new Error('Password doesnt match stored password')
     }
 
@@ -121,7 +121,7 @@ export async function setup (req: Request, res: Response) {
     }
 
     // Update db model and cached object
-    const userModel = await UserModel.findByPk(user.id)
+    const userModel = await UserModel.scope('withSensitive').findByPk(user.id)
     if (userModel == null) {
       throw new Error('No such user found!')
     }
@@ -149,12 +149,12 @@ export async function disable (req: Request, res: Response) {
 
     const { password } = req.body
 
-    if (user.password !== security.hash(password)) {
+    if (!security.verifyPassword(password, user.password)) {
       throw new Error('Password doesnt match stored password')
     }
 
     // Update db model and cached object
-    const userModel = await UserModel.findByPk(user.id)
+    const userModel = await UserModel.scope('withSensitive').findByPk(user.id)
     if (userModel == null) {
       throw new Error('No such user found!')
     }
