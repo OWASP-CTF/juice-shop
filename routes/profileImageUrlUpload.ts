@@ -13,6 +13,46 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
+// Only allow the profile image to be fetched from a public http(s) URL - block requests
+// targeting loopback/private/link-local addresses and non-http(s) schemes, which would
+// otherwise turn this into a Server-Side Request Forgery primitive against internal
+// services (including the application's own server-side challenge-solving endpoint).
+function isSafeExternalImageUrl (rawUrl: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false
+  }
+  const hostname = parsed.hostname.toLowerCase()
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1'
+  ) {
+    return false
+  }
+  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4) {
+    const [a, b] = ipv4.slice(1).map(Number)
+    if (
+      a === 127 || // loopback
+      a === 10 || // RFC1918
+      (a === 172 && b >= 16 && b <= 31) || // RFC1918
+      (a === 192 && b === 168) || // RFC1918
+      (a === 169 && b === 254) || // link-local / cloud metadata
+      a === 0
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
@@ -21,6 +61,12 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
+          if (!isSafeExternalImageUrl(url)) {
+            // Treated the same as any other failure to retrieve the image: fall back to
+            // storing the URL text itself rather than ever letting the server make a
+            // request to a private/internal target on the caller's behalf (SSRF).
+            throw new Error('Refusing to fetch a non-public image URL')
+          }
           const response = await fetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')

@@ -21,12 +21,17 @@ export function retrieveLoggedInUser () {
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
         const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        // Sensitive fields must never be returned via this generic accessor, regardless of what was requested
+        const forbiddenFields = new Set(['password', 'totpSecret', 'deluxeToken'])
 
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only those fields (excluding sensitive ones)
           for (const field of requestedFields) {
+            if (forbiddenFields.has(field)) {
+              continue
+            }
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }

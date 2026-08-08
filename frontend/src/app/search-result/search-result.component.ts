@@ -65,7 +65,8 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
-        this.trustProductDescription(products) // vuln-code-snippet neutral-line restfulXssChallenge
+        // Product descriptions are no longer force-trusted as safe HTML here; Angular's
+        // DomSanitizer will sanitize any HTML bound via [innerHTML] in the template instead.
         for (const product of products) {
           dataTable.push({
             name: product.name,
