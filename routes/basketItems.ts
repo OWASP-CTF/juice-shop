@@ -6,10 +6,8 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
-import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 interface RequestWithRawBody extends Request {
@@ -34,45 +32,100 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
-      res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
-    } else {
-      const basketItem = {
-        ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
-        quantity: quantities[quantities.length - 1]
-      }
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
 
-      const basketItemInstance = BasketItemModel.build(basketItem)
-      try {
-        const addedBasketItem = await basketItemInstance.save()
-        res.json({ status: 'success', data: addedBasketItem })
-      } catch (error) {
-        next(error)
-      }
+    if (!user || !user.bid) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+
+    const requestedBasketId = basketIds[basketIds.length - 1]
+
+    if (
+      !requestedBasketId ||
+      requestedBasketId === 'undefined' ||
+      Number(user.bid) !== Number(requestedBasketId)
+    ) {
+      res.status(403).json({ error: 'Invalid BasketId' })
+      return
+    }
+
+    const basketItem = {
+      ProductId: productIds[productIds.length - 1],
+      BasketId: Number(user.bid),
+      quantity: quantities[quantities.length - 1]
+    }
+
+    const basketItemInstance = BasketItemModel.build(basketItem)
+
+    try {
+      const addedBasketItem = await basketItemInstance.save()
+      res.json({ status: 'success', data: addedBasketItem })
+    } catch (error) {
+      next(error)
     }
   }
 }
 
 export function quantityCheckBeforeBasketItemAddition () {
   return (req: Request, res: Response, next: NextFunction) => {
-    void quantityCheck(req, res, next, req.body.ProductId, req.body.quantity).catch((error: Error) => {
+    void quantityCheck(
+      req,
+      res,
+      next,
+      req.body.ProductId,
+      req.body.quantity
+    ).catch((error: Error) => {
       next(error)
     })
   }
 }
+
 export function quantityCheckBeforeBasketItemUpdate () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
+      const item = await BasketItemModel.findOne({
+        where: { id: req.params.id }
+      })
+
+      if (item == null) {
+        res.status(404).json({ error: 'No such item found!' })
+        return
+      }
+
       const user = security.authenticatedUsers.from(req)
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+
+      if (!user || !user.bid) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+
+      if (Number(item.BasketId) !== Number(user.bid)) {
+        res.status(403).json({ error: 'Access denied' })
+        return
+      }
+
+      if (
+        req.body.BasketId != null &&
+        Number(req.body.BasketId) !== Number(user.bid)
+      ) {
+        res.status(403).json({ error: 'Invalid BasketId' })
+        return
+      }
+
+      /*
+       * Never allow the client to move an existing BasketItem
+       * into another user's basket.
+       */
+      req.body.BasketId = Number(user.bid)
+
       if (req.body.quantity) {
-        if (item == null) {
-          throw new Error('No such item found!')
-        }
-        void quantityCheck(req, res, next, item.ProductId, req.body.quantity)
+        await quantityCheck(
+          req,
+          res,
+          next,
+          item.ProductId,
+          req.body.quantity
+        )
       } else {
         next()
       }
@@ -82,20 +135,42 @@ export function quantityCheckBeforeBasketItemUpdate () {
   }
 }
 
-async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
-  const product = await QuantityModel.findOne({ where: { ProductId: id } })
+async function quantityCheck (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  id: number,
+  quantity: number
+) {
+  const product = await QuantityModel.findOne({
+    where: { ProductId: id }
+  })
+
   if (product == null) {
     throw new Error('No such product found!')
   }
 
   // is product limited per user and order, except if user is deluxe?
-  if (!product.limitPerUser || (product.limitPerUser && product.limitPerUser >= quantity) || security.isDeluxe(req)) {
-    if (product.quantity >= quantity) { // enough in stock?
+  if (
+    !product.limitPerUser ||
+    (product.limitPerUser && product.limitPerUser >= quantity) ||
+    security.isDeluxe(req)
+  ) {
+    if (product.quantity >= quantity) {
       next()
     } else {
-      res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })
+      res.status(400).json({
+        error: res.__(
+          'We are out of stock! Sorry for the inconvenience.'
+        )
+      })
     }
   } else {
-    res.status(400).json({ error: res.__('You can order only up to {{quantity}} items of this product.', { quantity: product.limitPerUser.toString() }) })
+    res.status(400).json({
+      error: res__(
+        'You can order only up to {{quantity}} items of this product.',
+        { quantity: product.limitPerUser.toString() }
+      )
+    })
   }
 }
