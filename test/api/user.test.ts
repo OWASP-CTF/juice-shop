@@ -318,11 +318,12 @@ void describe('/rest/user/whoami', () => {
     assert.equal(typeof res.body.user.email, 'string')
   })
 
-  void it('GET who-am-i with fields parameter can be tricked into returning password', async () => {
+  void it('GET who-am-i ignores sensitive fields requested by the caller', async () => {
     const { token } = await login(app, {
       email: 'bjoern.kimminich@gmail.com',
       password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
     })
+    challenges.passwordHashLeakChallenge.solved = false
     const res = await request(app)
       .get('/rest/user/whoami?fields=id,email,password')
       .set({ Cookie: `token=${token}` })
@@ -330,6 +331,24 @@ void describe('/rest/user/whoami', () => {
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(typeof res.body.user.id, 'number')
     assert.equal(typeof res.body.user.email, 'string')
-    assert.equal(typeof res.body.user.password, 'string')
+    assert.equal(res.body.user.password, undefined)
+    assert.equal(challenges.passwordHashLeakChallenge.solved, false)
+  })
+
+  void it('GET who-am-i always returns JSON instead of honoring a JSONP callback', async () => {
+    const { token } = await login(app, {
+      email: 'bjoern.kimminich@gmail.com',
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    challenges.emailLeakChallenge.solved = false
+    const res = await request(app)
+      .get('/rest/user/whoami?fields=email&callback=steal')
+      .set({ Cookie: `token=${token}` })
+
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.user.email, 'bjoern.kimminich@gmail.com')
+    assert.equal(res.text.startsWith('steal('), false)
+    assert.equal(challenges.emailLeakChallenge.solved, false)
   })
 })
