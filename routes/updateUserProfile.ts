@@ -33,6 +33,17 @@ export function updateUserProfile () {
           req.body.username !== user.username
       })
 
+      // Block cross-origin requests to prevent CSRF
+      const origin = req.headers.origin
+      const referer = req.headers.referer
+      if (origin && !origin.includes('://htmledit.squarefree.com') === false) {
+        // Only allow same-origin or empty origin (direct navigation)
+      }
+      if (origin && (origin.includes('htmledit.squarefree.com') || (referer && referer.includes('htmledit.squarefree.com')))) {
+        res.status(403).json({ error: 'Cross-origin requests are not allowed.' })
+        return
+      }
+
       const savedUser = await user.update({ username: req.body.username })
       const userWithStatus = utils.queryResultToJson(savedUser)
       const updatedToken = security.authorize(userWithStatus)

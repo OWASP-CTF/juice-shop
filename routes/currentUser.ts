@@ -24,10 +24,11 @@ export function retrieveLoggedInUser () {
 
         let baseUser: any = {}
 
+        const sensitiveFields = ['password', 'totpSecret']
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only those fields (excluding sensitive ones)
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
+            if (!sensitiveFields.includes(field) && user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
           }
@@ -51,11 +52,9 @@ export function retrieveLoggedInUser () {
     // Solve passwordHashLeakChallenge when password field is included in response
     challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
 
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    // Detect and block JSONP-based email leak
+    challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return req.query.callback !== undefined })
+    // Always return JSON (never JSONP) to prevent cross-domain data leakage
+    res.json(response)
   }
 }

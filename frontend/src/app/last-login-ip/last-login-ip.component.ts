@@ -36,7 +36,7 @@ export class LastLoginIpComponent implements OnInit {
       payload = jwtDecode(token)
       if (payload.data.lastLoginIp) {
 
-        this.lastLoginIp = this.sanitizer.bypassSecurityTrustHtml(`<small>${payload.data.lastLoginIp}</small>`)
+        this.lastLoginIp = payload.data.lastLoginIp
       }
     }
   }

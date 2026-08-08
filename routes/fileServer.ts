@@ -27,6 +27,14 @@ export function servePublicFiles () {
     if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
       file = security.cutOffPoisonNullByte(file)
 
+      // Re-verify after null byte removal to prevent null byte injection
+      if (!endsWithAllowlistedFileType(file) && file !== 'incident-support.kdbx') {
+        verifySuccessfulPoisonNullByteExploit(file)
+        res.status(403)
+        next(new Error('Only .md and .pdf files are allowed!'))
+        return
+      }
+
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 
