@@ -13,6 +13,13 @@ import { challenges, users } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 
+/* Anti-automation: per-account failed-attempt lockout against security-answer brute-forcing.
+ * Keyed by account (not client IP) because 'trust proxy' is enabled, making the client IP
+ * spoofable via the X-Forwarded-For header. */
+const MAX_FAILED_ANSWER_ATTEMPTS = 3
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000
+const failedAnswerAttempts = new Map<string, { count: number, lockedUntil: number }>()
+
 export function resetPassword () {
   return async ({ body, connection }: Request, res: Response, next: NextFunction) => {
     const email = body.email
@@ -31,6 +38,17 @@ export function resetPassword () {
       res.status(401).send(res.__('New and repeated password do not match.'))
       return
     }
+    const lockoutKey = String(email).toLowerCase()
+    const now = Date.now()
+    let attempts = failedAnswerAttempts.get(lockoutKey)
+    if (attempts && attempts.lockedUntil > now) {
+      res.status(429).send(res.__('Too many failed attempts. Please try again later.'))
+      return
+    }
+    if (attempts && attempts.lockedUntil !== 0 && attempts.lockedUntil <= now) {
+      attempts = undefined
+      failedAnswerAttempts.delete(lockoutKey)
+    }
     try {
       const data = await SecurityAnswerModel.findOne({
         include: [{
@@ -39,6 +57,7 @@ export function resetPassword () {
         }]
       })
       if ((data != null) && security.hmac(answer) === data.answer) {
+        failedAnswerAttempts.delete(lockoutKey)
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
@@ -46,6 +65,12 @@ export function resetPassword () {
           res.json({ user: updatedUser })
         }
       } else {
+        const record = attempts ?? { count: 0, lockedUntil: 0 }
+        record.count++
+        if (record.count >= MAX_FAILED_ANSWER_ATTEMPTS) {
+          record.lockedUntil = now + LOCKOUT_WINDOW_MS
+        }
+        failedAnswerAttempts.set(lockoutKey, record)
         res.status(401).send(res.__('Wrong answer to security question.'))
       }
     } catch (error) {
