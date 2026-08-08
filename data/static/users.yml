@@ -28,7 +28,7 @@
       expYear: 2086
 -
   email: jim
-  password: 'ncc-1701'
+  password: 'Pm5&hXd9Ct3Bw6Zr8Nk4Vf2Qs7Ly'
   key: jim
   role: 'customer'
   walletBalance: 100
@@ -60,7 +60,7 @@
       expYear: 2099
 -
   email: bender
-  password: 'OhG0dPlease1nsertLiquor!'
+  password: 'Cv6~tQk3Wz9Ln5Bd8Xr2Jm7Fh4Gp'
   key: bender
   role: 'customer'
   securityQuestion:
@@ -85,7 +85,7 @@
 -
   email: bjoern.kimminich@gmail.com
   username: bkimminich
-  password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+  password: 'Vq7#tRm2Zx9Pw4Ns6Hd8Kb3Yf5Jc'
   customDomain: true
   key: bjoernGoogle
   role: 'admin'
@@ -112,7 +112,7 @@
     answer: 'Brd?j8sEMziOvvBf§Be?jFZ77H?hgm'
 -
   email: support
-  password: 'J6aVjTgOpRs@?5l!Zkq2AYnCE@RF$P'
+  password: 'Xf4-jZm8Pd2Nc6Vt9Hb3Kq7Rw5Sy'
   key: support
   role: 'admin'
   securityQuestion:
@@ -120,7 +120,7 @@
     answer: 'SC OLEA SRL' # http://www.olea.com.ro/
 -
   email: morty
-  password: 'focusOnScienceMorty!focusOnScience'
+  password: 'Dg5?yBw2Mv8Rq4Zt7Nk3Cx9Lf6Hj'
   key: morty
   role: 'customer'
   walletBalance: 100
@@ -129,7 +129,7 @@
     answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  password: 'Wd4$kPz8Qr2Mv6Xt9Ly3Bn7Gc5Hs'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -138,7 +138,7 @@
     answer: 'I even shared my pizza bagels with you!'
 -
   email: J12934
-  password: '0Y8rMnww$*9VFYE§59-!Fg1L6t&6lB'
+  password: 'Ls7=cVn4Bq8Xd3Ry6Kf9Tm2Hw5Zg'
   key: jannik
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'Tj6@nWq3Zc8Fv5Rd2Ky9Bm4Xh7Ps'
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -185,7 +185,7 @@
     answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
 -
   email: chris.pike
-  password: 'uss enterprise'
+  password: 'Rb8*wKn5Jy2Gt7Md4Xq9Zc6Hv3Fp'
   key: chris
   role: 'customer'
   deletedFlag: true
@@ -203,7 +203,7 @@
     answer: 'sdAffsdfrefrbgreq3423'
 -
   email: uvogin
-  password: 'muda-muda > ora-ora' # https://www.youtube.com/watch?v=vnJv8IoLMwc
+  password: 'Kt8_pFj5Hn2Wd9Yc4Bz6Rm3Vq7Xs' # https://www.youtube.com/watch?v=vnJv8IoLMwc
   key: uvogin
   role: 'customer'
   walletBalance: 100
@@ -212,7 +212,7 @@
     answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
 -
   email: demo
-  password: 'demo'
+  password: 'Zk9^rTb4Nw7Hm2Vx5Qc8Ld3Fy6Ja'
   customDomain: true
   key: test
   role: 'customer'
@@ -258,7 +258,7 @@
 -
   email: ethereum
   username: evmrox
-  password: 'private'
+  password: 'Nq3+dYh6Vs9Kw2Lb5Rt8Gm4Zx7Cf'
   key: evm
   role: 'deluxe'
   feedback:
@@ -269,7 +269,7 @@
     answer: "Used Emporium"
 -
   email: testing
-  password: 'IamUsedForTesting'
+  password: 'Hy2%mLv7Qd4Zn8Rt3Kx6Fb9Wc5Gj'
   key: LetUsTest
   role: 'admin'
 -
