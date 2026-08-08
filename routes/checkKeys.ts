@@ -3,16 +3,33 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
+interface JuicyWallet {
+  privateKey: string
+  publicKey: string
+  address: string
+}
+
+/* The wallet used to be derived from a fixed seed phrase that was written down in one of the
+   shop's own feedback entries, which handed its private key to anyone who read it. It is now
+   generated once at runtime, so the key only ever exists in memory and is never committed,
+   printed or otherwise recoverable from the application. */
+let juicyWallet: Promise<JuicyWallet> | undefined
+
+const walletOfTheShop = async (): Promise<JuicyWallet> => {
+  if (juicyWallet === undefined) {
+    juicyWallet = (async () => {
+      const { Wallet } = await import('ethers')
+      const wallet = Wallet.createRandom()
+      return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
+    })()
+  }
+  return await juicyWallet
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { Wallet } = await import('ethers')
-      /* The wallet used to be derived from a seed phrase that had been posted in public. It was
-         rotated to a key that is only ever held server-side and never derived from shared words. */
-      const wallet = new Wallet('0x3ac4f1d90b78e2561c0a9f47d5e83b62710fa4d8c93e05b16d2748af9c30e5b1')
-      const privateKey = wallet.privateKey
-      const publicKey = wallet.signingKey?.publicKey
-      const address = wallet.address
+      const { privateKey, publicKey, address } = await walletOfTheShop()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })

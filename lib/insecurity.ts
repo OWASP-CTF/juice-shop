@@ -68,24 +68,26 @@ export const hasExpectedAlgorithm = (token?: string) => {
   }
 }
 
-/* Rejects a token whose header asks for any other algorithm before anything downstream gets to
-   look at it, so a forged signature is never treated as a valid session. */
+/* Drops a token whose header asks for any other algorithm before anything downstream gets to look
+   at it. The request then simply counts as unauthenticated, which is what a signature the shop
+   never issued is worth - and endpoints that do require a session answer 401 as they always do. */
 export const denyForgedTokenAlgorithm = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const token = utils.jwtFrom(req)
-    if (token && !hasExpectedAlgorithm(token)) {
-      res.status(401).json({ error: 'Unsupported token signature algorithm' })
-      return
+    if (utils.jwtFrom(req) && !hasExpectedAlgorithm(utils.jwtFrom(req))) {
+      delete req.headers.authorization
+    }
+    if (req.cookies?.token && !hasExpectedAlgorithm(req.cookies.token)) {
+      delete req.cookies.token
     }
     next()
   }
 }
 
 export const isAuthorized = () => {
-  const rejectForgedAlgorithm = denyForgedTokenAlgorithm()
-  const authorizeToken = expressJwt(({ secret: publicKey }) as any)
+  const dropForgedAlgorithm = denyForgedTokenAlgorithm()
+  const authorizeToken = expressJwt(({ secret: publicKey, algorithms: [jwtAlgorithm] }) as any)
   return (req: Request, res: Response, next: NextFunction) => {
-    rejectForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
+    dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
   }
 }
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
