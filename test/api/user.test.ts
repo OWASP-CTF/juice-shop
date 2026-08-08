@@ -330,4 +330,18 @@ void describe('/rest/user/whoami', () => {
     assert.equal(typeof res.body.user.email, 'string')
     assert.equal(res.body.user.password, undefined)
   })
+
+  void it('GET who-am-i ignores JSONP callbacks and returns JSON', async () => {
+    const { token } = await login(app, {
+      email: 'bjoern.kimminich@gmail.com',
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    const res = await request(app)
+      .get('/rest/user/whoami?callback=stealEmail')
+      .set({ Cookie: `token=${token}` })
+
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.text.startsWith('/**/ typeof stealEmail'), false)
+    assert.equal(res.body.user.email, 'bjoern.kimminich@gmail.com')
+  })
 })

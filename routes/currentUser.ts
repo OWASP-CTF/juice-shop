@@ -48,10 +48,6 @@ export function retrieveLoggedInUser () {
     } catch (err) {
       response = { user: emptyUser }
     }
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      res.jsonp(response)
-    }
+    res.json(response)
   }
 }

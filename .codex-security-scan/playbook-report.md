@@ -108,8 +108,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A03:2021 Injection; ASVS V5.3.3; WSTG-INPV-01
 - **Location**: `models/user.ts`, `models/product.ts`, `models/feedback.ts`, `routes/userProfile.ts`, `routes/saveLoginIp.ts`, `routes/trackOrder.ts`
 - **Impact**: Stored and reflected payloads could execute in another user's browser or escape the server-side profile template.
-- **Evidence**: API regressions submit direct and recursively masked iframe/script payloads and assert sanitized storage/output. Angular search regressions verify query/product HTML remains untrusted, profile usernames are encoded, the profile CSP no longer permits `unsafe-eval`, and remotely referenced SVG profile images are rejected before retrieval.
-- **Remediation**: Secure recursive sanitization is unconditional at model boundaries, Angular's built-in HTML sanitization is no longer bypassed for product descriptions or search queries, dynamic template evaluation was removed, reflected identifiers are constrained to inert characters, and remote profile images are restricted to non-active raster extensions.
+- **Evidence**: API regressions submit direct and recursively masked iframe/script payloads and assert sanitized storage/output. Angular search regressions verify query/product HTML remains untrusted, promotion subtitles are emitted as a native WebVTT track rather than executable script content, profile usernames are encoded, the profile CSP no longer permits `unsafe-eval`, and remotely referenced SVG profile images are rejected before retrieval.
+- **Remediation**: Secure recursive sanitization is unconditional at model boundaries, Angular's built-in HTML sanitization is no longer bypassed for product descriptions or search queries, video subtitles use the browser's non-executable WebVTT track mechanism, dynamic template evaluation was removed, reflected identifiers are constrained to inert characters, and remote profile images are restricted to non-active raster extensions.
 - **Confidence**: HIGH for reviewed server paths; exhaustive Angular DOM-sink analysis was out of scope.
 
 ### HIGH — Deprecated XML/YAML and weak upload checks enabled XXE and resource abuse
@@ -130,8 +130,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A04:2021 Insecure Design
 - **Location**: `server.ts`, `routes/wallet.ts`, `routes/deluxe.ts`, `routes/order.ts`, `routes/dataErasure.ts`, `routes/captcha.ts`
 - **Impact**: Callers could self-register privileged roles, charge invalid wallet amounts, gain deluxe status without a real payment mode, manipulate inventory with negative quantities, forge feedback owners, reuse CAPTCHAs, or submit erasure requests without the account security answer.
-- **Evidence**: API regressions verify role fields are ignored, foreign payment cards and invalid amounts are denied, negative item quantities, expired/forged/excessive coupons fail, concurrent duplicate review likes result in exactly one success, CAPTCHA answers are not returned and cannot be replayed, feedback owner IDs are overwritten, and erasure requires the stored HMAC answer.
-- **Remediation**: Server-side identity binding and allowlisted registration fields were added; monetary/rating/quantity ranges are validated; obsolete campaign coupons were removed; review likes use an atomic conditional update with per-process duplicate suppression; arithmetic and image CAPTCHAs are one-use and image answers remain server-side; erasure renders a fixed template and verifies the account answer.
+- **Evidence**: API regressions verify role fields are ignored, foreign payment cards and invalid amounts are denied, negative item quantities, expired/forged/excessive coupons fail, concurrent duplicate review likes result in exactly one success, CAPTCHA answers are not returned and concurrent/replayed submissions result in exactly one success, feedback owner IDs are overwritten, and erasure requires the stored HMAC answer.
+- **Remediation**: Server-side identity binding and allowlisted registration fields were added; monetary/rating/quantity ranges are validated; obsolete campaign coupons were removed; review likes use an atomic conditional update with per-process duplicate suppression; arithmetic and image CAPTCHAs are atomically one-use and image answers remain server-side; erasure renders a fixed template and verifies the account answer.
 - **Confidence**: HIGH
 
 ### CRITICAL — Installed dependencies include known vulnerable components
@@ -164,8 +164,8 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - **OWASP Ref**: A05:2021 Security Misconfiguration
 - **Location**: final server error boundary; formerly `/ftp`, `/encryptionkeys`, and `/metrics`
 - **Impact**: Attackers could learn stack, dependency, operational, or deliberately published challenge information that accelerates follow-on attacks.
-- **Evidence**: The final middleware returns a fixed JSON error while preserving safe 4xx statuses and logs diagnostics server-side. The reviewed operational surfaces no longer expose FTP/quarantine listings or backup artifacts, encryption keys, or unauthenticated metrics; regressions verify 403/404/401 behavior as appropriate.
-- **Remediation**: FTP is restricted to the legal document and generated order PDFs, quarantine and key routes are disabled, metrics require an authenticated administrator, and verbose development errors were replaced by a minimal client response.
+- **Evidence**: The final middleware returns a fixed JSON error while preserving safe 4xx statuses and logs diagnostics server-side. The current-user endpoint always returns JSON and ignores JSONP callbacks. The reviewed operational surfaces no longer expose FTP/quarantine listings or backup artifacts, encryption keys, or unauthenticated metrics; regressions verify 403/404/401 behavior as appropriate.
+- **Remediation**: FTP is restricted to the legal document and generated order PDFs, quarantine and key routes are disabled, metrics require an authenticated administrator, legacy JSONP user-data disclosure was removed, and verbose development errors were replaced by a minimal client response.
 - **Confidence**: HIGH for disclosure presence; operational severity depends on deployment intent.
 
 ## Verification Evidence
@@ -180,6 +180,7 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - Seed-credential and memory-response API regressions: 15 passed, 0 failed; user-token unit regressions: 4 passed, 0 failed.
 - Credential-pass full API suite: 467 tests, 452 passed, 4 failed, 11 skipped. All four failures were live-site DNS/timeout/HTTP failures (Pastebin, Stack Overflow, GitHub, and the external profile-image host); all repository-owned API tests passed.
 - Credential-pass full frontend suite: 120 files, 938 tests passed, 0 failed.
+- JSONP, video-subtitle, and concurrent-CAPTCHA focused API batch: 50 passed, 0 failed.
 - `test/api/2fa.test.ts`: 13 passed, 0 failed.
 - Focused security API batch: 51 tests, 49 passed, 0 failed, 2 pre-existing skips.
 - Focused server unit batch: 98 tests, 96 passed, 0 failed, 2 pending; `test/server/insecuritySpec.ts` separately passed 37/37.
@@ -187,7 +188,7 @@ The assessment confirmed three high-confidence canonical vulnerabilities and a s
 - `npm run build:server`: passed.
 - `npm run lint`: passed, including frontend TypeScript and SCSS lint.
 - `npm run rsn:update && npm run rsn`: reviewed deltas locked; all codefix files match the locked state.
-- Official PR scorer after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched. The second signed-off batch improved this to 118/141 points (84%), 32/38 challenges patched. The third signed-off batch remained at 118/141 and 32/38; the seed-credential pass has not yet been scored at the time of this report update.
+- Official PR scorer after the first signed-off batch: 106/141 points (75%), 28/38 challenges patched. The second signed-off batch improved this to 118/141 points (84%), 32/38 challenges patched. The third and seed-credential signed-off batches remained at 118/141 and 32/38; the JSONP/video/CAPTCHA pass has not yet been scored at the time of this report update.
 - Current-file manual secret-pattern scan: 1,166 files examined; 0 API-token pattern files, 0 private-key pattern files, and 0 embedded URL-credential pattern files (dependencies, build output, and Git metadata excluded). Five high-risk-named files were contextually reviewed: npm policy files, test-compose configuration, and static CTF/training key material rather than active service credentials. No trufflehog/gitleaks/detect-secrets binary, CI secret-scanning control, or broad `.env`/`*.key`/`*.pem` ignore coverage was present; these are preventive-control gaps.
 
 ## Out of Scope

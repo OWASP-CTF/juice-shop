@@ -56,6 +56,23 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.body.data.comment, 'I am a harmless comment.')
   })
 
+  void it('POST consumes a CAPTCHA atomically under concurrent reuse', async () => {
+    const captchaRes = await request(app).get('/rest/captcha')
+    const body = {
+      comment: 'Only one feedback may use this CAPTCHA',
+      rating: 1,
+      captchaId: captchaRes.body.captchaId,
+      captcha: answerFor(captchaRes.body.captcha)
+    }
+
+    const responses = await Promise.all([
+      request(app).post('/api/Feedbacks').set(jsonHeader).send(body),
+      request(app).post('/api/Feedbacks').set(jsonHeader).send(body)
+    ])
+
+    assert.deepEqual(responses.map(response => response.status).sort(), [201, 401])
+  })
+
   if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
     void it('POST recursively sanitizes a masked XSS attack', async () => {
       const captchaRes = await request(app)
