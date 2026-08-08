@@ -10,6 +10,7 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import { challenges } from '../../data/datacache'
 
 let app: Express
 
@@ -161,6 +162,8 @@ void describe('/rest/user/reset-password', () => {
   })
 
   void it('POST password reset for Morty with correct answer to his security question', async () => {
+    challenges.resetPasswordMortyChallenge.solved = false
+
     const res = await request(app)
       .post('/rest/user/reset-password')
       .set({ 'content-type': 'application/json' })
@@ -172,6 +175,7 @@ void describe('/rest/user/reset-password', () => {
       })
 
     assert.equal(res.status, 200)
+    assert.equal(challenges.resetPasswordMortyChallenge.solved, false)
   })
 
   void it('POST password reset with wrong answer to security question', async () => {
