@@ -11,8 +11,15 @@ import config from 'config'
 import path from 'node:path'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import { ImageCaptchaModel } from '../../models/imageCaptcha'
 
 let app: Express
+
+async function latestCaptchaAnswer (): Promise<string> {
+  const captcha = await ImageCaptchaModel.findOne({ order: [['createdAt', 'DESC']] })
+  assert.ok(captcha)
+  return captcha.answer
+}
 
 before(async () => {
   const result = await createTestApp()
@@ -67,11 +74,14 @@ void describe('/rest/user/data-export', () => {
 
     assert.equal(captchaRes.status, 200)
     assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
+    assert.equal(captchaRes.body.answer, undefined)
+
+    const answer = await latestCaptchaAnswer()
 
     const res = await request(app)
       .post('/rest/user/data-export')
       .set(authHeader)
-      .send({ answer: captchaRes.body.answer, format: 1 })
+      .send({ answer, format: 1 })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -79,6 +89,12 @@ void describe('/rest/user/data-export', () => {
     const parsedData = JSON.parse(res.body.userData)
     assert.equal(parsedData.username, 'bkimminich')
     assert.equal(parsedData.email, 'bjoern.kimminich@gmail.com')
+
+    const replay = await request(app)
+      .post('/rest/user/data-export')
+      .set(authHeader)
+      .send({ answer, format: 1 })
+    assert.equal(replay.status, 401)
   })
 
   void it('Export data including orders without use of CAPTCHA', async () => {
@@ -178,10 +194,12 @@ void describe('/rest/user/data-export', () => {
     assert.equal(captchaRes.status, 200)
     assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
+    const answer = await latestCaptchaAnswer()
+
     const res = await request(app)
       .post('/rest/user/data-export')
       .set(authHeader)
-      .send({ answer: captchaRes.body.answer, format: 1 })
+      .send({ answer, format: 1 })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -209,10 +227,12 @@ void describe('/rest/user/data-export', () => {
     assert.equal(captchaRes.status, 200)
     assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
+    const answer = await latestCaptchaAnswer()
+
     const res = await request(app)
       .post('/rest/user/data-export')
       .set(authHeader)
-      .send({ answer: captchaRes.body.answer, format: 1 })
+      .send({ answer, format: 1 })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -251,10 +271,12 @@ void describe('/rest/user/data-export', () => {
     assert.equal(captchaRes.status, 200)
     assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
+    const answer = await latestCaptchaAnswer()
+
     const res = await request(app)
       .post('/rest/user/data-export')
       .set(authHeader)
-      .send({ answer: captchaRes.body.answer, format: 1 })
+      .send({ answer, format: 1 })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))

@@ -11,7 +11,7 @@ export function applyCoupon () {
   return async ({ params }: Request, res: Response, next: NextFunction) => {
     try {
       const id = params.id
-      let coupon: string | undefined | null = params.coupon ? decodeURIComponent(params.coupon) : undefined
+      let coupon: string | undefined | null = params.coupon
       const discount = security.discountFromCoupon(coupon)
       coupon = discount ? coupon : null
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { describe, it, before } from 'node:test'
+import { describe, it, before, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
@@ -32,7 +32,7 @@ void describe('/rest/user/change-password', () => {
     const { token } = await login(app, { email: 'kuni@be.rt', password: 'kunigunde' })
 
     const res = await request(app)
-      .get('/rest/user/change-password?current=kunigunde&new=foo&repeat=foo')
+      .get('/rest/user/change-password?current=kunigunde&new=new-password&repeat=new-password')
       .set({ Authorization: 'Bearer ' + token })
 
     assert.equal(res.status, 200)
@@ -45,7 +45,7 @@ void describe('/rest/user/change-password', () => {
     })
 
     const res = await request(app)
-      .get('/rest/user/change-password?current=definetely_wrong&new=blubb&repeat=blubb')
+      .get('/rest/user/change-password?current=definetely_wrong&new=new-password&repeat=new-password')
       .set({ Authorization: 'Bearer ' + token })
 
     assert.equal(res.status, 401)
@@ -70,23 +70,19 @@ void describe('/rest/user/change-password', () => {
 
   void it('GET password change without passing an authorization token', async () => {
     const res = await request(app)
-      .get('/rest/user/change-password?new=foo&repeat=foo')
+      .get('/rest/user/change-password?new=new-password&repeat=new-password')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('GET password change with passing unrecognized authorization token', async () => {
     const res = await request(app)
-      .get('/rest/user/change-password?new=foo&repeat=foo')
+      .get('/rest/user/change-password?new=new-password&repeat=new-password')
       .set({ Authorization: 'Bearer unknown' })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('GET password change for Bender without current password using GET request', async () => {
@@ -99,11 +95,14 @@ void describe('/rest/user/change-password', () => {
       .get('/rest/user/change-password?new=slurmCl4ssic&repeat=slurmCl4ssic')
       .set({ Authorization: 'Bearer ' + token })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 401)
   })
 })
 
 void describe('/rest/user/reset-password', () => {
+  beforeEach(() => { process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET = 'true' })
+  afterEach(() => { delete process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET })
+
   void it('POST password reset for Jim with correct answer to his security question', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
@@ -194,9 +193,7 @@ void describe('/rest/user/reset-password', () => {
       .post('/rest/user/reset-password')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('POST password reset without new password throws a 401 error', async () => {
@@ -239,9 +236,7 @@ void describe('/rest/user/reset-password', () => {
       })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('POST password reset with no answer to the security question throws a 412 error', async () => {
@@ -255,8 +250,23 @@ void describe('/rest/user/reset-password', () => {
       })
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+  })
+})
+
+void describe('legacy password recovery', () => {
+  void it('is disabled by default', async () => {
+    delete process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'jim@' + config.get<string>('application.domain'),
+        answer: 'Samuel',
+        new: 'new-password',
+        repeat: 'new-password'
+      })
+
+    assert.equal(res.status, 410)
   })
 })

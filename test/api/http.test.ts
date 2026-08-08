@@ -18,10 +18,10 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('HTTP', () => {
-  void it('response must contain CORS header allowing all origins', async () => {
+  void it('response restricts CORS to the configured application origin', async () => {
     const res = await request(app).get('/')
     assert.equal(res.status, 200)
-    assert.equal(res.headers['access-control-allow-origin'], '*')
+    assert.equal(res.headers['access-control-allow-origin'], config.get('server.baseUrl'))
   })
 
   void it('response must contain sameorigin frameguard header', async () => {
@@ -51,6 +51,7 @@ void describe('HTTP', () => {
   void it('unexpected path under known sub-path caught by generic error handler', async () => {
     const res = await request(app).get('/rest/x')
     assert.equal(res.status, 500)
-    assert.ok(res.text.includes('<title>Error: Unexpected path: /rest/x</title>'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('Unexpected path: /rest/x'), false)
   })
 })

@@ -1,0 +1,96 @@
+{
+  "documentType": "codex-security.scan-manifest",
+  "scan": {
+    "artifacts": [
+      {
+        "mediaType": "application/json",
+        "path": "findings.json",
+        "sha256": "2e74814a44a7264bb76dbd9ceb7601b5653d48f32545fb91a48d92d6976ac0a8"
+      },
+      {
+        "mediaType": "application/json",
+        "path": "coverage.json",
+        "sha256": "242bbcf9b9dfd4b23bc57e3882240facb4c370c687c201a61677f842afa7686c"
+      }
+    ],
+    "completedAt": "2026-08-08T00:30:00Z",
+    "coverageRef": "coverage.json",
+    "findingsRef": "findings.json",
+    "id": "scan_juice_shop_dc34_20260808",
+    "producer": {
+      "name": "codex-security-plugin",
+      "version": "0.1.18"
+    },
+    "scope": {
+      "artifactsReviewed": [
+        "server.ts",
+        "lib/insecurity.ts",
+        "routes/",
+        "models/",
+        "test/api/",
+        "test/server/"
+      ],
+      "excludePaths": [
+        "node_modules/",
+        "frontend/node_modules/",
+        "build/",
+        "dist/"
+      ],
+      "includePaths": [
+        "."
+      ],
+      "limitations": [
+        "Independent baseline worker unavailable because all four session slots were occupied.",
+        "Frontend and ancillary tooling were not exhaustively reviewed."
+      ],
+      "runtimeStatus": "Static review completed; exploit verification is part of remediation.",
+      "summary": "Repository-wide review emphasizing remotely reachable server security boundaries.",
+      "validationMode": "source-backed static analysis"
+    },
+    "sealedAt": "2026-08-08T00:30:00Z",
+    "startedAt": "2026-08-08T00:00:00Z",
+    "status": "completed",
+    "target": {
+      "displayName": "OWASP-CTF/juice-shop",
+      "kind": "git_worktree",
+      "remote": "https://github.com/OWASP-CTF/juice-shop.git",
+      "revision": "bd2611f6cac491bb80c9fe54e954fd945c3ab5ba",
+      "snapshotDigest": "codex-security-snapshot/v1:sha256:bd2611f6cac491bb80c9fe54e954fd945c3ab5ba000000000000000000000000",
+      "targetId": "target_juice_shop_dc34"
+    },
+    "threatModel": {
+      "assets": [
+        "Credentials and sessions",
+        "Customer baskets and orders",
+        "Server filesystem",
+        "Internal network reachability",
+        "Application integrity"
+      ],
+      "assumptions": [
+        "The CTF asks to harden scorer-targeted flaws even when modeled as upstream training challenges."
+      ],
+      "attackerCapabilities": [
+        "Send arbitrary public HTTP requests",
+        "Authenticate as a customer",
+        "Submit duplicate JSON keys",
+        "Upload crafted files",
+        "Supply server-fetched URLs"
+      ],
+      "securityObjectives": [
+        "Authenticate sensitive operations",
+        "Enforce object ownership",
+        "Use data-only query parameters",
+        "Contain writes",
+        "Restrict outbound requests"
+      ],
+      "summary": "An unauthenticated internet client or ordinary customer controls HTTP parameters, bodies, headers, cookies, and files. Credentials, sessions, customer objects, the filesystem, internal network access, and process integrity must remain isolated.",
+      "trustBoundaries": [
+        "Internet to Express",
+        "HTTP input to query engines",
+        "Archive entries to filesystem writes",
+        "User URL to server-side fetch"
+      ]
+    }
+  },
+  "schemaVersion": "1.0"
+}

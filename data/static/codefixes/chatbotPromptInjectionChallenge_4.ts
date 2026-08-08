@@ -1,7 +1,7 @@
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.',
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
+          discount: z.number().int().min(1).max(10).describe('The approved discount percentage for the coupon'),
           reason: z.string().describe('The reason for generating this coupon, must reference the damaged order ID')
         }),
         execute: async ({ discount, reason }) => {

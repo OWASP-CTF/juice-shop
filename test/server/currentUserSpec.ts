@@ -7,7 +7,7 @@ import sinon from 'sinon'
 import chai from 'chai'
 import sinonChai from 'sinon-chai'
 import { retrieveLoggedInUser } from '../../routes/currentUser'
-import { authenticatedUsers } from '../../lib/insecurity'
+import { authenticatedUsers, authorize, decode } from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
 const expect = chai.expect
 chai.use(sinonChai)
@@ -30,14 +30,31 @@ describe('currentUser', () => {
   })
 
   it('should return ID and email of user belonging to cookie from the request', () => {
-    req.cookies.token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0'
+    req.cookies.token = authorize({ data: { id: 1, email: 'admin@juice-sh.op', lastLoginIp: '0.0.0.0', profileImage: '/assets/public/images/uploads/default.svg' } })
     req.query.callback = undefined
     authenticatedUsers.put(
-      'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJlbWFpbCI6ImFkbWluQGp1aWNlLXNoLm9wIiwibGFzdExvZ2luSXAiOiIwLjAuMC4wIiwicHJvZmlsZUltYWdlIjoiZGVmYXVsdC5zdmcifSwiaWF0IjoxNTgyMjIyMzY0fQ.CHiFQieZudYlrd1o8Ih-Izv7XY_WZupt8Our-CP9HqsczyEKqrWC7wWguOgVuSGDN_S3mP4FyuEFN8l60aAhVsUbqzFetvJkFwe5nKVhc9dHuen6cujQLMcTlHLKassOSDP41Q-MkKWcUOQu0xUkTMfEq2hPMHpMosDb4benzH0',
+      req.cookies.token,
       { data: { id: 1, email: 'admin@juice-sh.op', lastLoginIp: '0.0.0.0', profileImage: '/assets/public/images/uploads/default.svg' } as unknown as UserModel }
     )
     retrieveLoggedInUser()(req, res)
 
     expect(res.json).to.have.been.calledWith({ user: { id: 1, email: 'admin@juice-sh.op', lastLoginIp: '0.0.0.0', profileImage: '/assets/public/images/uploads/default.svg' } })
+  })
+
+  it('does not expose password hashes through the fields parameter', () => {
+    req.cookies.token = authorize({ data: { id: 1, email: 'admin@juice-sh.op', password: 'sensitive' } })
+    req.query.fields = 'id,password,totpSecret'
+    authenticatedUsers.put(req.cookies.token, { data: { id: 1, email: 'admin@juice-sh.op', password: 'sensitive', totpSecret: 'sensitive' } as unknown as UserModel })
+
+    retrieveLoggedInUser()(req, res)
+
+    expect(res.json).to.have.been.calledWith({ user: { id: 1 } })
+  })
+
+  it('does not include password hashes or second-factor secrets in user tokens', () => {
+    const token = authorize({ data: { id: 1, email: 'admin@juice-sh.op', password: 'sensitive', totpSecret: 'sensitive' } })
+    const payload = decode(token)
+
+    expect(payload.data).to.deep.equal({ id: 1, email: 'admin@juice-sh.op' })
   })
 })

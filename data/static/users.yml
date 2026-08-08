@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'admin123'
+  passwordEnv: JUICE_SHOP_ADMIN_PASSWORD
   key: admin
   role: 'admin'
   securityQuestion:
@@ -85,7 +85,7 @@
 -
   email: bjoern.kimminich@gmail.com
   username: bkimminich
-  password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+  passwordEnv: JUICE_SHOP_GOOGLE_USER_PASSWORD
   customDomain: true
   key: bjoernGoogle
   role: 'admin'
@@ -112,7 +112,7 @@
     answer: 'Brd?j8sEMziOvvBf§Be?jFZ77H?hgm'
 -
   email: support
-  password: 'J6aVjTgOpRs@?5l!Zkq2AYnCE@RF$P'
+  passwordEnv: JUICE_SHOP_SUPPORT_PASSWORD
   key: support
   role: 'admin'
   securityQuestion:
@@ -129,7 +129,7 @@
     answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  passwordEnv: JUICE_SHOP_RAPPER_PASSWORD
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -138,7 +138,7 @@
     answer: 'I even shared my pizza bagels with you!'
 -
   email: J12934
-  password: '0Y8rMnww$*9VFYE§59-!Fg1L6t&6lB'
+  passwordEnv: JUICE_SHOP_JANNIK_PASSWORD
   key: jannik
   role: 'admin'
   securityQuestion:
@@ -147,8 +147,8 @@
 -
   email: wurstbrot
   username: wurstbrot
-  password: 'EinBelegtesBrotMitSchinkenSCHINKEN!'
-  totpSecret: IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH
+  passwordEnv: JUICE_SHOP_2FA_ADMIN_PASSWORD
+  totpSecretEnv: JUICE_SHOP_2FA_ADMIN_TOTP_SECRET
   key: timo
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  passwordEnv: JUICE_SHOP_AMY_PASSWORD
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -269,7 +269,7 @@
     answer: "Used Emporium"
 -
   email: testing
-  password: 'IamUsedForTesting'
+  passwordEnv: JUICE_SHOP_TEST_USER_PASSWORD
   key: LetUsTest
   role: 'admin'
 -

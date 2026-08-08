@@ -38,6 +38,7 @@ import * as security from '../lib/insecurity'
 import { variableDependencies, domainDependencies, preconditionResults } from '../lib/startup/validatePreconditions'
 // @ts-expect-error FIXME due to non-existing type definitions for replace
 import replace from 'replace'
+import crypto from 'node:crypto'
 
 const entities = new Entities()
 
@@ -186,17 +187,20 @@ async function createUsers () {
   const users = await loadStaticUserData()
 
   await Promise.all(
-    users.map(async ({ username, email, password, customDomain, key, role, deletedFlag, profileImage, securityQuestion, feedback, address, card, totpSecret, lastLoginIp = '' }) => {
+    users.map(async ({ username, email, password, passwordEnv, customDomain, key, role, deletedFlag, profileImage, securityQuestion, feedback, address, card, totpSecret, totpSecretEnv, lastLoginIp = '' }) => {
       try {
         const completeEmail = customDomain ? email : `${email}@${config.get<string>('application.domain')}`
+        const seedPassword = passwordEnv ? process.env[passwordEnv] ?? crypto.randomBytes(32).toString('base64url') : password
+        const seedTotpSecret = totpSecretEnv ? process.env[totpSecretEnv] ?? randomBase32Secret() : totpSecret
+        if (!seedPassword) throw new Error('A password or password environment variable is required')
         const user = await UserModel.create({
           username,
           email: completeEmail,
-          password,
+          password: seedPassword,
           role,
           deluxeToken: role === security.roles.deluxe ? security.deluxeToken(completeEmail) : '',
           profileImage: `assets/public/images/uploads/${profileImage ?? (role === security.roles.admin ? 'defaultAdmin.png' : 'default.svg')}`,
-          totpSecret,
+          totpSecret: seedTotpSecret,
           lastLoginIp
         })
         datacache.users[key] = user
@@ -210,6 +214,11 @@ async function createUsers () {
       }
     })
   )
+}
+
+function randomBase32Secret (): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  return Array.from(crypto.randomBytes(32), byte => alphabet[byte % alphabet.length]).join('')
 }
 
 async function createWallet () {

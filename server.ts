@@ -83,7 +83,6 @@ import { retrieveBasket } from './routes/basket'
 import { searchProducts } from './routes/search'
 import { trackOrder } from './routes/trackOrder'
 import { saveLoginIp } from './routes/saveLoginIp'
-import { serveKeyFiles } from './routes/keyServer'
 import * as basketItems from './routes/basketItems'
 import { performRedirect } from './routes/redirect'
 import { serveEasterEgg } from './routes/easterEgg'
@@ -109,7 +108,6 @@ import { updateUserProfile } from './routes/updateUserProfile'
 import { getVideo, promotionVideo } from './routes/videoHandler'
 import { likeProductReviews } from './routes/likeProductReviews'
 import { repeatNotification } from './routes/repeatNotification'
-import { serveQuarantineFiles } from './routes/quarantineServer'
 import { showProductReviews } from './routes/showProductReviews'
 import { nftMintListener, walletNFTVerify } from './routes/nftMint'
 import { createProductReviews } from './routes/createProductReviews'
@@ -129,10 +127,6 @@ import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType
 
 const app = express()
 const server = new http.Server(app)
-
-// errorhandler requires us from overwriting a string property on it's module which is a big no-no with esmodules :/
-
-const errorhandler = require('errorhandler')
 
 const startTime = Date.now()
 
@@ -178,9 +172,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Compression for all requests */
   app.use(compression())
 
-  /* Bludgeon solution for possible CORS problems: Allow everything! */
-  app.options('*', cors())
-  app.use(cors())
+  const corsOptions = { origin: config.get<string>('server.baseUrl'), credentials: true }
+  app.options('*', cors(corsOptions))
+  app.use(cors(corsOptions))
 
   /* Security middleware */
   app.use(helmet.noSniff())
@@ -207,6 +201,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
+
+  // vuln-code-snippet start exposedMetricsChallenge
+  app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+  // vuln-code-snippet end exposedMetricsChallenge
 
   /* Security Policy */
   const securityTxtExpiration = new Date()
@@ -264,18 +262,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   }
 
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin())
+
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  app.get('/ftp', (_req: Request, res: Response) => { res.status(404).end() }) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/quarantine', (_req: Request, res: Response) => { res.status(404).end() }) // vuln-code-snippet neutral-line directoryListingChallenge
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
   /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
-  app.use('/encryptionkeys/:file', serveKeyFiles())
+  app.use('/encryptionkeys', (_req: Request, res: Response) => { res.status(404).end() })
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
@@ -339,13 +338,61 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start resetPasswordMortyChallenge
   /* Rate limiting */
-  app.enable('trust proxy')
+  app.set('trust proxy', 'loopback')
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator (req: Request) { return req.ip ?? req.socket.remoteAddress ?? '' } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
+
+  app.get('/api/BasketItems', security.isAuthorized(), utils.asyncHandler(basketItems.getBasketItems()))
+  app.use('/api/BasketItems/:id', security.isAuthorized(), utils.asyncHandler(basketItems.enforceBasketItemOwnership()))
+  app.use('/api/Feedbacks/:id', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users/:id', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
+  app.post('/api/Products', security.denyAll())
+  app.put('/api/Products/:id', security.denyAll())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+  app.use('/rest/basket/:id', security.isAuthorized(), basketItems.enforceBasketOwnership())
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (typeof req.body.email !== 'string' || typeof req.body.password !== 'string') {
+      res.status(400).json({ error: 'Email and password are required' })
+      return
+    }
+    req.body.email = req.body.email.trim()
+    req.body.password = req.body.password.trim()
+    if (typeof req.body.passwordRepeat === 'string') {
+      req.body.passwordRepeat = req.body.passwordRepeat.trim()
+      if (req.body.passwordRepeat !== req.body.password) {
+        res.status(400).json({ error: 'Passwords do not match' })
+        return
+      }
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email) || req.body.password.length < 8) {
+      res.status(400).json({ error: 'A valid email and password of at least 8 characters are required' })
+      return
+    }
+    next()
+  })
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    for (const property of ['id', 'role', 'deluxeToken', 'lastLoginIp', 'totpSecret', 'isActive']) {
+      delete req.body[property]
+    }
+    next()
+  })
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const user = security.authenticatedUsers.from(req)
+    req.body.UserId = user?.data.id ?? null
+    const rating = Number(req.body.rating)
+    if (typeof req.body.comment !== 'string' || req.body.comment.trim() === '' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      res.status(400).json({ error: 'A comment and rating between 1 and 5 are required' })
+      return
+    }
+    req.body.rating = rating
+    next()
+  })
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
@@ -381,10 +428,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', recycles.blockRecycleItems())
-  app.post('/api/Recycles', security.isAuthorized())
+  app.get('/api/Recycles', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItems()))
+  app.post('/api/Recycles', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(recycles.prepareRecycleItem()))
   /* Challenge evaluation before finale takes over */
-  app.get('/api/Recycles/:id', recycles.getRecycleItem())
+  app.get('/api/Recycles/:id', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItem()))
   app.put('/api/Recycles/:id', security.denyAll())
   app.delete('/api/Recycles/:id', security.denyAll())
   /* SecurityQuestions: Only GET list of questions allowed. */
@@ -446,7 +493,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   app.post('/api/Addresss', security.appendUserId())
   app.get('/api/Addresss', security.appendUserId(), utils.asyncHandler(address.getAddress()))
-  app.put('/api/Addresss/:id', security.appendUserId())
+  app.put('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.enforceAddressOwnership()))
   app.delete('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.delAddressById()))
   app.get('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.getAddressById()))
   app.get('/api/Deliverys', utils.asyncHandler(delivery.getDeliveryMethods()))
@@ -619,17 +666,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/user/data-export', security.appendUserId(), utils.asyncHandler(verifyImageCaptcha()))
   app.post('/rest/user/data-export', security.appendUserId(), utils.asyncHandler(dataExport()))
   app.get('/rest/languages', utils.asyncHandler(getLanguageList()))
-  app.get('/rest/order-history', utils.asyncHandler(orderHistory()))
+  app.get('/rest/order-history', security.isAuthorized(), utils.asyncHandler(orderHistory()))
   app.get('/rest/order-history/orders', security.isAccounting(), utils.asyncHandler(allOrders()))
   app.put('/rest/order-history/:id/delivery-status', security.isAccounting(), utils.asyncHandler(toggleDeliveryStatus()))
-  app.get('/rest/wallet/balance', security.appendUserId(), utils.asyncHandler(getWalletBalance()))
-  app.put('/rest/wallet/balance', security.appendUserId(), utils.asyncHandler(addWalletBalance()))
-  app.get('/rest/deluxe-membership', deluxeMembershipStatus())
-  app.post('/rest/deluxe-membership', security.appendUserId(), utils.asyncHandler(upgradeToDeluxe()))
+  app.get('/rest/wallet/balance', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(getWalletBalance()))
+  app.put('/rest/wallet/balance', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(addWalletBalance()))
+  app.get('/rest/deluxe-membership', security.isAuthorized(), deluxeMembershipStatus())
+  app.post('/rest/deluxe-membership', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(upgradeToDeluxe()))
   app.get('/rest/memories', utils.asyncHandler(getMemories()))
   /* NoSQL API endpoints */
   app.get('/rest/products/:id/reviews', showProductReviews())
-  app.put('/rest/products/:id/reviews', utils.asyncHandler(createProductReviews()))
+  app.put('/rest/products/:id/reviews', security.isAuthorized(), utils.asyncHandler(createProductReviews()))
   app.patch('/rest/products/reviews', security.isAuthorized(), updateProductReviews())
   app.post('/rest/products/reviews', security.isAuthorized(), utils.asyncHandler(likeProductReviews()))
 
@@ -637,18 +684,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/chat', utils.asyncHandler(chat()))
 
   /* Web3 API endpoints */
-  app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
-  app.get('/rest/web3/nftUnlocked', nftUnlocked())
-  app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))
-  app.post('/rest/web3/walletNFTVerify', walletNFTVerify())
-  app.post('/rest/web3/walletExploitAddress', utils.asyncHandler(contractExploitListener()))
+  app.post('/rest/web3/submitKey', security.isAuthorized(), utils.asyncHandler(checkKeys()))
+  app.get('/rest/web3/nftUnlocked', security.isAuthorized(), nftUnlocked())
+  app.get('/rest/web3/nftMintListen', security.isAuthorized(), utils.asyncHandler(nftMintListener()))
+  app.post('/rest/web3/walletNFTVerify', security.isAuthorized(), walletNFTVerify())
+  app.post('/rest/web3/walletExploitAddress', security.isAuthorized(), utils.asyncHandler(contractExploitListener()))
 
   /* B2B Order API */
   app.post('/b2b/v2/orders', b2bOrder())
 
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
-  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
+  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', security.isAuthorized(), security.isDeluxeUser(), servePremiumContent())
   app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
 
   /* Route for dataerasure page */
@@ -675,7 +722,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    logger.warn(`Request failed (${req.method} ${req.originalUrl}): ${utils.getErrorMessage(err)}`)
+    const errorStatus = typeof err === 'object' && err !== null
+      ? Number((err as { status?: unknown, statusCode?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode)
+      : 500
+    const status = Number.isInteger(errorStatus) && errorStatus >= 400 && errorStatus < 500
+      ? errorStatus
+      : (res.statusCode >= 400 && res.statusCode < 500 ? res.statusCode : 500)
+    res.status(status).json({ error: 'The request could not be processed.' })
+  })
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.
@@ -718,13 +774,9 @@ while (!expectedModels.every(model => Object.keys(sequelize.models).includes(mod
 }
 logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.toString())} of ${colors.bold(expectedModels.length.toString())} are initialized (${colors.green('SUCCESS')})`)
 
-// vuln-code-snippet start exposedMetricsChallenge
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
-errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
-
 export async function start (readyCallback?: () => void) {
   const datacreatorEnd = startupGauge.startTimer({ task: 'datacreator' })
   await sequelize.sync({ force: true })
@@ -765,8 +817,6 @@ export function close (exitCode: number | undefined) {
     process.exit(exitCode)
   }
 }
-// vuln-code-snippet end exposedMetricsChallenge
-
 export async function createApp (options?: { inMemoryDb?: boolean }) {
   const seq = options?.inMemoryDb ? createSequelize({ inMemory: true }) : sequelize
   if (options?.inMemoryDb) {

@@ -14,8 +14,6 @@ import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
 import { roles } from '../lib/insecurity'
 import * as utils from '../lib/utils'
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
 import * as db from '../data/mongodb'
 import { type Review } from '../data/types'
 import logger from '../lib/logger'
@@ -41,7 +39,7 @@ const appName = config.get<string>('application.name')
 
 async function getUserId (req: Request): Promise<number | undefined> {
   const token = utils.jwtFrom(req)
-  if (!token) return undefined
+  if (!token || !security.verify(token)) return undefined
   const decoded = security.decode(token) as { data?: { id?: number } } | undefined
   return decoded?.data?.id
 }
@@ -144,7 +142,8 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          if (!Number.isInteger(productId) || productId <= 0) return []
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 
@@ -174,11 +173,12 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          discount: z.number().int().min(1).max(10).describe('The approved discount percentage for the coupon') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
         execute: async ({ discount }) => {
-          challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
-          challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
+          if (process.env.SUPPORT_COUPON_ISSUANCE !== 'true' || !Number.isInteger(discount) || discount < 1 || discount > 10) {
+            return { error: 'Coupon issuance requires verified support approval' }
+          }
           const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
           return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
         }
@@ -216,24 +216,24 @@ export function chat () {
             res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: event.text } }] })}\n\n`)
             break
           case 'tool-call':
-            challengeUtils.solveIf(challenges.aiDebuggingChallenge, () => {
-              const token = utils.jwtFrom(req)
-              const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
-              const role = decoded?.data?.role
-              return req.cookies.show_tool_calls === 'true' && role !== roles.admin
-            })
             metricToolCalls.labels({ tool: event.toolName }).inc()
-            res.write(`data: ${JSON.stringify({
-              choices: [{
-                delta: {
-                  tool_calls: [{
-                    id: event.toolCallId,
-                    type: 'function',
-                    function: { name: event.toolName, arguments: JSON.stringify(event.input) }
+            {
+              const token = utils.jwtFrom(req)
+              const decoded = token && security.verify(token) ? security.decode(token) as { data?: { role?: string } } : undefined
+              if (decoded?.data?.role === roles.admin) {
+                res.write(`data: ${JSON.stringify({
+                  choices: [{
+                    delta: {
+                      tool_calls: [{
+                        id: event.toolCallId,
+                        type: 'function',
+                        function: { name: event.toolName, arguments: JSON.stringify(event.input) }
+                      }]
+                    }
                   }]
-                }
-              }]
-            })}\n\n`)
+                })}\n\n`)
+              }
+            }
             break
           case 'finish':
             res.write(`data: ${JSON.stringify({ choices: [{ finish_reason: event.finishReason }] })}\n\n`)

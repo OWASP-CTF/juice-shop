@@ -60,8 +60,9 @@ const chatTools = {
       id: z.string().describe('The product ID to get reviews for')
     }),
     execute: async ({ id }) => {
-      const productId = Number(Id)
-      return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+      const productId = Number(id)
+      if (!Number.isInteger(productId) || productId <= 0) return []
+      return await db.reviewsCollection.find({ product: productId }) as Review[]
     }
   }),
 
@@ -90,9 +91,12 @@ const chatTools = {
   generateCoupon: tool({
     description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.',
     inputSchema: z.object({
-      discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)')
+      discount: z.number().int().min(1).max(10).describe('The approved discount percentage for the coupon')
     }),
     execute: async ({ discount }) => {
+      if (process.env.SUPPORT_COUPON_ISSUANCE !== 'true' || !Number.isInteger(discount) || discount < 1 || discount > 10) {
+        return { error: 'Coupon issuance requires verified support approval' }
+      }
       const couponCode = security.generateCoupon(discount)
       return { couponCode, discount }
     }

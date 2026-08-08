@@ -24,6 +24,7 @@ void describe('/rest/memories', () => {
     const res = await request(app)
       .get('/rest/memories')
     assert.equal(res.status, 200)
+    assert.equal(res.body.data.every((memory: any) => memory.User?.password === undefined && memory.User?.totpSecret === undefined && memory.User?.email === undefined), true)
   })
 
   void it('GET memories via a valid authorization token', async () => {
@@ -108,6 +109,7 @@ void describe('/rest/memories', () => {
       .set('Content-Type', 'multipart/form-data; boundary=----WebKitFormBoundaryoo6vortfDzBsDiro')
       .send('------WebKitFormBoundaryoo6vortfDzBsDiro\r\n Content-Disposition: form-data; name="bildbeschreibung"\r\n\r\n\r\n------WebKitFormBoundaryoo6vortfDzBsDiro--')
     assert.equal(res.status, 500)
-    assert.ok(res.text.includes('Error: Malformed part header'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('Malformed part header'), false)
   })
 })

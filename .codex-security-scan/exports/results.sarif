@@ -1,0 +1,236 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "scan_juice_shop_dc34_20260808"
+      },
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": [
+            {
+              "level": "warning",
+              "message": {
+                "text": "Frontend was sampled but not exhaustively reviewed."
+              }
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "codexSecurityCoverageCompleteness": "partial",
+        "codexSecuritySchemaVersion": "1.0",
+        "codexSecurityTargetKind": "git_worktree"
+      },
+      "results": [
+        {
+          "level": "error",
+          "locations": [
+            {
+              "message": {
+                "text": "source-and-sink"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/fileUpload.ts"
+                },
+                "region": {
+                  "endLine": 46,
+                  "startLine": 27
+                }
+              }
+            },
+            {
+              "message": {
+                "text": "evidence:zip-slip"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/fileUpload.ts"
+                },
+                "region": {
+                  "endLine": 45,
+                  "startLine": 41
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "A crafted entry is concatenated into a write path and checked against the whole repository rather than the upload root."
+          },
+          "partialFingerprints": {
+            "codexSecurity/v1": "codex-security/v1:sha256:f380968772d888ee7f5510f700f4b681a503acc87949cbb019698a75081c6443",
+            "primaryLocationLineHash": "700375f24c8268a5:1"
+          },
+          "properties": {
+            "category": "path-traversal",
+            "confidence": "high",
+            "findingId": "csf_11fd21482a164fafcede17db",
+            "occurrenceId": "occ_1ab71f28585b3b22bd4171a9",
+            "severity": "critical"
+          },
+          "ruleId": "path-traversal.archive-extraction",
+          "ruleIndex": 1
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "message": {
+                "text": "source-and-sink"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/login.ts"
+                },
+                "region": {
+                  "endLine": 35,
+                  "startLine": 32
+                }
+              }
+            },
+            {
+              "message": {
+                "text": "evidence:login-sqli"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/login.ts"
+                },
+                "region": {
+                  "endLine": 34,
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "An unauthenticated caller can change the login predicate and authenticate as another user."
+          },
+          "partialFingerprints": {
+            "codexSecurity/v1": "codex-security/v1:sha256:7a837046e1c58bf08046b773c8652af382d5724c9174641ac426492fcb4e14d7",
+            "primaryLocationLineHash": "cc0396843bdd44a7:1"
+          },
+          "properties": {
+            "category": "sql-injection",
+            "confidence": "high",
+            "findingId": "csf_a95e086279dd89613c27caf3",
+            "occurrenceId": "occ_2e9a6ac112f85b1087227104",
+            "severity": "critical"
+          },
+          "ruleId": "sql-injection.authentication",
+          "ruleIndex": 2
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "message": {
+                "text": "sink"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/basket.ts"
+                },
+                "region": {
+                  "endLine": 31,
+                  "startLine": 15
+                }
+              }
+            },
+            {
+              "message": {
+                "text": "sink"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/order.ts"
+                },
+                "region": {
+                  "endLine": 36,
+                  "startLine": 32
+                }
+              }
+            },
+            {
+              "message": {
+                "text": "evidence:basket-owner"
+              },
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "routes/basket.ts"
+                },
+                "region": {
+                  "endLine": 19,
+                  "startLine": 18
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Any customer can read or mutate another customer's basket by selecting its id."
+          },
+          "partialFingerprints": {
+            "codexSecurity/v1": "codex-security/v1:sha256:4de8e6c4c800d569c592e95a5a9c57544008a11df3049b98e9fafcd4476c0f8a",
+            "primaryLocationLineHash": "20867a8505b6153c:1"
+          },
+          "properties": {
+            "category": "broken-access-control",
+            "confidence": "high",
+            "findingId": "csf_905fc718a2fe00a94d416c17",
+            "occurrenceId": "occ_509d8accb02aa17690db5606",
+            "severity": "high"
+          },
+          "ruleId": "broken-access-control.basket-owner",
+          "ruleIndex": 0
+        }
+      ],
+      "tool": {
+        "driver": {
+          "name": "Codex Security",
+          "rules": [
+            {
+              "id": "broken-access-control.basket-owner",
+              "name": "broken-access-control.basket-owner",
+              "properties": {
+                "tags": [
+                  "security"
+                ]
+              },
+              "shortDescription": {
+                "text": "broken-access-control.basket-owner"
+              }
+            },
+            {
+              "id": "path-traversal.archive-extraction",
+              "name": "path-traversal.archive-extraction",
+              "properties": {
+                "tags": [
+                  "security"
+                ]
+              },
+              "shortDescription": {
+                "text": "path-traversal.archive-extraction"
+              }
+            },
+            {
+              "id": "sql-injection.authentication",
+              "name": "sql-injection.authentication",
+              "properties": {
+                "tags": [
+                  "security"
+                ]
+              },
+              "shortDescription": {
+                "text": "sql-injection.authentication"
+              }
+            }
+          ],
+          "version": "0.1.18"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

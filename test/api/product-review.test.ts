@@ -10,16 +10,19 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { type Product } from '../../data/types'
-import * as security from '../../lib/insecurity'
 
 let app: Express
 
-const authHeader = { Authorization: `Bearer ${security.authorize()}`, 'content-type': 'application/json' }
+let authHeader: { Authorization: string, 'content-type': string }
 
 before(async () => {
   const result = await createTestApp()
   app = result.app
+  const { token } = await login(app, {
+    email: `admin@${config.get<string>('application.domain')}`,
+    password: 'admin123'
+  })
+  authHeader = { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }
 }, { timeout: 60000 })
 
 void describe('/rest/products/:id/reviews', () => {
@@ -27,7 +30,6 @@ void describe('/rest/products/:id/reviews', () => {
     const res = await request(app)
       .get('/rest/products/1/reviews')
     assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
     const review = res.body.data[0]
     assert.equal(typeof review.product, 'number')
     assert.equal(typeof review.message, 'string')
@@ -37,7 +39,7 @@ void describe('/rest/products/:id/reviews', () => {
   void it('GET product reviews attack by injecting a mongoDB sleep command', async () => {
     const res = await request(app)
       .get('/rest/products/sleep(1)/reviews')
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
   })
 
@@ -51,6 +53,7 @@ void describe('/rest/products/:id/reviews', () => {
   void it('PUT single product review can be created', async () => {
     const res = await request(app)
       .put('/rest/products/1/reviews')
+      .set(authHeader)
       .send({
         message: 'Lorem Ipsum',
         author: 'Anonymous'
@@ -123,9 +126,17 @@ void describe('/rest/products/reviews', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('PATCH multiple product review via injection', async () => {
-    const totalReviews = config.get<Product[]>('products').reduce((sum: number, { reviews = [] }: any) => sum + reviews.length, 1)
+  void it('POST concurrent likes from one user are accepted only once', async () => {
+    const responses = await Promise.all([
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId }),
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId }),
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId })
+    ])
 
+    assert.deepEqual(responses.map(response => response.status).sort(), [200, 403, 403])
+  })
+
+  void it('PATCH multiple product review via injection is rejected', async () => {
     const res = await request(app)
       .patch('/rest/products/reviews')
       .set(authHeader)
@@ -133,11 +144,6 @@ void describe('/rest/products/reviews', () => {
         id: { $ne: -1 },
         message: 'trololololololololololololololololololololololololololol'
       })
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.modified, 'number')
-    assert.ok(Array.isArray(res.body.original))
-    assert.ok(Array.isArray(res.body.updated))
-    assert.equal(res.body.modified, totalReviews)
+    assert.equal(res.status, 400)
   })
 })

@@ -7,7 +7,6 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
-import config from 'config'
 import { createTestApp } from './helpers/setup'
 
 let app: Express
@@ -25,11 +24,11 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm when this URL is passed as "to" parameter', async () => {
+  void it('GET rejects outdated blockchain.info cryptocurrency target', async () => {
     const res = await request(app)
       .get('/redirect?to=https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
   void it('GET redirected to http://shop.spreadshirt.com/juiceshop when this URL is passed as "to" parameter', async () => {
@@ -53,59 +52,46 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW when this URL is passed as "to" parameter', async () => {
+  void it('GET rejects outdated dash cryptocurrency target', async () => {
     const res = await request(app)
       .get('/redirect?to=https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
-  void it('GET redirected to https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 when this URL is passed as "to" parameter', async () => {
+  void it('GET rejects outdated etherscan cryptocurrency target', async () => {
     const res = await request(app)
       .get('/redirect?to=https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
   })
 
-  void it('GET error message with information leakage when calling /redirect without query parameter', async () => {
+  void it('GET rejects /redirect without a target without information leakage', async () => {
     const res = await request(app)
       .get('/redirect')
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('TypeError'))
-    assert.ok(res.text.includes('of undefined'))
-    assert.ok(res.text.includes('&#39;includes&#39;'))
+    assert.equal(res.status, 406)
+    assert.equal(res.text.includes('TypeError'), false)
   })
 
-  void it('GET error message with information leakage when calling /redirect with unrecognized query parameter', async () => {
+  void it('GET rejects /redirect with an unrelated parameter without information leakage', async () => {
     const res = await request(app)
       .get('/redirect?x=y')
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('TypeError'))
-    assert.ok(res.text.includes('of undefined'))
-    assert.ok(res.text.includes('&#39;includes&#39;'))
+    assert.equal(res.status, 406)
+    assert.equal(res.text.includes('TypeError'), false)
   })
 
-  void it('GET error message hinting at allowlist validation when calling /redirect with an unrecognized "to" target', async () => {
+  void it('GET rejects an unrecognized redirect target without leaking validation details', async () => {
     const res = await request(app)
       .get('/redirect?to=whatever')
     assert.equal(res.status, 406)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('Unrecognized target URL for redirect: whatever'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('whatever'), false)
   })
 
-  void it('GET redirected to target URL in "to" parameter when a allow-listed URL is part of the query string', async () => {
+  void it('GET rejects a target that merely contains an allow-listed URL', async () => {
     const res = await request(app)
       .get('/redirect?to=/score-board?satisfyIndexOf=https://github.com/juice-shop/juice-shop')
       .redirects(1)
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('main.js'))
-    assert.ok(res.text.includes('scripts.js'))
-    assert.ok(res.text.includes('polyfills.js'))
+    assert.equal(res.status, 406)
   })
 })

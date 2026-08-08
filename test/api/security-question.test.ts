@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { describe, it, before } from 'node:test'
+import { describe, it, before, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
@@ -71,6 +71,9 @@ void describe('/api/SecurityQuestions/:id', () => {
 })
 
 void describe('/rest/user/security-question', () => {
+  beforeEach(() => { process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET = 'true' })
+  afterEach(() => { delete process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET })
+
   void it('GET security question for an existing user\'s email address', async () => {
     const res = await request(app)
       .get(`/rest/user/security-question?email=jim@${config.get<string>('application.domain')}`)
@@ -92,9 +95,8 @@ void describe('/rest/user/security-question', () => {
       .get('/rest/user/security-question')
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('Error: WHERE parameter &quot;email&quot; has invalid &quot;undefined&quot; value'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
+    assert.equal(res.text.includes('WHERE parameter'), false)
   })
 
   void it('GET security question is not susceptible to SQL Injection attacks', async () => {
@@ -102,5 +104,15 @@ void describe('/rest/user/security-question', () => {
       .get("/rest/user/security-question?email=';")
 
     assert.equal(res.status, 200)
+  })
+})
+
+void describe('legacy security-question recovery', () => {
+  void it('is disabled by default', async () => {
+    delete process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET
+    const res = await request(app)
+      .get('/rest/user/security-question?email=admin@juice-sh.op')
+
+    assert.equal(res.status, 410)
   })
 })

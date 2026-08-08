@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { type Request, type Response } from 'express'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
+
+const exposableUserFields = new Set(['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive'])
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
@@ -26,7 +26,7 @@ export function retrieveLoggedInUser () {
 
         if (requestedFields.length > 0) {
           // When fields are specified, return only those fields
-          for (const field of requestedFields) {
+          for (const field of requestedFields.filter(field => exposableUserFields.has(field))) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
@@ -48,14 +48,6 @@ export function retrieveLoggedInUser () {
     } catch (err) {
       response = { user: emptyUser }
     }
-    // Solve passwordHashLeakChallenge when password field is included in response
-    challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
-
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    res.json(response)
   }
 }

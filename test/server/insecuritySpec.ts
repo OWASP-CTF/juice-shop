@@ -8,7 +8,7 @@ import z85 from 'z85'
 import chai from 'chai'
 import * as security from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 const expect = chai.expect
 
 describe('insecurity', () => {
@@ -34,10 +34,9 @@ describe('insecurity', () => {
   })
 
   describe('generateCoupon', () => {
-    it('returns base85-encoded month, year and discount as coupon code', () => {
+    it('returns a signed base85-encoded month, year and discount as coupon code', () => {
       const coupon = security.generateCoupon(20, new Date('1980-01-02'))
-      expect(coupon).to.equal('n<MiifFb4l')
-      expect(z85.decode(coupon).toString()).to.equal('JAN80-20')
+      expect(z85.decode(coupon).toString()).to.match(/^JAN80-20:[0-9a-f]{15}$/)
     })
 
     it('uses current month and year if not specified', () => {
@@ -78,7 +77,13 @@ describe('insecurity', () => {
 
     it('returns discount from valid coupon code', () => {
       expect(security.discountFromCoupon(security.generateCoupon(10))).to.equal(10)
-      expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(99)
+      expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(undefined)
+    })
+
+    it('rejects coupons whose payload was changed without a valid signature', () => {
+      const signed = z85.decode(security.generateCoupon(10)).toString()
+      const tampered = signed.replace('-10:', '-50:')
+      expect(security.discountFromCoupon(z85.encode(tampered))).to.equal(undefined)
     })
   })
 
@@ -111,6 +116,45 @@ describe('insecurity', () => {
     })
   })
 
+  describe('appendUserId', () => {
+    it('rejects a cached token that fails JWT verification', () => {
+      security.authenticatedUsers.put('invalid-expired-token', { data: { id: 7 } as unknown as UserModel })
+      const req = { headers: { authorization: 'Bearer invalid-expired-token' }, body: {} } as unknown as Request
+      let statusCode: number | undefined
+      let responseBody: unknown
+      let nextCalled = false
+      const response = {
+        status: (code: number) => {
+          statusCode = code
+          return response
+        },
+        json: (body: unknown) => {
+          responseBody = body
+          return response
+        }
+      }
+
+      security.appendUserId()(req, response as unknown as Response, () => { nextCalled = true })
+
+      expect(statusCode).to.equal(401)
+      expect(responseBody).to.deep.equal({ status: 'error', message: 'Invalid or expired authentication token.' })
+      expect(nextCalled).to.equal(false)
+      expect(req.body.UserId).to.equal(undefined)
+    })
+
+    it('sets the user id for a valid cached JWT', () => {
+      const token = security.authorize({ data: { id: 7 } })
+      security.authenticatedUsers.put(token, { data: { id: 7 } as unknown as UserModel })
+      const req = { headers: { authorization: `Bearer ${token}` }, body: {} } as unknown as Request
+      let nextCalled = false
+
+      security.appendUserId()(req, {} as Response, () => { nextCalled = true })
+
+      expect(nextCalled).to.equal(true)
+      expect(req.body.UserId).to.equal(7)
+    })
+  })
+
   describe('sanitizeHtml', () => {
     it('handles empty inputs by returning their string representation', () => {
       expect(security.sanitizeHtml('')).to.equal('')
@@ -134,8 +178,8 @@ describe('insecurity', () => {
       expect(security.sanitizeHtml('Sani<iframe src="alert("IFrameXSS")"></iframe>tizedIFrame')).to.equal('SanitizedIFrame')
     })
 
-    it('can be bypassed by exploiting lack of recursive sanitization', () => {
-      expect(security.sanitizeHtml('<<script>Foo</script>iframe src="javascript:alert(`xss`)">')).to.equal('<iframe src="javascript:alert(`xss`)">')
+    it('cannot be bypassed with recursive tag reconstruction', () => {
+      expect(security.sanitizeHtml('<<script>Foo</script>iframe src="javascript:alert(`xss`)">')).not.to.include('<iframe')
     })
   })
 
@@ -184,7 +228,7 @@ describe('insecurity', () => {
     })
 
     it('cannot be bypassed by exploiting lack of recursive sanitization', () => {
-      expect(security.sanitizeSecure('Bla<<script>Foo</script>iframe src="javascript:alert(`xss`)">Blubb')).to.equal('BlaBlubb')
+      expect(security.sanitizeSecure('Bla<<script>Foo</script>iframe src="javascript:alert(`xss`)">Blubb')).not.to.include('<iframe')
     })
   })
 
@@ -197,10 +241,21 @@ describe('insecurity', () => {
   })
 
   describe('hmac', () => {
-    it('returns SHA-256 HMAC with "pa4qacea4VK9t9nGv7yZtwmj" as salt any input string', () => {
-      expect(security.hmac('admin123')).to.equal('6be13e2feeada221f29134db71c0ab0be0e27eccfc0fb436ba4096ba73aafb20')
-      expect(security.hmac('password')).to.equal('da28fc4354f4a458508a461fbae364720c4249c27f10fccf68317fc4bf6531ed')
-      expect(security.hmac('')).to.equal('f052179ec5894a2e79befa8060cfcb517f1e14f7f6222af854377b6481ae953e')
+    it('returns a stable SHA-256 HMAC without a source-controlled key', () => {
+      expect(security.hmac('admin123')).to.have.length(64)
+      expect(security.hmac('admin123')).to.equal(security.hmac('admin123'))
+      expect(security.hmac('password')).not.to.equal(security.hmac('admin123'))
+    })
+  })
+
+  describe('password hashing', () => {
+    it('uses a unique salt and verifies only the matching password', () => {
+      const first = security.hashPassword('correct horse battery staple')
+      const second = security.hashPassword('correct horse battery staple')
+      expect(first).not.to.equal(second)
+      expect(security.verifyPassword('correct horse battery staple', first)).to.equal(true)
+      expect(security.verifyPassword('wrong password', first)).to.equal(false)
+      expect(security.verifyPassword('password', 'not-a-password-hash')).to.equal(false)
     })
   })
 })

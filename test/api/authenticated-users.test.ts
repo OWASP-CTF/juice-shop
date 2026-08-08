@@ -7,17 +7,18 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
-import * as security from '../../lib/insecurity'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 
 let app: Express
-const authHeader = { Authorization: `Bearer ${security.authorize({ data: { email: 'admin@juice-sh.op' } })}`, 'content-type': 'application/json' }
+let authHeader: { Authorization: string, 'content-type': string }
 
 before(async () => {
   const result = await createTestApp()
   app = result.app
+  const { token } = await login(app, { email: 'admin@juice-sh.op', password: 'admin123' })
+  authHeader = { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }
 }, { timeout: 60000 })
 
 void describe('/rest/user/authentication-details', () => {
@@ -27,8 +28,7 @@ void describe('/rest/user/authentication-details', () => {
       .set(authHeader)
 
     assert.equal(res.status, 200)
-    const userWithAsterisks = res.body.data.find((user: any) => user.password === '********************************')
-    assert.ok(userWithAsterisks, 'Expected at least one user with password replaced by asterisks')
+    assert.equal(res.body.data.every((user: any) => /^\*+$/.test(user.password)), true)
   })
 
   void it('GET returns lastLoginTime for users with active sessions', async () => {

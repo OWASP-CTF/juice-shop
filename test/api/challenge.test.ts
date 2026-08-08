@@ -10,6 +10,7 @@ import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import * as security from '../../lib/insecurity'
 import { ChallengeDependencyModelInit } from '../../models/challengeDependency'
+import { createContinueCode } from '../../routes/continueCode'
 
 let app: Express
 const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
@@ -100,15 +101,25 @@ void describe('/rest/continue-code', () => {
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
+    const continueCode = createContinueCode([1, 2], 'solve') as string
     const res = await request(app)
-      .put('/rest/continue-code/apply/yXjv6Z5jWJnzD6a3YvmwPRXK7roAyzHDde2Og19yEN84plqxkMBbLVQrDeoY')
+      .put(`/rest/continue-code/apply/${continueCode}`)
     assert.equal(res.status, 200)
   })
 
-  void it('PUT continue code for non-existent challenge #999 is accepted', async () => {
+  void it('PUT continue code for non-existent challenge #999 is rejected', async () => {
+    const continueCode = createContinueCode([999], 'solve') as string
     const res = await request(app)
-      .put('/rest/continue-code/apply/69OxrZ8aJEgxONZyWoz1Dw4BvXmRGkM6Ae9M7k2rK63YpqQLPjnlb5V5LvDj')
-    assert.equal(res.status, 200)
+      .put(`/rest/continue-code/apply/${continueCode}`)
+    assert.equal(res.status, 404)
+  })
+
+  void it('PUT continue code with a forged signature is rejected', async () => {
+    const continueCode = createContinueCode([1], 'solve') as string
+    const forgedCode = continueCode.slice(0, -1) + (continueCode.endsWith('0') ? '1' : '0')
+    const res = await request(app)
+      .put(`/rest/continue-code/apply/${forgedCode}`)
+    assert.equal(res.status, 404)
   })
 })
 
@@ -132,8 +143,9 @@ void describe('/rest/continue-code-findIt', () => {
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
+    const continueCode = createContinueCode([1, 2], 'find') as string
     const res = await request(app)
-      .put('/rest/continue-code-findIt/apply/Xg9oK0VdbW5g1KX9G7JYnqLpz3rAPBh6p4eRlkDM6EaBON2QoPmxjyvwMrP6')
+      .put(`/rest/continue-code-findIt/apply/${continueCode}`)
     assert.equal(res.status, 200)
   })
 })
@@ -158,8 +170,9 @@ void describe('/rest/continue-code-fixIt', () => {
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
+    const continueCode = createContinueCode([1, 2], 'fix') as string
     const res = await request(app)
-      .put('/rest/continue-code-fixIt/apply/y28BEPE2k3yRrdz5p6DGqJONnj41n5UEWawYWgBMoVmL79bKZ8Qve0Xl5QLW')
+      .put(`/rest/continue-code-fixIt/apply/${continueCode}`)
     assert.equal(res.status, 200)
   })
 })

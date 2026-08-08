@@ -12,6 +12,7 @@ import { login } from './helpers/auth'
 
 let app: Express
 let authHeader: { Authorization: string, 'content-type': string }
+let otherUserAuthHeader: { Authorization: string, 'content-type': string }
 let addressId: string
 
 before(
@@ -25,6 +26,14 @@ before(
     })
     authHeader = {
       Authorization: 'Bearer ' + token,
+      'content-type': 'application/json'
+    }
+    const { token: otherUserToken } = await login(app, {
+      email: 'bender@juice-sh.op',
+      password: 'OhG0dPlease1nsertLiquor!'
+    })
+    otherUserAuthHeader = {
+      Authorization: 'Bearer ' + otherUserToken,
       'content-type': 'application/json'
     }
   },
@@ -152,6 +161,20 @@ void describe('/api/Addresss/:id', () => {
       .send({ fullName: 'Jimy' })
     assert.equal(res.status, 200)
     assert.equal(res.body.data.fullName, 'Jimy')
+  })
+
+  void it('PUT cannot update or take ownership of another user\'s address', async () => {
+    const res = await request(app)
+      .put('/api/Addresss/' + addressId)
+      .set(otherUserAuthHeader)
+      .send({ fullName: 'Cross User Change' })
+    assert.equal(res.status, 400)
+
+    const ownerReadback = await request(app)
+      .get('/api/Addresss/' + addressId)
+      .set(authHeader)
+    assert.equal(ownerReadback.status, 200)
+    assert.equal(ownerReadback.body.data.fullName, 'Jimy')
   })
 
   void it('PUT update address by id with invalid mobile number is forbidden', async () => {

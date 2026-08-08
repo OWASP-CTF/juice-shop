@@ -51,9 +51,7 @@ void describe('/profile/image/file', () => {
       .attach('file', file)
 
     assert.equal(res.status, 415)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('Error: Profile image upload does not accept this file type'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 
   void it('POST profile image file forbidden for anonymous user', async () => {
@@ -64,8 +62,7 @@ void describe('/profile/image/file', () => {
       .attach('file', file)
 
     assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('Error: Blocked illegal activity'))
+    assert.deepEqual(res.body, { error: 'The request could not be processed.' })
   })
 })
 
@@ -79,13 +76,13 @@ void describe('/profile/image/url', () => {
     const res = await request(app)
       .post('/profile/image/url')
       .set('Cookie', `token=${token}`)
-      .field('imageUrl', 'cataas.com/cat')
+      .field('imageUrl', 'https://example.com/image.jpg')
       .redirects(0)
 
     assert.equal(res.status, 302)
   })
 
-  void it('POST profile image URL redirects even for invalid image URL', async () => {
+  void it('POST profile image URL rejects an invalid image URL', async () => {
     const { token } = await login(app, {
       email: `jim@${config.get<string>('application.domain')}`,
       password: 'ncc-1701'
@@ -97,7 +94,37 @@ void describe('/profile/image/url', () => {
       .field('imageUrl', 'https://notanimage.here/100/100')
       .redirects(0)
 
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 400)
+  })
+
+  void it('POST profile image URL rejects a loopback destination', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://127.0.0.1/internal.jpg')
+      .redirects(0)
+
+    assert.equal(res.status, 400)
+  })
+
+  void it('POST profile image URL rejects active SVG content', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'https://example.com/image.svg')
+      .redirects(0)
+
+    assert.equal(res.status, 400)
   })
 
   void it('POST profile image URL forbidden for anonymous user', { skip: 'FIXME runs into "socket hang up"' }, async () => {

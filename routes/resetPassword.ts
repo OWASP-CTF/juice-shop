@@ -15,6 +15,10 @@ import { UserModel } from '../models/user'
 
 export function resetPassword () {
   return async ({ body, connection }: Request, res: Response, next: NextFunction) => {
+    if (process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET !== 'true') {
+      res.status(410).json({ error: 'Security-question password reset is disabled' })
+      return
+    }
     const email = body.email
     const answer = body.answer
     const newPassword = body.new
@@ -39,6 +43,10 @@ export function resetPassword () {
         }]
       })
       if ((data != null) && security.hmac(answer) === data.answer) {
+        if (typeof newPassword !== 'string' || newPassword.length < 8) {
+          res.status(400).send(res.__('Password must be at least 8 characters long.'))
+          return
+        }
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })

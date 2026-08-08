@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
-import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
 import sanitizeFilenameLib from 'sanitize-filename'
 import * as utils from './utils'
@@ -19,8 +17,19 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const configuredPrivateKey = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, '\n')
+const privateKey = configuredPrivateKey ?? crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+}).privateKey
+export const publicKey = crypto.createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString()
+const applicationHmacKey = process.env.APPLICATION_HMAC_KEY ?? crypto.createHash('sha256').update(privateKey).digest('hex')
+export const authCookieOptions = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  secure: process.env.NODE_ENV === 'production'
+}
 
 interface ResponseWithUser {
   status?: string
@@ -41,7 +50,21 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+export const hmac = (data: string) => crypto.createHmac('sha256', applicationHmacKey).update(data).digest('hex')
+export const hashPassword = (password: string) => {
+  const salt = crypto.randomBytes(16)
+  const derivedKey = crypto.scryptSync(password, salt, 32)
+  return `${salt.toString('hex')}:${derivedKey.toString('hex')}`
+}
+export const verifyPassword = (password: string, storedPassword: string) => {
+  const [saltHex, hashHex, ...extra] = storedPassword.split(':')
+  if (extra.length !== 0 || !/^[0-9a-f]{32}$/i.test(saltHex) || !/^[0-9a-f]{64}$/i.test(hashHex)) {
+    return false
+  }
+  const expected = Buffer.from(hashHex, 'hex')
+  const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length)
+  return crypto.timingSafeEqual(actual, expected)
+}
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
@@ -51,11 +74,51 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
-export const decode = (token: string) => { return jws.decode(token)?.payload }
+const expectedJwtAlgorithm = 'RS256'
+
+export const hasExpectedJwtAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString())
+    return header?.alg === expectedJwtAlgorithm
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const verifyToken = expressjwt({ secret: publicKey, algorithms: [expectedJwtAlgorithm] })
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!hasExpectedJwtAlgorithm(utils.jwtFrom(req))) {
+      res.status(401).send()
+      return
+    }
+    verifyToken(req, res, next)
+  }
+}
+export const denyAll = () => expressjwt({ secret: crypto.randomBytes(32), algorithms: ['HS256'] })
+export const authorize = (payload: any = {}) => {
+  if (payload?.data && typeof payload.data === 'object') {
+    const exposableFields = ['id', 'username', 'email', 'role', 'deluxeToken', 'lastLoginIp', 'profileImage', 'isActive']
+    const data = Object.fromEntries(exposableFields
+      .filter(field => payload.data[field] !== undefined)
+      .map(field => [field, payload.data[field]]))
+    payload = { ...payload, data }
+  }
+  return jwt.sign(payload, privateKey, { expiresIn: '6h', algorithm: expectedJwtAlgorithm })
+}
+export const verify = (token: string) => {
+  if (!hasExpectedJwtAlgorithm(token)) return false
+  try {
+    jwt.verify(token, publicKey, { algorithms: [expectedJwtAlgorithm] })
+    return true
+  } catch {
+    return false
+  }
+}
+export const decode = (token: string): any => jwt.decode(token)
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -97,7 +160,8 @@ export const userEmailFrom = ({ headers }: any) => {
 }
 
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
+  const payload = utils.toMMMYY(date) + '-' + discount.toString().padStart(2, '0')
+  const coupon = payload + ':' + hmac(payload).slice(0, 15)
   return z85.encode(coupon)
 }
 
@@ -105,27 +169,25 @@ export const discountFromCoupon = (coupon?: string) => {
   if (!coupon) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
+  try {
+    const decoded = z85.decode(coupon)?.toString()
+    const match = decoded?.match(/^((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-([0-9]{2})):([0-9a-f]{15})$/)
+    if (match) {
+      const [, payload, discountText, signature] = match
+      const expectedSignature = hmac(payload).slice(0, 15)
+      if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature)) && utils.toMMMYY(new Date()) === payload.slice(0, 5)) {
+        const discount = Number(discountText)
+        return discount >= 1 && discount <= 50 ? discount : undefined
+      }
     }
+  } catch {
+    return undefined
   }
-}
-
-function hasValidFormat (coupon: string) {
-  return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
 }
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -133,11 +195,7 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
-  }
-  return allowed
+  return redirectAllowlist.has(url)
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -146,6 +204,28 @@ export const roles = {
   deluxe: 'deluxe',
   accounting: 'accounting',
   admin: 'admin'
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    const decodedToken = verify(token) && decode(token)
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isDeluxeUser = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (isDeluxe(req)) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Deluxe membership required' })
+    }
+  }
 }
 
 export const deluxeToken = (email: string) => {
@@ -176,23 +256,27 @@ export const isCustomer = (req: Request) => {
 
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
-      next()
-    } catch (error: unknown) {
-      res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
+    const token = utils.jwtFrom(req)
+    const authenticatedUser = token && verify(token) ? authenticatedUsers.get(token) : undefined
+    if (!authenticatedUser) {
+      res.status(401).json({ status: 'error', message: 'Invalid or expired authentication token.' })
+      return
     }
+
+    req.body ??= {}
+    req.body.UserId = authenticatedUser.data.id
+    next()
   }
 }
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          res.cookie('token', token, authCookieOptions)
         }
       }
     })

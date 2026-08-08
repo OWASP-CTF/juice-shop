@@ -5,25 +5,23 @@
 
 import { type Request, type Response } from 'express'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { reviewsCollection } from '../data/mongodb'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
-    challengeUtils.solveIf(
-      challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
-    )
+    const product = Number(req.params.id)
+    if (!user || !Number.isInteger(product) || product <= 0 || typeof req.body.message !== 'string') {
+      return res.status(400).json({ error: 'Invalid review' })
+    }
 
     try {
       await reviewsCollection.insert({
-        product: req.params.id,
+        product,
         message: req.body.message,
-        author: req.body.author,
+        author: user.data.email,
         likesCount: 0,
         likedBy: []
       })
