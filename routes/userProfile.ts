@@ -8,9 +8,7 @@ import { AllHtmlEntities as Entities } from 'html-entities'
 import config from 'config'
 import fs from 'node:fs/promises'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { themes } from '../views/themes/themes'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
@@ -49,29 +47,11 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
-      username = '\\' + username
-    }
+    const username = user.username
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -85,17 +65,22 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      // Static Content-Security-Policy: never interpolate the user-controlled
+      // profileImage into the header (that allowed CSP injection / disarming),
+      // and drop 'unsafe-eval'/'unsafe-inline'.
+      const CSP = "default-src 'self'; img-src 'self'; script-src 'self'"
 
-      challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
-      })
+      // Render the template first, then substitute the username as HTML-escaped
+      // text into the already-rendered markup. Injecting the username into the
+      // Pug source before compilation allowed both SSTI (via `#{...}`) and stored
+      // XSS; inserting escaped text post-render closes both.
+      const html = fn(user).replace(/_username_/g, entities.encode(username ?? ''))
 
       res.set({
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(html)
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
