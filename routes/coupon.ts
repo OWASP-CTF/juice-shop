@@ -8,9 +8,17 @@ import { BasketModel } from '../models/basket'
 import * as security from '../lib/insecurity'
 
 export function applyCoupon () {
-  return async ({ params }: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const params = req.params
     try {
       const id = params.id
+      /* A coupon could be applied to any basket by id, including other
+         customers' baskets. */
+      const user = security.authenticatedUsers.from(req)
+      if (!user?.bid || String(user.bid) !== String(id)) {
+        res.status(401).send('Malicious activity detected.')
+        return
+      }
       let coupon: string | undefined | null = params.coupon ? decodeURIComponent(params.coupon) : undefined
       const discount = security.discountFromCoupon(coupon)
       coupon = discount ? coupon : null
