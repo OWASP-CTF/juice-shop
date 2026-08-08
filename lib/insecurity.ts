@@ -51,10 +51,32 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+const acceptedJwtAlgorithm = 'RS256'
+
+// Tokens are only ever issued as RS256, so any other algorithm in the header (e.g. HS256 abusing the
+// public key as an HMAC secret, or "none") is a forgery attempt and must never reach signature verification.
+export const hasAcceptedAlgorithm = (token: string): boolean => {
+  try {
+    return jws.decode(token)?.header?.alg === acceptedJwtAlgorithm
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const checkSignature = expressJwt(({ secret: publicKey, algorithms: [acceptedJwtAlgorithm] }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (token && !hasAcceptedAlgorithm(token)) {
+      res.status(401).json({ status: 'error', message: 'Invalid token algorithm' })
+      return
+    }
+    checkSignature(req, res, next)
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => token ? hasAcceptedAlgorithm(token) && (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -187,8 +209,8 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+  if (token && hasAcceptedAlgorithm(token)) {
+    jwt.verify(token, publicKey, { algorithms: [acceptedJwtAlgorithm] } as any, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
