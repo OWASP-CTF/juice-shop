@@ -32,7 +32,7 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
-    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
@@ -72,9 +72,12 @@ export function placeOrder () {
               challengeUtils.solveIf(challenges.christmasSpecialChallenge, () => { return BasketItem.ProductId === products.christmasSpecial.id })
               try {
                 const quantityRow = await QuantityModel.findOne({ where: { ProductId: BasketItem.ProductId } })
-                if (quantityRow) {
+                if (quantityRow && BasketItem.quantity > 0 && quantityRow.quantity >= BasketItem.quantity) {
                   const newQuantity = quantityRow.quantity - BasketItem.quantity
                   await QuantityModel.update({ quantity: newQuantity }, { where: { ProductId: BasketItem.ProductId } })
+                } else {
+                  next(new Error('Invalid or unavailable product quantity.'))
+                  return
                 }
               } catch (error: unknown) {
                 next(error)

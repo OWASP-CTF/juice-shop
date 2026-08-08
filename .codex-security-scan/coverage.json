@@ -1,0 +1,77 @@
+{
+  "completeness": "partial",
+  "deferred": [
+    {
+      "id": "frontend_deferred",
+      "paths": [
+        "frontend/src/"
+      ],
+      "reason": "Frontend was sampled but not exhaustively reviewed.",
+      "surfaceIds": [
+        "frontend"
+      ]
+    }
+  ],
+  "documentType": "codex-security.coverage",
+  "excludePaths": [
+    "node_modules/",
+    "frontend/node_modules/",
+    "build/",
+    "dist/"
+  ],
+  "explicitExclusions": [
+    {
+      "pattern": "node_modules/**",
+      "reason": "Third-party installed source is outside product-source review."
+    },
+    {
+      "pattern": "frontend/node_modules/**",
+      "reason": "Third-party installed source is outside product-source review."
+    }
+  ],
+  "includePaths": [
+    "."
+  ],
+  "inventoryStrategy": "repository",
+  "mode": "repository",
+  "openQuestions": [
+    {
+      "followUpPrompt": "Use scorer feedback from the authorized PR to prioritize remediation.",
+      "question": "Which training vulnerabilities are included in the hidden rubric?"
+    }
+  ],
+  "scanId": "scan_juice_shop_dc34_20260808",
+  "schemaVersion": "1.0",
+  "surfaces": [
+    {
+      "disposition": "reported",
+      "id": "auth_sql",
+      "label": "Authentication and SQL construction",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "reported",
+      "id": "customer_objects",
+      "label": "Customer object ownership",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "reported",
+      "id": "server_fetch",
+      "label": "Server-side URL retrieval",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "reported",
+      "id": "upload_parsing",
+      "label": "Upload parsing and filesystem writes",
+      "receiptRefs": []
+    },
+    {
+      "disposition": "needs_follow_up",
+      "id": "frontend",
+      "label": "Frontend injection surfaces",
+      "receiptRefs": []
+    }
+  ]
+}

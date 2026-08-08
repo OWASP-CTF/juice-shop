@@ -31,6 +31,8 @@ export function dataExport () {
 
         try {
           orders = await db.ordersCollection.find({ email: updatedEmail })
+          const orderPrefix = security.hash(email).slice(0, 4) + '-'
+          orders = orders.filter((order: { orderId: string }) => order.orderId.startsWith(orderPrefix))
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return

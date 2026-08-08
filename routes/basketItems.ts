@@ -16,6 +16,18 @@ interface RequestWithRawBody extends Request {
   rawBody: string
 }
 
+export function getBasketItems () {
+  return async (req: Request, res: Response) => {
+    const user = security.authenticatedUsers.from(req)
+    if (!user || !Number.isInteger(Number(user.bid))) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    const items = await BasketItemModel.findAll({ where: { BasketId: Number(user.bid) } })
+    res.json({ status: 'success', data: items })
+  }
+}
+
 export function addBasketItem () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const result = utils.parseJsonCustom((req as RequestWithRawBody).rawBody)
@@ -34,15 +46,17 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
-      res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
+    const basketId = Number(user?.bid)
+    if (!user || !Number.isInteger(basketId)) {
+      res.status(401).send('{\'error\' : \'Unauthorized\'}')
+    } else if (basketIds.some(suppliedBasketId => basketId !== Number(suppliedBasketId))) {
+      res.status(403).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        BasketId: basketId,
         quantity: quantities[quantities.length - 1]
       }
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
@@ -67,6 +81,10 @@ export function quantityCheckBeforeBasketItemUpdate () {
     try {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
+      if (!user || item == null || Number(item.BasketId) !== Number(user.bid)) {
+        res.status(403).json({ error: 'Malicious activity detected' })
+        return
+      }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
         if (item == null) {
@@ -82,7 +100,34 @@ export function quantityCheckBeforeBasketItemUpdate () {
   }
 }
 
+export function enforceBasketOwnership () {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = security.authenticatedUsers.from(req)
+    if (user && Number(req.params.id) === Number(user.bid)) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export function enforceBasketItemOwnership () {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = security.authenticatedUsers.from(req)
+    const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
+    if (user && item && Number(item.BasketId) === Number(user.bid)) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  if (!Number.isInteger(quantity) || quantity <= 0) {
+    res.status(400).json({ error: res.__('Invalid quantity') })
+    return
+  }
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')

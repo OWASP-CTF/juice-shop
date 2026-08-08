@@ -79,13 +79,13 @@ void describe('/profile/image/url', () => {
     const res = await request(app)
       .post('/profile/image/url')
       .set('Cookie', `token=${token}`)
-      .field('imageUrl', 'cataas.com/cat')
+      .field('imageUrl', 'https://example.com/image.jpg')
       .redirects(0)
 
     assert.equal(res.status, 302)
   })
 
-  void it('POST profile image URL redirects even for invalid image URL', async () => {
+  void it('POST profile image URL rejects an invalid image URL', async () => {
     const { token } = await login(app, {
       email: `jim@${config.get<string>('application.domain')}`,
       password: 'ncc-1701'
@@ -97,7 +97,22 @@ void describe('/profile/image/url', () => {
       .field('imageUrl', 'https://notanimage.here/100/100')
       .redirects(0)
 
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 400)
+  })
+
+  void it('POST profile image URL rejects a loopback destination', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://127.0.0.1/internal.jpg')
+      .redirects(0)
+
+    assert.equal(res.status, 400)
   })
 
   void it('POST profile image URL forbidden for anonymous user', { skip: 'FIXME runs into "socket hang up"' }, async () => {

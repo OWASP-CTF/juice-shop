@@ -178,9 +178,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Compression for all requests */
   app.use(compression())
 
-  /* Bludgeon solution for possible CORS problems: Allow everything! */
-  app.options('*', cors())
-  app.use(cors())
+  const corsOptions = { origin: config.get<string>('server.baseUrl'), credentials: true }
+  app.options('*', cors(corsOptions))
+  app.use(cors(corsOptions))
 
   /* Security middleware */
   app.use(helmet.noSniff())
@@ -264,6 +264,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   }
 
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin())
+
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
@@ -339,13 +341,54 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start resetPasswordMortyChallenge
   /* Rate limiting */
-  app.enable('trust proxy')
+  app.set('trust proxy', 'loopback')
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator (req: Request) { return req.ip ?? req.socket.remoteAddress ?? '' } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
+
+  app.get('/api/BasketItems', security.isAuthorized(), utils.asyncHandler(basketItems.getBasketItems()))
+  app.use('/api/BasketItems/:id', security.isAuthorized(), utils.asyncHandler(basketItems.enforceBasketItemOwnership()))
+  app.use('/api/Feedbacks/:id', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users/:id', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
+  app.post('/api/Products', security.denyAll())
+  app.put('/api/Products/:id', security.denyAll())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+  app.use('/rest/basket/:id', security.isAuthorized(), basketItems.enforceBasketOwnership())
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (typeof req.body.email !== 'string' || typeof req.body.password !== 'string') {
+      res.status(400).json({ error: 'Email and password are required' })
+      return
+    }
+    req.body.email = req.body.email.trim()
+    req.body.password = req.body.password.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email) || req.body.password.length < 8) {
+      res.status(400).json({ error: 'A valid email and password of at least 8 characters are required' })
+      return
+    }
+    next()
+  })
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    for (const property of ['id', 'role', 'deluxeToken', 'lastLoginIp', 'totpSecret', 'isActive']) {
+      delete req.body[property]
+    }
+    next()
+  })
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const user = security.authenticatedUsers.from(req)
+    req.body.UserId = user?.data.id ?? null
+    const rating = Number(req.body.rating)
+    if (typeof req.body.comment !== 'string' || req.body.comment.trim() === '' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+      res.status(400).json({ error: 'A comment and rating between 1 and 5 are required' })
+      return
+    }
+    req.body.rating = rating
+    next()
+  })
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
@@ -619,17 +662,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/user/data-export', security.appendUserId(), utils.asyncHandler(verifyImageCaptcha()))
   app.post('/rest/user/data-export', security.appendUserId(), utils.asyncHandler(dataExport()))
   app.get('/rest/languages', utils.asyncHandler(getLanguageList()))
-  app.get('/rest/order-history', utils.asyncHandler(orderHistory()))
+  app.get('/rest/order-history', security.isAuthorized(), utils.asyncHandler(orderHistory()))
   app.get('/rest/order-history/orders', security.isAccounting(), utils.asyncHandler(allOrders()))
   app.put('/rest/order-history/:id/delivery-status', security.isAccounting(), utils.asyncHandler(toggleDeliveryStatus()))
-  app.get('/rest/wallet/balance', security.appendUserId(), utils.asyncHandler(getWalletBalance()))
-  app.put('/rest/wallet/balance', security.appendUserId(), utils.asyncHandler(addWalletBalance()))
-  app.get('/rest/deluxe-membership', deluxeMembershipStatus())
-  app.post('/rest/deluxe-membership', security.appendUserId(), utils.asyncHandler(upgradeToDeluxe()))
+  app.get('/rest/wallet/balance', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(getWalletBalance()))
+  app.put('/rest/wallet/balance', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(addWalletBalance()))
+  app.get('/rest/deluxe-membership', security.isAuthorized(), deluxeMembershipStatus())
+  app.post('/rest/deluxe-membership', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(upgradeToDeluxe()))
   app.get('/rest/memories', utils.asyncHandler(getMemories()))
   /* NoSQL API endpoints */
   app.get('/rest/products/:id/reviews', showProductReviews())
-  app.put('/rest/products/:id/reviews', utils.asyncHandler(createProductReviews()))
+  app.put('/rest/products/:id/reviews', security.isAuthorized(), utils.asyncHandler(createProductReviews()))
   app.patch('/rest/products/reviews', security.isAuthorized(), updateProductReviews())
   app.post('/rest/products/reviews', security.isAuthorized(), utils.asyncHandler(likeProductReviews()))
 

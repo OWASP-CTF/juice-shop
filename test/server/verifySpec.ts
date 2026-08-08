@@ -289,7 +289,7 @@ describe('verify', () => {
     })
 
     if (!isWindows()) { // The "jwtForgedChallenge" is disabled on Windows due to an incompatibility
-      it('"jwtForgedChallenge" is solved when forged token HMAC-signed with public RSA-key has email rsa_lord@juice-sh.op in the payload', () => {
+      it('does not accept a token HMAC-signed with the public RSA key', () => {
         /*
         Header: { "alg": "HS256", "typ": "JWT" }
         Payload: { "data": { "email": "rsa_lord@juice-sh.op" }, "iat": 1508639612, "exp": 9999999999 }
@@ -298,10 +298,10 @@ describe('verify', () => {
 
         verify.jwtChallenges()(req, res, next)
 
-        expect(challenges.jwtForgedChallenge.solved).to.equal(true)
+        expect(challenges.jwtForgedChallenge.solved).to.equal(false)
       })
 
-      it('"jwtForgedChallenge" is solved when forged token HMAC-signed with public RSA-key has string "rsa_lord@" in the payload', () => {
+      it('does not accept a shortened token HMAC-signed with the public RSA key', () => {
         /*
         Header: { "alg": "HS256", "typ": "JWT" }
         Payload: { "data": { "email": "rsa_lord@" }, "iat": 1508639612, "exp": 9999999999 }
@@ -310,7 +310,7 @@ describe('verify', () => {
 
         verify.jwtChallenges()(req, res, next)
 
-        expect(challenges.jwtForgedChallenge.solved).to.equal(true)
+        expect(challenges.jwtForgedChallenge.solved).to.equal(false)
       })
 
       it('"jwtForgedChallenge" is not solved when token regularly signed with private RSA-key has email rsa_lord@juice-sh.op in the payload', () => {

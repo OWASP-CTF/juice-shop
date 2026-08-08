@@ -28,20 +28,20 @@ void describe('/file-upload', () => {
     assert.equal(res.status, 204)
   })
 
-  void it('POST file too large for client validation but valid for API', async () => {
+  void it('POST file over the API limit is rejected', async () => {
     const file = path.resolve(__dirname, '../files/invalidSizeForClient.pdf')
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
-    assert.equal(res.status, 204)
+    assert.equal(res.status, 413)
   })
 
-  void it('POST file with illegal type for client validation but valid for API', async () => {
+  void it('POST file with an illegal type is rejected by the API', async () => {
     const file = path.resolve(__dirname, '../files/invalidTypeForClient.exe')
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
-    assert.equal(res.status, 204)
+    assert.equal(res.status, 415)
   })
 
   void it('POST file type XML deprecated for API', async () => {
@@ -57,7 +57,7 @@ void describe('/file-upload', () => {
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
-    assert.equal(res.status, 410)
+    assert.equal(res.status, 413)
   })
 
   if (utils.isChallengeEnabled(challenges.xxeFileDisclosureChallenge) || utils.isChallengeEnabled(challenges.xxeDosChallenge)) {
@@ -83,7 +83,7 @@ void describe('/file-upload', () => {
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
-      assert.ok(res.text.includes('Detected an entity reference loop'))
+      assert.ok(res.body.error.includes('deprecated'))
     })
 
     void it('POST file type XML with Quadratic Blowup attack', async () => {
@@ -121,12 +121,12 @@ void describe('/file-upload', () => {
     assert.equal(res.status, 500)
   })
 
-  void it('POST zip file with directory traversal payload', async () => {
+  void it('POST zip file with directory traversal payload is rejected', async () => {
     const file = path.resolve(__dirname, '../files/arbitraryFileWrite.zip')
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
-    assert.equal(res.status, 204)
+    assert.equal(res.status, 400)
   })
 
   void it('POST zip file with password protection', async () => {
@@ -134,7 +134,7 @@ void describe('/file-upload', () => {
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
-    assert.equal(res.status, 204)
+    assert.equal(res.status, 400)
   })
 
   void it('POST valid file with tampered content length', { skip: 'Fails on CI/CD pipeline' }, async () => {

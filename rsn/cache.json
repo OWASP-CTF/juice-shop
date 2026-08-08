@@ -669,27 +669,38 @@
 		]
 	},
 	"dbSchemaChallenge_1.ts": {
-		"added": [],
-		"removed": []
-	},
-	"dbSchemaChallenge_2_correct.ts": {
 		"added": [
+			5,
 			6
 		],
 		"removed": [
+			5
+		]
+	},
+	"dbSchemaChallenge_2_correct.ts": {
+		"added": [
+			5,
 			6,
-			7,
+			8
+		],
+		"removed": [
+			5,
+			6,
 			8
 		]
 	},
 	"dbSchemaChallenge_3.ts": {
-		"added": [],
+		"added": [
+			5,
+			6
+		],
 		"removed": [
 			1,
 			2,
+			5,
 			6,
-			7,
-			8
+			8,
+			9
 		]
 	},
 	"directoryListingChallenge_1_correct.ts": {
@@ -728,10 +739,12 @@
 	},
 	"forgedReviewChallenge_1.ts": {
 		"added": [
-			6
+			10,
+			11
 		],
 		"removed": [
-			6
+			10,
+			11
 		]
 	},
 	"forgedReviewChallenge_2_correct.ts": {
@@ -740,11 +753,11 @@
 	},
 	"forgedReviewChallenge_3.ts": {
 		"added": [
-			6,
-			7
+			10,
+			11
 		],
 		"removed": [
-			6
+			10
 		]
 	},
 	"localXssChallenge_1.ts": {
@@ -764,60 +777,151 @@
 		"removed": []
 	},
 	"loginAdminChallenge_1.ts": {
-		"added": [],
-		"removed": [
+		"added": [
+			15,
 			17,
-			18
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17,
+			18,
+			19
 		]
 	},
 	"loginAdminChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginAdminChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginAdminChallenge_4_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginBenderChallenge_1.ts": {
-		"added": [],
-		"removed": [
+		"added": [
+			15,
 			17,
-			18
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17,
+			18,
+			19
 		]
 	},
 	"loginBenderChallenge_2_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginBenderChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginBenderChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15
+		]
 	},
 	"loginJimChallenge_1_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginJimChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15
+		]
 	},
 	"loginJimChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15,
+			17,
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17
+		]
 	},
 	"loginJimChallenge_4.ts": {
-		"added": [],
-		"removed": [
+		"added": [
+			15,
 			17,
-			18
+			18,
+			19
+		],
+		"removed": [
+			15,
+			17,
+			18,
+			19
 		]
 	},
 	"nftMintChallenge_1.sol": {
@@ -854,47 +958,74 @@
 	},
 	"noSqlReviewsChallenge_1.ts": {
 		"added": [
-			6
+			4,
+			5,
+			10
 		],
 		"removed": [
 			4,
+			5,
 			6,
-			8,
-			9,
-			6
+			7,
+			8
 		]
 	},
 	"noSqlReviewsChallenge_2.ts": {
 		"added": [
-			6
+			10
 		],
 		"removed": [
-			6
+			10
 		]
 	},
 	"noSqlReviewsChallenge_3_correct.ts": {
 		"added": [
-			6
+			4,
+			5,
+			10
 		],
 		"removed": [
 			4,
+			5,
 			6,
-			8,
-			9,
-			6
+			7,
+			8
 		]
 	},
 	"redirectChallenge_1.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"redirectChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"redirectChallenge_3.ts": {
-		"added": [],
+		"added": [
+			13
+		],
 		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17,
 			18,
 			19,
 			20,
@@ -911,24 +1042,64 @@
 		]
 	},
 	"redirectChallenge_4_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"redirectCryptoCurrencyChallenge_1.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"redirectCryptoCurrencyChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"redirectCryptoCurrencyChallenge_3_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			11,
+			12,
+			13,
+			14,
+			15
+		]
 	},
 	"redirectCryptoCurrencyChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			13
+		],
+		"removed": [
+			13,
+			14,
+			15,
+			16,
+			17
+		]
 	},
 	"registerAdminChallenge_1.ts": {
 		"added": [],
@@ -1141,22 +1312,32 @@
 		"removed": []
 	},
 	"resetPasswordMortyChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			2
+		],
+		"removed": [
+			2
+		]
 	},
 	"resetPasswordMortyChallenge_3.ts": {
 		"added": [
+			2,
 			4,
 			5
 		],
 		"removed": [
+			2,
 			4,
 			5
 		]
 	},
 	"resetPasswordMortyChallenge_4_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			2
+		],
+		"removed": [
+			2
+		]
 	},
 	"resetPasswordUvoginChallenge_1.yml": {
 		"added": [],
@@ -1266,32 +1447,45 @@
 		]
 	},
 	"unionSqlInjectionChallenge_1.ts": {
-		"added": [],
-		"removed": []
-	},
-	"unionSqlInjectionChallenge_2_correct.ts": {
 		"added": [
+			5,
 			6
 		],
 		"removed": [
+			5,
+			6
+		]
+	},
+	"unionSqlInjectionChallenge_2_correct.ts": {
+		"added": [
+			5,
 			6,
-			7,
+			8
+		],
+		"removed": [
+			5,
+			6,
 			8
 		]
 	},
 	"unionSqlInjectionChallenge_3.ts": {
-		"added": [],
+		"added": [
+			5,
+			6
+		],
 		"removed": [
+			5,
 			6,
-			7,
 			8,
-			9
+			9,
+			10
 		]
 	},
 	"weakPasswordChallenge_1_correct.ts": {
 		"added": [],
 		"removed": [
-			6
+			6,
+			7
 		]
 	},
 	"weakPasswordChallenge_2.ts": {
@@ -1301,7 +1495,8 @@
 			7,
 			8,
 			9,
-			10
+			10,
+			11
 		]
 	},
 	"weakPasswordChallenge_3.ts": {
@@ -1310,12 +1505,15 @@
 			6,
 			7,
 			8,
-			9
+			9,
+			10
 		]
 	},
 	"weakPasswordChallenge_4.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			6
+		]
 	},
 	"web3SandboxChallenge_1_correct.ts": {
 		"added": [

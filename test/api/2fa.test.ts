@@ -140,7 +140,7 @@ void describe('/rest/2fa/status', () => {
 void describe('/rest/2fa/setup', () => {
   void it('POST should be able to setup 2fa for accounts without 2fa enabled', async () => {
     const email = 'fooooo1@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const secret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password })
@@ -172,7 +172,7 @@ void describe('/rest/2fa/setup', () => {
 
   void it('POST should fail if the password doesnt match', async () => {
     const email = 'fooooo2@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const secret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password })
@@ -198,7 +198,7 @@ void describe('/rest/2fa/setup', () => {
 
   void it('POST should fail if the initial token is incorrect', async () => {
     const email = 'fooooo3@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const secret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password })
@@ -224,7 +224,7 @@ void describe('/rest/2fa/setup', () => {
 
   void it('POST should fail if the token is of the wrong type', async () => {
     const email = 'fooooo4@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const secret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password })
@@ -277,7 +277,7 @@ void describe('/rest/2fa/setup', () => {
 void describe('/rest/2fa/disable', () => {
   void it('POST should be able to disable 2fa for account with 2fa enabled', async () => {
     const email = 'fooooodisable1@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const totpSecret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password, totpSecret })
@@ -304,7 +304,7 @@ void describe('/rest/2fa/disable', () => {
 
   void it('POST should not be possible to disable 2fa without the correct password', async () => {
     const email = 'fooooodisable2@bar.com'
-    const password = '123456'
+    const password = '12345678'
     const totpSecret = 'KDR5FXSOLNV6A5UAQYCKROSJZF7SVML7'
 
     await register(app, { email, password, totpSecret })

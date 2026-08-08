@@ -14,8 +14,9 @@ export function orderHistory () {
     if (loggedInUser?.data?.email && loggedInUser.data.id) {
       const email = loggedInUser.data.email
       const updatedEmail = email.replace(/[aeiou]/gi, '*')
-      const order = await ordersCollection.find({ email: updatedEmail })
-      res.status(200).json({ status: 'success', data: order })
+      const orderPrefix = security.hash(email).slice(0, 4) + '-'
+      const orders = await ordersCollection.find({ email: updatedEmail })
+      res.status(200).json({ status: 'success', data: orders.filter((order: { orderId: string }) => order.orderId.startsWith(orderPrefix)) })
     } else {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

@@ -73,4 +73,12 @@ void describe('/api/Wallets', () => {
       .send({ balance: 10 })
     assert.equal(res.status, 402)
   })
+
+  void it('PUT rejects negative wallet amounts', async () => {
+    const res = await request(app)
+      .put('/rest/wallet/balance')
+      .set(authHeader)
+      .send({ balance: -100, paymentId: 2 })
+    assert.equal(res.status, 400)
+  })
 })

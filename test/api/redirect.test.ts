@@ -67,26 +67,18 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET error message with information leakage when calling /redirect without query parameter', async () => {
+  void it('GET rejects /redirect without a target without information leakage', async () => {
     const res = await request(app)
       .get('/redirect')
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('TypeError'))
-    assert.ok(res.text.includes('of undefined'))
-    assert.ok(res.text.includes('&#39;includes&#39;'))
+    assert.equal(res.status, 406)
+    assert.equal(res.text.includes('TypeError'), false)
   })
 
-  void it('GET error message with information leakage when calling /redirect with unrecognized query parameter', async () => {
+  void it('GET rejects /redirect with an unrelated parameter without information leakage', async () => {
     const res = await request(app)
       .get('/redirect?x=y')
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('TypeError'))
-    assert.ok(res.text.includes('of undefined'))
-    assert.ok(res.text.includes('&#39;includes&#39;'))
+    assert.equal(res.status, 406)
+    assert.equal(res.text.includes('TypeError'), false)
   })
 
   void it('GET error message hinting at allowlist validation when calling /redirect with an unrecognized "to" target', async () => {
@@ -98,14 +90,10 @@ void describe('/redirect', () => {
     assert.ok(res.text.includes('Unrecognized target URL for redirect: whatever'))
   })
 
-  void it('GET redirected to target URL in "to" parameter when a allow-listed URL is part of the query string', async () => {
+  void it('GET rejects a target that merely contains an allow-listed URL', async () => {
     const res = await request(app)
       .get('/redirect?to=/score-board?satisfyIndexOf=https://github.com/juice-shop/juice-shop')
       .redirects(1)
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('main.js'))
-    assert.ok(res.text.includes('scripts.js'))
-    assert.ok(res.text.includes('polyfills.js'))
+    assert.equal(res.status, 406)
   })
 })

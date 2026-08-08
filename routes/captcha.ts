@@ -6,6 +6,31 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { CaptchaModel } from '../models/captcha'
 
+export function calculateCaptcha (firstTerm: number, firstOperator: string, secondTerm: number, secondOperator: string, thirdTerm: number) {
+  const values = [firstTerm, secondTerm, thirdTerm]
+  const operations = [firstOperator, secondOperator]
+  if (operations[1] === '*') {
+    values[1] *= values[2]
+    values.pop()
+    operations.pop()
+  }
+  if (operations[0] === '*') {
+    values[0] *= values[1]
+  } else if (operations[0] === '+') {
+    values[0] += values[1]
+  } else {
+    values[0] -= values[1]
+  }
+  if (operations.length === 2) {
+    if (operations[1] === '+') {
+      values[0] += values[2]
+    } else {
+      values[0] -= values[2]
+    }
+  }
+  return values[0]
+}
+
 export function captchas () {
   return async (req: Request, res: Response) => {
     const captchaId = req.app.locals.captchaId++
@@ -19,7 +44,7 @@ export function captchas () {
     const secondOperator = operators[Math.floor((Math.random() * 3))]
 
     const expression = firstTerm.toString() + firstOperator + secondTerm.toString() + secondOperator + thirdTerm.toString()
-    const answer = eval(expression).toString() // eslint-disable-line no-eval
+    const answer = calculateCaptcha(firstTerm, firstOperator, secondTerm, secondOperator, thirdTerm).toString()
 
     const captcha = {
       captchaId,
@@ -28,7 +53,7 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    res.json({ captchaId, captcha: expression })
   }
 }
 
@@ -36,6 +61,7 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

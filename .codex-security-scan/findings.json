@@ -1,0 +1,232 @@
+{
+  "documentType": "codex-security.findings",
+  "findings": [
+    {
+      "attackPath": {
+        "dataflow": {
+          "summary": "email body -> template literal -> sequelize.query"
+        },
+        "reachability": {
+          "summary": "Public route."
+        }
+      },
+      "codeEvidence": [
+        {
+          "code": "models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`",
+          "endLine": 34,
+          "explanation": "email becomes SQL syntax.",
+          "id": "login-sqli",
+          "label": "Raw login SQL",
+          "language": "typescript",
+          "path": "routes/login.ts",
+          "role": "sink",
+          "startLine": 34
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The request email is directly embedded between SQL quotes without binding."
+      },
+      "findingId": "csf_a95e086279dd89613c27caf3",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:7a837046e1c58bf08046b773c8652af382d5724c9174641ac426492fcb4e14d7"
+      },
+      "identity": {
+        "anchor": "authentication-sql-query",
+        "instance": "login"
+      },
+      "locations": [
+        {
+          "endLine": 35,
+          "path": "routes/login.ts",
+          "role": "source-and-sink",
+          "startLine": 32
+        }
+      ],
+      "occurrenceId": "occ_2e9a6ac112f85b1087227104",
+      "provenance": {
+        "source": "local_plugin"
+      },
+      "remediation": "Use a parameterized query or UserModel.findOne.",
+      "rootCause": {
+        "evidenceRefs": [
+          "login-sqli"
+        ],
+        "summary": "Authentication uses string-built SQL instead of a parameterized ORM query."
+      },
+      "ruleId": "sql-injection.authentication",
+      "severity": {
+        "level": "critical",
+        "rationale": "Remote account takeover, including administrator accounts, is directly reachable.",
+        "score": 9.1,
+        "scoringSystem": "CVSS:3.1"
+      },
+      "summary": "An unauthenticated caller can change the login predicate and authenticate as another user.",
+      "taxonomy": {
+        "category": "sql-injection",
+        "cwe": [
+          "CWE-89"
+        ]
+      },
+      "title": "Login input is interpolated into executable SQL",
+      "validation": {
+        "summary": "POST /rest/user/login is public and no upstream middleware sanitizes email."
+      }
+    },
+    {
+      "attackPath": {
+        "dataflow": {
+          "summary": "attacker basket id -> ID-only lookup -> victim object"
+        },
+        "reachability": {
+          "summary": "Any customer."
+        }
+      },
+      "codeEvidence": [
+        {
+          "code": "const id = req.params.id; BasketModel.findOne({ where: { id } })",
+          "endLine": 19,
+          "explanation": "User ownership is absent from the predicate.",
+          "id": "basket-owner",
+          "label": "ID-only basket lookup",
+          "language": "typescript",
+          "path": "routes/basket.ts",
+          "role": "sink",
+          "startLine": 18
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The lookup uses only req.params.id although token-bound bid is available."
+      },
+      "findingId": "csf_905fc718a2fe00a94d416c17",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:4de8e6c4c800d569c592e95a5a9c57544008a11df3049b98e9fafcd4476c0f8a"
+      },
+      "identity": {
+        "anchor": "basket-ownership",
+        "instance": "read-checkout"
+      },
+      "locations": [
+        {
+          "endLine": 31,
+          "path": "routes/basket.ts",
+          "role": "sink",
+          "startLine": 15
+        },
+        {
+          "endLine": 36,
+          "path": "routes/order.ts",
+          "role": "sink",
+          "startLine": 32
+        }
+      ],
+      "occurrenceId": "occ_509d8accb02aa17690db5606",
+      "provenance": {
+        "source": "local_plugin"
+      },
+      "remediation": "Require the path basket id to equal the token-bound basket id and retain ownership in database predicates.",
+      "rootCause": {
+        "evidenceRefs": [
+          "basket-owner"
+        ],
+        "summary": "Authentication is enforced but object ownership is not."
+      },
+      "ruleId": "broken-access-control.basket-owner",
+      "severity": {
+        "level": "high",
+        "rationale": "Ordinary customers cross account boundaries to expose and mutate orders.",
+        "score": 8.1,
+        "scoringSystem": "CVSS:3.1"
+      },
+      "summary": "Any customer can read or mutate another customer's basket by selecting its id.",
+      "taxonomy": {
+        "category": "broken-access-control",
+        "cwe": [
+          "CWE-639"
+        ]
+      },
+      "title": "Basket operations do not enforce ownership",
+      "validation": {
+        "summary": "Middleware authenticates but never compares req.params.id with user.bid."
+      }
+    },
+    {
+      "attackPath": {
+        "dataflow": {
+          "summary": "entry.path -> concatenation -> createWriteStream"
+        },
+        "reachability": {
+          "summary": "Remote upload route, gated by challenge configuration."
+        }
+      },
+      "codeEvidence": [
+        {
+          "code": "if (absolutePath.includes(path.resolve('.'))) entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName))",
+          "endLine": 45,
+          "explanation": "Repository containment is broader than the intended extraction root.",
+          "id": "zip-slip",
+          "label": "Incorrect containment",
+          "language": "typescript",
+          "path": "routes/fileUpload.ts",
+          "role": "sink",
+          "startLine": 41
+        }
+      ],
+      "confidence": {
+        "level": "high",
+        "rationale": "The original traversal-bearing path reaches createWriteStream after an overbroad includes check."
+      },
+      "findingId": "csf_11fd21482a164fafcede17db",
+      "fingerprints": {
+        "algorithm": "codex-security/v1",
+        "primary": "codex-security/v1:sha256:f380968772d888ee7f5510f700f4b681a503acc87949cbb019698a75081c6443"
+      },
+      "identity": {
+        "anchor": "archive-entry-write",
+        "instance": "zip-upload"
+      },
+      "locations": [
+        {
+          "endLine": 46,
+          "path": "routes/fileUpload.ts",
+          "role": "source-and-sink",
+          "startLine": 27
+        }
+      ],
+      "occurrenceId": "occ_1ab71f28585b3b22bd4171a9",
+      "provenance": {
+        "source": "local_plugin"
+      },
+      "remediation": "Resolve against a fixed root, reject escaping relative paths, and write only the validated destination.",
+      "rootCause": {
+        "evidenceRefs": [
+          "zip-slip"
+        ],
+        "summary": "Archive paths are not constrained to the upload root."
+      },
+      "ruleId": "path-traversal.archive-extraction",
+      "severity": {
+        "level": "critical",
+        "rationale": "Repository-relative file overwrite can compromise integrity and potentially execution.",
+        "score": 9.0,
+        "scoringSystem": "CVSS:3.1"
+      },
+      "summary": "A crafted entry is concatenated into a write path and checked against the whole repository rather than the upload root.",
+      "taxonomy": {
+        "category": "path-traversal",
+        "cwe": [
+          "CWE-22"
+        ]
+      },
+      "title": "ZIP entry paths escape the upload directory",
+      "validation": {
+        "summary": "The file upload endpoint accepts ZIPs and routes them here."
+      }
+    }
+  ],
+  "scanId": "scan_juice_shop_dc34_20260808",
+  "schemaVersion": "1.0"
+}

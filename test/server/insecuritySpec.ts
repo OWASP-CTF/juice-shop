@@ -34,10 +34,9 @@ describe('insecurity', () => {
   })
 
   describe('generateCoupon', () => {
-    it('returns base85-encoded month, year and discount as coupon code', () => {
+    it('returns a signed base85-encoded month, year and discount as coupon code', () => {
       const coupon = security.generateCoupon(20, new Date('1980-01-02'))
-      expect(coupon).to.equal('n<MiifFb4l')
-      expect(z85.decode(coupon).toString()).to.equal('JAN80-20')
+      expect(z85.decode(coupon).toString()).to.match(/^JAN80-20:[0-9a-f]{15}$/)
     })
 
     it('uses current month and year if not specified', () => {
@@ -78,7 +77,13 @@ describe('insecurity', () => {
 
     it('returns discount from valid coupon code', () => {
       expect(security.discountFromCoupon(security.generateCoupon(10))).to.equal(10)
-      expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(99)
+      expect(security.discountFromCoupon(security.generateCoupon(99))).to.equal(undefined)
+    })
+
+    it('rejects coupons whose payload was changed without a valid signature', () => {
+      const signed = z85.decode(security.generateCoupon(10)).toString()
+      const tampered = signed.replace('-10:', '-50:')
+      expect(security.discountFromCoupon(z85.encode(tampered))).to.equal(undefined)
     })
   })
 
@@ -197,10 +202,21 @@ describe('insecurity', () => {
   })
 
   describe('hmac', () => {
-    it('returns SHA-256 HMAC with "pa4qacea4VK9t9nGv7yZtwmj" as salt any input string', () => {
-      expect(security.hmac('admin123')).to.equal('6be13e2feeada221f29134db71c0ab0be0e27eccfc0fb436ba4096ba73aafb20')
-      expect(security.hmac('password')).to.equal('da28fc4354f4a458508a461fbae364720c4249c27f10fccf68317fc4bf6531ed')
-      expect(security.hmac('')).to.equal('f052179ec5894a2e79befa8060cfcb517f1e14f7f6222af854377b6481ae953e')
+    it('returns a stable SHA-256 HMAC without a source-controlled key', () => {
+      expect(security.hmac('admin123')).to.have.length(64)
+      expect(security.hmac('admin123')).to.equal(security.hmac('admin123'))
+      expect(security.hmac('password')).not.to.equal(security.hmac('admin123'))
+    })
+  })
+
+  describe('password hashing', () => {
+    it('uses a unique salt and verifies only the matching password', () => {
+      const first = security.hashPassword('correct horse battery staple')
+      const second = security.hashPassword('correct horse battery staple')
+      expect(first).not.to.equal(second)
+      expect(security.verifyPassword('correct horse battery staple', first)).to.equal(true)
+      expect(security.verifyPassword('wrong password', first)).to.equal(false)
+      expect(security.verifyPassword('password', 'not-a-password-hash')).to.equal(false)
     })
   })
 })

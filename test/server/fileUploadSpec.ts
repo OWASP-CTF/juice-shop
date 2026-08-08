@@ -4,6 +4,7 @@
  */
 
 import chai from 'chai'
+import sinon from 'sinon'
 import { challenges } from '../../data/datacache'
 import { type Challenge } from 'data/types'
 import { checkUploadSize, checkFileType } from '../../routes/fileUpload'
@@ -17,7 +18,7 @@ describe('fileUpload', () => {
 
   beforeEach(() => {
     req = { file: { originalname: '' } }
-    res = {}
+    res = { status: sinon.stub().returnsThis(), json: sinon.spy() }
     save = () => ({
       then () { }
     })
@@ -37,22 +38,24 @@ describe('fileUpload', () => {
     })
   })
 
-  it('should solve "uploadSizeChallenge" when file size exceeds 100000 bytes', () => {
+  it('should reject a file size that exceeds 100000 bytes', () => {
     challenges.uploadSizeChallenge = { solved: false, save } as unknown as Challenge
     req.file.size = 100001
 
     checkUploadSize(req, res, () => {})
 
-    expect(challenges.uploadSizeChallenge.solved).to.equal(true)
+    expect(res.status.calledWith(413)).to.equal(true)
+    expect(challenges.uploadSizeChallenge.solved).to.equal(false)
   })
 
-  it('should solve "uploadTypeChallenge" when file type is not PDF', () => {
+  it('should reject a disallowed file type', () => {
     challenges.uploadTypeChallenge = { solved: false, save } as unknown as Challenge
     req.file.originalname = 'hack.exe'
 
     checkFileType(req, res, () => {})
 
-    expect(challenges.uploadTypeChallenge.solved).to.equal(true)
+    expect(res.status.calledWith(415)).to.equal(true)
+    expect(challenges.uploadTypeChallenge.solved).to.equal(false)
   })
 
   it('should not solve "uploadTypeChallenge" when file type is PDF', () => {
