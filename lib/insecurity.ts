@@ -57,10 +57,52 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+/* The shop only ever issues RS256-signed tokens, so that is the only signature algorithm any
+   verification path may accept. Leaving the algorithm to be read from the token itself (as
+   express-jwt/jsonwebtoken/jws all do by default) lets an attacker sign a token with HMAC
+   (HS256) using the RSA *public* key as the "secret" - which is published under
+   /encryptionkeys and is therefore not a secret at all - and have it accepted as valid,
+   including claiming an arbitrary role such as admin. */
+export const jwtAlgorithm = 'RS256'
+
+export const hasExpectedAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+    return header?.alg === jwtAlgorithm
+  } catch (error: unknown) {
+    return false
+  }
+}
+
+/* Strips a token whose header asks for any algorithm other than RS256 before anything
+   downstream looks at it. The request then simply counts as unauthenticated - which is what a
+   signature the shop never issued is worth - and endpoints that require a session answer 401
+   as they always do for a missing/invalid token. */
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (utils.jwtFrom(req) && !hasExpectedAlgorithm(utils.jwtFrom(req))) {
+      delete req.headers.authorization
+    }
+    if (req.cookies?.token && !hasExpectedAlgorithm(req.cookies.token)) {
+      delete req.cookies.token
+    }
+    next()
+  }
+}
+
+export const isAuthorized = () => {
+  const dropForgedAlgorithm = denyForgedTokenAlgorithm()
+  const authorizeToken = expressJwt(({ secret: publicKey, algorithms: [jwtAlgorithm] }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
+export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -203,7 +245,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
