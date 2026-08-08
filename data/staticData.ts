@@ -4,8 +4,14 @@ import { safeLoad } from 'js-yaml'
 import logger from '../lib/logger'
 import { type ChallengeKey } from 'models/challenge'
 
+const staticDataFiles = new Set(['users', 'challenges', 'deliveries', 'securityQuestions'])
+
 export async function loadStaticData (file: string) {
-  const filePath = path.resolve('./data/static/' + file + '.yml')
+  if (!staticDataFiles.has(file)) {
+    logger.error(`Refusing to load unexpected static data file: "${file}"`)
+    return
+  }
+  const filePath = path.resolve('./data/static', `${file}.yml`)
   return await readFile(filePath, 'utf8')
     .then(safeLoad)
     .catch(() => logger.error('Could not open file: "' + filePath + '"'))

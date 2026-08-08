@@ -107,11 +107,16 @@ export const toISO8601 = (date: Date) => {
 }
 
 export const extractFilename = (url: string) => {
-  let file = decodeURIComponent(url.substring(url.lastIndexOf('/') + 1))
+  let file: string
+  try {
+    file = decodeURIComponent(url.substring(url.lastIndexOf('/') + 1))
+  } catch {
+    return ''
+  }
   if (contains(file, '?')) {
     file = file.substring(0, file.indexOf('?'))
   }
-  return file
+  return file === '.' || file === '..' || /[\\/]/.test(file) ? '' : file
 }
 
 export const downloadToFile = async (url: string, dest: string) => {

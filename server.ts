@@ -244,7 +244,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
+  app.use(cookieParser())
 
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
@@ -277,7 +277,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body = {}
       }
       if (req.body !== Object(req.body)) { // Expensive workaround for 500 errors during Frisby test run (see #640)
-        req.body = JSON.parse(req.body)
+        try {
+          const parsedBody = JSON.parse(req.body)
+          if (parsedBody === null || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+            res.status(400).json({ error: 'JSON request body must be an object.' })
+            return
+          }
+          req.body = parsedBody
+        } catch {
+          res.status(400).json({ error: 'Malformed JSON request body.' })
+          return
+        }
       }
     }
     next()
