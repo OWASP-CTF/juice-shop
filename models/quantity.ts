@@ -28,7 +28,9 @@ const QuantityModelInit = (sequelize: Sequelize) => {
   Quantity.init(
     {
       ProductId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        unique: true
       },
       id: {
         type: DataTypes.INTEGER,
@@ -37,14 +39,17 @@ const QuantityModelInit = (sequelize: Sequelize) => {
       },
       quantity: {
         type: DataTypes.INTEGER,
+        allowNull: false,
         validate: {
-          isInt: true
+          isInt: true,
+          min: 0
         }
       },
       limitPerUser: {
         type: DataTypes.INTEGER,
         validate: {
-          isInt: true
+          isInt: true,
+          min: 0
         },
         defaultValue: null
       }

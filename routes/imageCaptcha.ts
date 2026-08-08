@@ -43,7 +43,7 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       return
     }
     const UserId = user.data.id
-    const captchas = await ImageCaptchaModel.findAll({
+    const captchas = await ImageCaptchaModel.scope('withAnswer').findAll({
       limit: 1,
       where: {
         UserId,

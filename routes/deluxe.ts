@@ -21,7 +21,7 @@ export function upgradeToDeluxe () {
         res.status(401).json({ status: 'error', error: 'Unauthorized' })
         return
       }
-      const user = await UserModel.findOne({ where: { id: loggedInUser.data.id, role: security.roles.customer } })
+      const user = await UserModel.scope('withSensitive').findOne({ where: { id: loggedInUser.data.id, role: security.roles.customer } })
       if (user == null) {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return

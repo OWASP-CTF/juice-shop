@@ -32,13 +32,13 @@ export function resetPassword () {
       return
     }
     try {
-      const data = await SecurityAnswerModel.findOne({
+      const data = await SecurityAnswerModel.scope('withAnswer').findOne({
         include: [{
           model: UserModel,
           where: { email }
         }]
       })
-      if ((data != null) && security.hmac(answer) === data.answer) {
+      if ((data != null) && security.verifyPassword(answer, data.answer)) {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })

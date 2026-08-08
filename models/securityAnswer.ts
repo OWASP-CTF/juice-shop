@@ -22,6 +22,12 @@ InferCreationAttributes<SecurityAnswer>
   declare UserId: number
   declare id: CreationOptional<number>
   declare answer: string
+
+  toJSON () {
+    const values = { ...this.get() }
+    delete values.answer
+    return values
+  }
 }
 
 const SecurityAnswerModelInit = (sequelize: Sequelize) => {
@@ -29,10 +35,12 @@ const SecurityAnswerModelInit = (sequelize: Sequelize) => {
     {
       UserId: {
         type: DataTypes.INTEGER,
-        unique: true
+        unique: true,
+        allowNull: false
       },
       SecurityQuestionId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
 
       id: {
@@ -42,13 +50,26 @@ const SecurityAnswerModelInit = (sequelize: Sequelize) => {
       },
       answer: {
         type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+          notEmpty: true,
+          len: [1, 1024]
+        },
         set (answer: string) {
-          this.setDataValue('answer', security.hmac(answer))
+          this.setDataValue('answer', security.passwordHash(answer))
         }
       }
     },
     {
       tableName: 'SecurityAnswers',
+      defaultScope: {
+        attributes: { exclude: ['answer'] }
+      },
+      scopes: {
+        withAnswer: {
+          attributes: { include: ['answer'] }
+        }
+      },
       sequelize
     }
   )

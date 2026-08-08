@@ -21,6 +21,12 @@ InferCreationAttributes<ImageCaptcha>
   declare answer: string
   declare UserId: number
   declare createdAt: CreationOptional<Date>
+
+  toJSON () {
+    const values = { ...this.get() }
+    delete values.answer
+    return values
+  }
 }
 
 const ImageCaptchaModelInit = (sequelize: Sequelize) => {
@@ -31,13 +37,27 @@ const ImageCaptchaModelInit = (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true
       },
-      image: DataTypes.STRING,
-      answer: DataTypes.STRING,
-      UserId: { type: DataTypes.INTEGER },
+      image: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      answer: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      UserId: { type: DataTypes.INTEGER, allowNull: false },
       createdAt: DataTypes.DATE
     },
     {
       tableName: 'ImageCaptchas',
+      defaultScope: {
+        attributes: { exclude: ['answer'] }
+      },
+      scopes: {
+        withAnswer: {
+          attributes: { include: ['answer'] }
+        }
+      },
       sequelize
     }
   )

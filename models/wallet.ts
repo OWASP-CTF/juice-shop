@@ -26,7 +26,9 @@ const WalletModelInit = (sequelize: Sequelize) => {
   Wallet.init(
     {
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        unique: true
       },
       id: {
         type: DataTypes.INTEGER,
@@ -36,7 +38,8 @@ const WalletModelInit = (sequelize: Sequelize) => {
       balance: {
         type: DataTypes.INTEGER,
         validate: {
-          isInt: true
+          isInt: true,
+          min: 0
         },
         defaultValue: 0
       }

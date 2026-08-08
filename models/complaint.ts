@@ -28,14 +28,18 @@ const ComplaintModelInit = (sequelize: Sequelize) => {
   Complaint.init(
     {
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false
       },
       id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true
       },
-      message: DataTypes.STRING,
+      message: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
       file: DataTypes.STRING
     },
     {

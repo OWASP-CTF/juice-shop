@@ -43,6 +43,37 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+const passwordHashAlgorithm = 'scrypt'
+const passwordKeyLength = 64
+
+export const passwordHash = (password: string) => {
+  const salt = crypto.randomBytes(16)
+  const key = crypto.scryptSync(password, salt, passwordKeyLength)
+  return `${passwordHashAlgorithm}$${salt.toString('base64url')}$${key.toString('base64url')}`
+}
+
+export const verifyPassword = (password: string, storedHash: string) => {
+  if (typeof password !== 'string' || typeof storedHash !== 'string') return false
+
+  const [algorithm, saltString, keyString] = storedHash.split('$')
+  if (algorithm === passwordHashAlgorithm && saltString && keyString) {
+    try {
+      const salt = Buffer.from(saltString, 'base64url')
+      const expectedKey = Buffer.from(keyString, 'base64url')
+      const actualKey = crypto.scryptSync(password, salt, expectedKey.length)
+      return actualKey.length === expectedKey.length && crypto.timingSafeEqual(actualKey, expectedKey)
+    } catch {
+      return false
+    }
+  }
+
+  const legacyHash = Buffer.from(hash(password), 'hex')
+  const expectedLegacyHash = Buffer.from(storedHash, 'hex')
+  return expectedLegacyHash.length === legacyHash.length && crypto.timingSafeEqual(legacyHash, expectedLegacyHash)
+}
+
+export const needsPasswordRehash = (storedHash: string) => typeof storedHash !== 'string' || !storedHash.startsWith(`${passwordHashAlgorithm}$`)
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
@@ -63,7 +94,7 @@ export const isAdmin = () => (req: Request, res: Response, next: NextFunction) =
   }
 }
 export const authorize = (user = {}) => jwt.sign(
-  JSON.parse(JSON.stringify(user, (key, value) => key === 'password' || key === 'totpSecret' ? undefined : value)),
+  JSON.parse(JSON.stringify(user, (key, value) => key === 'password' || key === 'totpSecret' || key === 'deluxeToken' ? undefined : value)),
   privateKey,
   { expiresIn: '6h', algorithm: 'RS256' }
 )
@@ -183,7 +214,7 @@ export const isAccounting = () => {
 
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
+  return decodedToken?.data?.role === roles.deluxe
 }
 
 export const isCustomer = (req: Request) => {

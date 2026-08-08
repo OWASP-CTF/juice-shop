@@ -36,7 +36,9 @@ const BasketModelInit = (sequelize: Sequelize) => {
       },
       coupon: DataTypes.STRING,
       UserId: {
-        type: DataTypes.INTEGER
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        unique: true
       }
     },
     {
