@@ -397,6 +397,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Rate limit feedback submissions - a CAPTCHA alone (especially a plaintext math one) is
+     not sufficient anti-automation; scripted/automated bulk submission must also be capped. */
+  app.post('/api/Feedbacks', rateLimit({ windowMs: 20 * 1000, max: 5, validate: false }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
