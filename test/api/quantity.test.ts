@@ -34,7 +34,7 @@ void describe('/api/Quantitys', () => {
   void it('GET quantity of all items for admin', async () => {
     const { token } = await login(app, {
       email: `admin@${config.get<string>('application.domain')}`,
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const res = await request(app)
       .get('/api/Quantitys')
@@ -71,7 +71,7 @@ void describe('/api/Quantitys', () => {
   void it('POST quantity forbidden for admin', async () => {
     const { token } = await login(app, {
       email: `admin@${config.get<string>('application.domain')}`,
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const res = await request(app)
       .post('/api/Quantitys')
@@ -112,7 +112,7 @@ void describe('/api/Quantitys/:ids', () => {
   void it('GET quantity of all items is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: `admin@${config.get<string>('application.domain')}`,
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const res = await request(app)
       .get('/api/Quantitys/1')
@@ -216,7 +216,7 @@ void describe('/api/Quantitys/:ids', () => {
   void it('DELETE quantity is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: `admin@${config.get<string>('application.domain')}`,
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const res = await request(app)
       .delete('/api/Quantitys/1')

@@ -95,7 +95,7 @@ void describe('/rest/products/search', () => {
     assert.ok(res.headers['content-type']?.includes('application/json'))
 
     const adminMatch = res.body.data.find((item: any) =>
-      item.id === 1 && item.price === `admin@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('admin123')
+      item.id === 1 && item.price === `admin@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('R4nd0m-Capybara-7!Quartz')
     )
     assert.ok(adminMatch, 'Expected admin user in UNION SELECT results')
 

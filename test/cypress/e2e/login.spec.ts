@@ -49,7 +49,7 @@ describe('/#/login', () => {
   })
 
   describe('challenge "adminCredentials"', () => {
-    it('should be able to log in with original (weak) admin credentials', () => {
+    it('should reject the original weak admin credentials without solving the challenge', () => {
       cy.task<string>('GetFromConfig', 'application.domain').then(
         (appDomain: string) => {
           cy.get('#email').type(`admin@${appDomain}`)
@@ -57,7 +57,10 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Password Strength' })
+      cy.get('.error').should('contain', 'Invalid email or password.')
+      cy.request('/api/Challenges/?name=Password Strength').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 

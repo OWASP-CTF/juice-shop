@@ -5,7 +5,7 @@ describe('/rest/products/reviews', () => {
 
   describe('challenge "NoSQL DoS"', () => {
     beforeEach(() => {
-      cy.login({ email: 'admin', password: 'admin123' })
+      cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
     })
     it('should be possible to inject a command into the get route', () => {
       cy.task('isDocker').then((isDocker) => {
@@ -50,7 +50,7 @@ describe('/rest/products/reviews', () => {
 
   describe('challenge "NoSQL Manipulation"', () => {
     beforeEach(() => {
-      cy.login({ email: 'admin', password: 'admin123' })
+      cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
     })
 
     it('should be possible to inject a selector into the update route', () => {

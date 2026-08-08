@@ -22,7 +22,7 @@ void describe('/rest/order-history', () => {
   void it('GET own previous orders', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)
@@ -66,7 +66,7 @@ void describe('/rest/order-history/orders', () => {
   void it('GET all orders is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)
@@ -94,7 +94,7 @@ void describe('/rest/order-history/:id/delivery-status', () => {
   void it('PUT delivery status is forbidden for admin', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
 
     const res = await request(app)

@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'admin123'
+  password: 'R4nd0m-Capybara-7!Quartz'
   key: admin
   role: 'admin'
   securityQuestion:

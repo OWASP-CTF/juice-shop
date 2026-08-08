@@ -1,6 +1,6 @@
 describe('/dataerasure', () => {
   beforeEach(() => {
-    cy.login({ email: 'admin', password: 'admin123' })
+    cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
   })
 
   describe('challenge "lfr"', () => {

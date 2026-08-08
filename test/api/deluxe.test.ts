@@ -52,7 +52,7 @@ void describe('/rest/deluxe-membership', () => {
   void it('GET deluxe membership status for admin throws error', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const authHeader = { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }
 
@@ -180,7 +180,7 @@ void describe('/rest/deluxe-membership', () => {
   void it('POST deluxe membership status for admin throws error', async () => {
     const { token } = await login(app, {
       email: 'admin@' + config.get<string>('application.domain'),
-      password: 'admin123'
+      password: 'R4nd0m-Capybara-7!Quartz'
     })
     const authHeader = { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }
 

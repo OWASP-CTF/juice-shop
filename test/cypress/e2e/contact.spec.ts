@@ -8,7 +8,7 @@ describe('/#/contact', () => {
 
   describe('challenge "forgedFeedback"', () => {
     beforeEach(() => {
-      cy.login({ email: 'admin', password: 'admin123' })
+      cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
       cy.visit('/#/contact')
       solveNextCaptcha()
     })
@@ -44,7 +44,7 @@ describe('/#/contact', () => {
 
   describe('challenge "persistedXssFeedback"', () => {
     beforeEach(() => {
-      cy.login({ email: 'admin', password: 'admin123' })
+      cy.login({ email: 'admin', password: 'R4nd0m-Capybara-7!Quartz' })
       cy.visit('/#/contact')
       solveNextCaptcha()
     })

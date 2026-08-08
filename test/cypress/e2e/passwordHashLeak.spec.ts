@@ -1,6 +1,6 @@
 describe('challenge "Password Hash Leak"', () => {
   beforeEach(() => {
-    cy.login({ email: 'admin@juice-sh.op', password: 'admin123' })
+    cy.login({ email: 'admin@juice-sh.op', password: 'R4nd0m-Capybara-7!Quartz' })
   })
 
   it('should solve the challenge by leaking the password hash via fields parameter', () => {

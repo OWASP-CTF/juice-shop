@@ -9,6 +9,9 @@ import request from 'supertest'
 import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
+import { challenges } from '../../data/datacache'
+
+const adminPassword = 'R4nd0m-Capybara-7!Quartz'
 
 let app: Express
 
@@ -67,7 +70,9 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('POST login with admin credentials', async () => {
+  void it('POST login rejects the legacy weak admin credentials without solving the challenge', async () => {
+    challenges.weakPasswordChallenge.solved = false
+
     const res = await request(app)
       .post('/rest/user/login')
       .set({ 'content-type': 'application/json' })
@@ -76,9 +81,23 @@ void describe('/rest/user/login', () => {
         password: 'admin123'
       })
 
+    assert.equal(res.status, 401)
+    assert.equal(challenges.weakPasswordChallenge.solved, false)
+  })
+
+  void it('POST login with replacement admin credentials', async () => {
+    const res = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'admin@' + config.get<string>('application.domain'),
+        password: adminPassword
+      })
+
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(challenges.weakPasswordChallenge.solved, false)
   })
 
   void it('POST login with support-team credentials', async () => {
