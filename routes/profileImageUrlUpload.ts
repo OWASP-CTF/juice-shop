@@ -45,12 +45,17 @@ function isDisallowedAddress (address: string): boolean {
 }
 
 // Validates a user-supplied image URL to prevent Server-Side Request Forgery.
-// Rejects non-http(s) schemes and any host resolving to an internal address
-// (which also covers the application's own loopback origin).
-async function assertSafeImageUrl (rawUrl: string): Promise<void> {
+// Rejects non-http(s) schemes, the application's own origin, and any host
+// resolving to an internal address.
+async function assertSafeImageUrl (rawUrl: string, ownHost?: string): Promise<void> {
   const parsed = new URL(rawUrl)
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error(`Disallowed URL scheme: ${parsed.protocol}`)
+  }
+  // Reject requests pointing back at the application itself (the SSRF-to-self
+  // vector used to reach internal /solve endpoints), regardless of IP range.
+  if (ownHost && parsed.host.toLowerCase() === ownHost.toLowerCase()) {
+    throw new Error('Disallowed host: application origin')
   }
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
   if (hostname.toLowerCase() === 'localhost') {
@@ -74,17 +79,19 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
           // Validate the URL BEFORE issuing any outbound request, blocking SSRF
           // to loopback/link-local/private ranges and the app's own origin.
-          await assertSafeImageUrl(url)
+          await assertSafeImageUrl(url, req.headers.host)
           const response = await fetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
+          // Only a genuinely-performed outbound retrieval counts as abuse — the
+          // flag must never be set from unvalidated, attacker-controlled input.
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const contentType = response.headers.get('content-type') ?? ''
           if (!contentType.toLowerCase().startsWith('image/')) {
             throw new Error(`url returned a non-image content type: ${contentType}`)
