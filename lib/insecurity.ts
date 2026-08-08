@@ -16,9 +16,6 @@ import * as utils from './utils'
 
 /* jslint node: true */
 
-// @ts-expect-error FIXME no typescript definitions for z85 :(
-import * as z85 from 'z85'
-
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
 const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
 
@@ -40,7 +37,10 @@ interface IAuthenticatedUsers {
   updateFrom: (req: Request, user: ResponseWithUser) => any
 }
 
-export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
+/* MD5 is a broken hash and unsuitable for storing credentials. Both the
+   password setter and every comparison go through this function, so moving to
+   SHA-256 keeps them consistent. */
+export const hash = (data: string) => crypto.createHash('sha256').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
 export const cutOffPoisonNullByte = (str: string) => {
@@ -96,24 +96,58 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+/* z85 is an encoding, not a signature, so anyone could mint a coupon for an
+   arbitrary discount by encoding the expected string. Coupons now carry an
+   HMAC that only the server can produce. */
+const couponSignature = (payload: string) => crypto.createHmac('sha256', privateKey).update(payload).digest('hex').substring(0, 32)
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const payload = utils.toMMMYY(date) + '-' + discount
+  return Buffer.from(payload).toString('hex') + couponSignature(payload)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
-  if (!coupon) {
+  if (!coupon || coupon.length <= 32) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  const signature = coupon.substring(coupon.length - 32)
+  const payloadHex = coupon.substring(0, coupon.length - 32)
+  if (!/^[0-9a-fA-F]*$/.test(payloadHex)) {
+    return undefined
   }
+  const payload = Buffer.from(payloadHex, 'hex').toString('utf8')
+  if (signature !== couponSignature(payload) || hasValidFormat(payload) == null) {
+    return undefined
+  }
+  const parts = payload.split('-')
+  if (utils.toMMMYY(new Date()) === parts[0]) {
+    return parseInt(parts[1])
+  }
+}
+
+/* hashids obfuscates, it does not authenticate: anyone could craft a continue
+   code that restores arbitrary challenge ids. Progress codes now carry an HMAC,
+   and stay alphanumeric so the existing format check still accepts them. */
+const progressSignature = (namespace: string, payloadHex: string) => crypto.createHmac('sha256', privateKey).update(namespace + ':' + payloadHex).digest('hex').substring(0, 32)
+
+export const encodeProgress = (namespace: string, ids: number[]) => {
+  const payloadHex = Buffer.from(ids.join('.')).toString('hex')
+  return payloadHex + progressSignature(namespace, payloadHex)
+}
+
+export const decodeProgress = (namespace: string, code?: string): number[] => {
+  if (!code || code.length <= 32) {
+    return []
+  }
+  const signature = code.substring(code.length - 32)
+  const payloadHex = code.substring(0, code.length - 32)
+  if (!/^[0-9a-fA-F]+$/.test(payloadHex) || signature !== progressSignature(namespace, payloadHex)) {
+    return []
+  }
+  return Buffer.from(payloadHex, 'hex').toString('utf8')
+    .split('.')
+    .map(Number)
+    .filter((id) => Number.isInteger(id))
 }
 
 function hasValidFormat (coupon: string) {
