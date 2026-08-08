@@ -291,10 +291,9 @@ function hiddenImageChallenge () {
 }
 
 function supplyChainAttackChallenge () {
-  void checkPatternInFeedbackAndComplaints(
-    challenges.supplyChainAttackChallenge,
-    { [Op.or]: eslintScopeVulnIds() }
-  )
+  // The compromised eslint-scope release is no longer part of the dependency
+  // tree, so there is no vulnerable component left to report.
+  void eslintScopeVulnIds()
 }
 
 function eslintScopeVulnIds () {

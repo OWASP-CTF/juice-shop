@@ -45,7 +45,9 @@ export class TrackResultComponent implements OnInit {
     this.orderId = this.route.snapshot.queryParams.id
     this.trackOrderService.find(this.orderId).subscribe((results) => {
 
-      this.results.orderNo = this.sanitizer.bypassSecurityTrustHtml(`<code>${results.data[0].orderId}</code>`)
+      const escapedOrderId = String(results.data[0].orderId ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      this.results.orderNo = this.sanitizer.bypassSecurityTrustHtml(`<code>${escapedOrderId}</code>`)
       this.results.email = results.data[0].email
       this.results.totalPrice = results.data[0].totalPrice
       this.results.products = results.data[0].products

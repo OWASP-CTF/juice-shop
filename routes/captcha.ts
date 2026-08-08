@@ -36,6 +36,9 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // A CAPTCHA is a one-shot proof of human interaction: burn it so the same
+      // id/answer pair cannot be replayed to flood the endpoint.
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

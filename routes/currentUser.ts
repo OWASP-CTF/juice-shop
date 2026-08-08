@@ -20,7 +20,11 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        // Only ever expose non-sensitive fields, regardless of what is requested.
+        const allowedFields = ['id', 'email', 'lastLoginIp', 'profileImage']
+        const requestedFields = fieldsParam
+          ? fieldsParam.split(',').map(f => f.trim()).filter(f => allowedFields.includes(f))
+          : []
 
         let baseUser: any = {}
 

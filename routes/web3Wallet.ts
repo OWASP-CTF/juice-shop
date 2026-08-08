@@ -3,7 +3,6 @@ import { type Request, type Response } from 'express'
 import logger from '../lib/logger'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
-import * as challengeUtils from '../lib/challengeUtils'
 import { web3WalletABI } from '../data/static/contractABIs'
 
 const web3WalletAddress = '0x413744D59d31AFDC2889aeE602636177805Bd7b0'
@@ -26,7 +25,7 @@ export function contractExploitListener () {
         void contract.on('ContractExploited', (exploiter: string) => {
           if (walletsConnected.has(exploiter)) {
             walletsConnected.delete(exploiter)
-            challengeUtils.solveIf(challenges.web3WalletChallenge, () => true)
+            logger.warn('Wallet contract reported an exploit attempt')
           }
         })
         isEventListenerCreated = true

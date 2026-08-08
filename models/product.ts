@@ -4,8 +4,6 @@
  */
 
 /* jslint node: true */
-import * as utils from '../lib/utils'
-import * as challengeUtils from '../lib/challengeUtils'
 import {
   Model,
   type InferAttributes,
@@ -15,7 +13,6 @@ import {
   type Sequelize
 } from 'sequelize'
 import { type BasketItemModel } from './basketitem'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 class Product extends Model<
@@ -43,17 +40,9 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
-          if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-            challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
-              return utils.contains(
-                description,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            description = security.sanitizeSecure(description)
-          }
-          this.setDataValue('description', description)
+          // Products can be created or edited through the REST API without the
+          // Angular form, so the description is always sanitised server-side.
+          this.setDataValue('description', security.sanitizeSecure(description))
         }
       },
       price: DataTypes.DECIMAL,

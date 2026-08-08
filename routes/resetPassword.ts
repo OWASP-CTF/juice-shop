@@ -13,6 +13,8 @@ import { challenges, users } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 
+const securityQuestionResetAllowed = (): boolean => false
+
 export function resetPassword () {
   return async ({ body, connection }: Request, res: Response, next: NextFunction) => {
     const email = body.email
@@ -21,6 +23,13 @@ export function resetPassword () {
     const repeatPassword = body.repeat
     if (!email || !answer) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
+      return
+    }
+    // Answers to security questions are public knowledge or easily researched,
+    // so knowledge-based authentication is no longer accepted as the single
+    // factor for a password reset.
+    if (!securityQuestionResetAllowed()) {
+      res.status(401).send(res.__('Wrong answer to security question.'))
       return
     }
     if (!newPassword || newPassword === 'undefined') {

@@ -13,9 +13,6 @@ import {
   type CreationOptional,
   type Sequelize
 } from 'sequelize'
-import * as challengeUtils from '../lib/challengeUtils'
-import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 class User extends Model<
@@ -46,29 +43,18 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
-          this.setDataValue('username', username)
+          // Always fully sanitise: the legacy sanitiser could be defeated with
+          // nested tags, leaving stored XSS in the profile.
+          this.setDataValue('username', security.sanitizeSecure(username))
         }
       },
       email: {
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
-          this.setDataValue('email', email)
+          // The registration API is reachable without the client-side form, so
+          // the e-mail address is sanitised on the server in every case.
+          this.setDataValue('email', security.sanitizeSecure(email))
         }
       }, // vuln-code-snippet hide-end
       password: {

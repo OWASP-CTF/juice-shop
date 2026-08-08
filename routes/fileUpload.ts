@@ -38,11 +38,12 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
             fs.createReadStream(tempFile)
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
-                const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                // Resolve every archive entry against the destination directory and
+                // refuse anything that escapes it ("zip slip" / path traversal).
+                const destinationRoot = path.resolve('uploads/complaints')
+                const absolutePath = path.resolve(destinationRoot, entry.path)
+                if (absolutePath.startsWith(destinationRoot + path.sep)) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -78,25 +79,15 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
       try {
-        const sandbox = { libxml, data }
-        vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
-        const xmlString = xmlDoc.toString(false)
-        challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
+        // Entity substitution is disabled, so external entities are never resolved
+        // (no local file disclosure) and entity expansion bombs cannot inflate
+        // (no denial of service). The parsed document is also not echoed back.
+        libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true })
         res.status(410)
-        next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: ' + utils.trunc(xmlString, 400) + ' (' + file.originalname + ')'))
+        next(new Error('B2B customer complaints via file upload have been deprecated for security reasons (' + file.originalname + ')'))
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        if (utils.contains(errorMessage, 'Script execution timed out')) {
-          if (challengeUtils.notSolved(challenges.xxeDosChallenge)) {
-            challengeUtils.solve(challenges.xxeDosChallenge)
-          }
-          res.status(503)
-          next(new Error('Sorry, we are temporarily not available! Please try again later.'))
-        } else {
-          res.status(410)
-          next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: ' + errorMessage + ' (' + file.originalname + ')'))
-        }
+        res.status(410)
+        next(new Error('B2B customer complaints via file upload have been deprecated for security reasons (' + file.originalname + ')'))
       }
     } else {
       res.status(410)

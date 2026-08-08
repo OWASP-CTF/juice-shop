@@ -51,10 +51,21 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+export const isAuthorized = () => expressJwt(({ secret: publicKey, algorithms: ['RS256'] }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  // Pin the algorithm to RS256. Without it an attacker can re-sign a tampered
+  // token with HS256 using the public key as the shared secret, or strip the
+  // signature entirely with "alg": "none".
+  if (!token) return false
+  try {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] })
+    return true
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -123,9 +134,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -133,11 +141,9 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
-  }
-  return allowed
+  // Exact membership only. A substring test let an attacker append an allowed
+  // URL to an arbitrary target and be redirected anywhere.
+  return typeof url === 'string' && redirectAllowlist.has(url)
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -188,7 +194,7 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)

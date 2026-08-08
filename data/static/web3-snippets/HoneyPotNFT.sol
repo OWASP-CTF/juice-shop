@@ -19,11 +19,25 @@ contract HoneyPotNFT is ERC721, Ownable {
 
     constructor() ERC721("The Enchanted Honey Pot", "EHP") {}
 
-    function mintNFT() external {
-        token.transferFrom(msg.sender, address(this), mintPrice);
-        _safeMint(msg.sender, totalSupply);
-        totalSupply = totalSupply.add(1); // vuln-code-snippet neutral-line nftMintChallenge
-        emit NFTMinted(msg.sender, totalSupply - 1); // vuln-code-snippet vuln-line nftMintChallenge
+    bool private minting;
+
+    modifier nonReentrant() {
+        require(!minting, "Reentrant call");
+        minting = true;
+        _;
+        minting = false;
+    }
+
+    function mintNFT() external nonReentrant {
+        // The return value of transferFrom must be checked: a token that
+        // signals failure by returning false instead of reverting would
+        // otherwise hand out a free mint. State is also updated before
+        // _safeMint, whose receiver callback can re-enter this function.
+        require(token.transferFrom(msg.sender, address(this), mintPrice), "Payment failed");
+        uint256 tokenId = totalSupply;
+        totalSupply = totalSupply.add(1);
+        _safeMint(msg.sender, tokenId);
+        emit NFTMinted(msg.sender, tokenId);
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
