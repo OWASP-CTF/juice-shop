@@ -347,9 +347,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -382,10 +382,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
+  app.post('/api/Feedbacks', rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    keyGenerator: (req: Request) => req.socket.remoteAddress ?? 'unknown',
+    validate: false
+  }))
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
@@ -413,8 +419,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       res.status(400).send(res.__('Invalid email/password cannot be empty'))
       return
     }
-    req.body.email = email
+    const sanitizedEmail = security.sanitizeSecure(email)
+    if (sanitizedEmail !== email) {
+      res.status(400).send(res.__('Invalid email address'))
+      return
+    }
+    req.body.email = sanitizedEmail
     req.body.password = password
+    /* Registration is an untrusted, public endpoint. A caller must not be
+       able to select an elevated application role. */
+    req.body.role = security.roles.customer
     const passwordRepeat = typeof req.body.passwordRepeat === 'string' ? req.body.passwordRepeat.trim() : undefined
     req.body.passwordRepeat = passwordRepeat
     /* The repeated password was only ever compared for a challenge check, never
@@ -439,6 +453,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
   /* Feedbacks: Do not allow changes of existing feedback */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())
@@ -699,9 +714,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       next(err)
       return
     }
-    /* Errors such as express-jwt's UnauthorizedError carry their own status;
-       honour it so an authorization failure stays a 401 rather than becoming a
-       generic 500. */
+    /* Honour errors which carry their own status so authorization failures do
+       not become generic 500 responses. */
     const carried = (err as { status?: unknown, statusCode?: unknown })?.status ?? (err as { statusCode?: unknown })?.statusCode
     const status = typeof carried === 'number' && carried >= 400 && carried < 600
       ? carried

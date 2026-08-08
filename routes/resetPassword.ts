@@ -42,6 +42,7 @@ export function resetPassword () {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
+          security.authenticatedUsers.removeByUserId(updatedUser.id)
           verifySecurityAnswerChallenges(updatedUser, answer)
           /* Echoing the model returned the freshly stored password hash. */
           res.json({ user: { id: updatedUser.id, email: updatedUser.email } })

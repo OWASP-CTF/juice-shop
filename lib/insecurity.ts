@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -16,8 +14,20 @@ import * as utils from './utils'
 
 /* jslint node: true */
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const configuredPrivateKey = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, '\n')
+const configuredPublicKey = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, '\n')
+if ((configuredPrivateKey && !configuredPublicKey) || (!configuredPrivateKey && configuredPublicKey)) {
+  throw new Error('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured together')
+}
+const generatedKeys = configuredPrivateKey && configuredPublicKey
+  ? null
+  : crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  })
+export const publicKey = configuredPublicKey ?? generatedKeys?.publicKey ?? ''
+const privateKey = configuredPrivateKey ?? generatedKeys?.privateKey ?? ''
 
 interface ResponseWithUser {
   status?: string
@@ -35,6 +45,8 @@ interface IAuthenticatedUsers {
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
+  remove: (token: string) => void
+  removeByUserId: (userId: number) => void
 }
 
 /* MD5 is a broken hash and unsuitable for storing credentials. Both the
@@ -51,11 +63,33 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey, algorithms: ['RS256'] }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? jws.verify(token, 'RS256', publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const verify = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const decodedToken = decode(token)
+    const expiresAt = typeof decodedToken === 'object' && decodedToken !== null ? decodedToken.exp : undefined
+    return jws.verify(token, 'RS256', publicKey) && typeof expiresAt === 'number' && expiresAt > Math.floor(Date.now() / 1000)
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  if (token && authenticatedUsers.get(token)) {
+    next()
+  } else {
+    res.status(401).json({ error: 'Authentication required' })
+  }
+}
+
+export const denyAll = () => (_req: Request, res: Response) => {
+  res.status(401).json({ error: 'Access denied' })
+}
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -73,14 +107,36 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
   put: function (token: string, user: ResponseWithUser) {
+    const previousToken = this.idMap[user.data.id]
+    if (previousToken && previousToken !== token) {
+      delete this.tokenMap[previousToken]
+    }
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const rawToken = utils.unquote(token)
+    const user = this.tokenMap[rawToken]
+    if (!user) {
+      return undefined
+    }
+    try {
+      if (!verify(rawToken)) {
+        this.remove(rawToken)
+        return undefined
+      }
+      return user
+    } catch {
+      this.remove(rawToken)
+      return undefined
+    }
   },
   tokenOf: function (user: UserModel) {
-    return user ? this.idMap[user.id] : undefined
+    const token = user ? this.idMap[user.id] : undefined
+    return token && this.get(token) ? token : undefined
   },
   from: function (req: Request) {
     const token = utils.jwtFrom(req)
@@ -89,6 +145,20 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
     this.put(token, user)
+  },
+  remove: function (token: string) {
+    const rawToken = utils.unquote(token)
+    const user = this.tokenMap[rawToken]
+    delete this.tokenMap[rawToken]
+    if (user && this.idMap[user.data.id] === rawToken) {
+      delete this.idMap[user.data.id]
+    }
+  },
+  removeByUserId: function (userId: number) {
+    const token = this.idMap[userId]
+    if (token) {
+      this.remove(token)
+    }
   }
 }
 
@@ -197,8 +267,8 @@ export const isAccounting = () => {
 
 export const isAdmin = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-    if (decodedToken?.data?.role === roles.admin) {
+    const user = authenticatedUsers.from(req)
+    if (user?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -229,15 +299,12 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null) {
-        if (authenticatedUsers.get(token) === undefined) {
-          authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
-        }
-      }
-    })
+  if (token && verify(token) && authenticatedUsers.get(token) === undefined) {
+    const decodedToken = decode(token)
+    if (typeof decodedToken === 'object' && decodedToken?.data?.id) {
+      authenticatedUsers.put(token, decodedToken)
+      res.cookie('token', token, { httpOnly: true, sameSite: 'strict' })
+    }
   }
   next()
 }

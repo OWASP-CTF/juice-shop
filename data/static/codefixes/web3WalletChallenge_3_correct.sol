@@ -26,7 +26,8 @@ contract ETHWalletBank {
       userWithdrawing[msg.sender] = 0;
       return;
     }
-    balances[msg.sender] -= _amount;
+    // Apply the balance change before yielding control to the recipient.
+    balances[msg.sender] = balances[msg.sender].sub(_amount);
     (bool result, ) = msg.sender.call{ value: _amount }("");
     require(result, "Withdrawal call failed");
     userWithdrawing[msg.sender] = 0;
