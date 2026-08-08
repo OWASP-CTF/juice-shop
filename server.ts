@@ -167,7 +167,6 @@ void collectDurationPromise('validateConfig', validateConfig)({})
 function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Locals */
   app.locals.captchaId = 0
-  app.locals.abused_ssti_bug = false
   app.locals.abused_ssrf_bug = false
 
   /* Compression for all requests */
@@ -229,7 +228,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
   app.use('/assets/i18n', verify.accessControlChallenges())
 
-  /* Checks for challenges solved by abusing SSTi and SSRF bugs */
+  /* Checks for challenges solved by abusing SSRF bugs */
   app.use('/solve/challenges/server-side', verify.serverSideChallenges())
 
   /* Create middleware to change paths from the serve-index plugin from absolute to relative */

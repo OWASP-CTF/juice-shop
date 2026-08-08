@@ -161,6 +161,23 @@ describe('verify', () => {
     })
   })
 
+  describe('serverSideChallenges', () => {
+    it('does not solve the SSTI challenge from a stale application flag', () => {
+      challenges.sstiChallenge = { solved: false, save } as unknown as Challenge
+      challenges.ssrfChallenge = { solved: false, save } as unknown as Challenge
+      req.query = { key: 'tRy_H4rd3r_n0thIng_iS_Imp0ssibl3' }
+      req.app = { locals: { abused_ssti_bug: true } }
+      res.status = sinon.stub().returns(res)
+      res.send = sinon.spy()
+
+      verify.serverSideChallenges()(req, res, next)
+
+      expect(challenges.sstiChallenge.solved).to.equal(false)
+      expect(res.status.called).to.equal(false)
+      expect(next.calledOnce).to.equal(true)
+    })
+  })
+
   describe('"errorHandlingChallenge"', () => {
     beforeEach(() => {
       challenges.errorHandlingChallenge = { solved: false, save } as unknown as Challenge
