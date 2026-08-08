@@ -27,9 +27,11 @@ global.sleep = (time: number) => {
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Always coerce to a Number and never build a $where clause from user input,
-    // which would otherwise allow arbitrary JS execution against the NoSQL store.
-    const id = Number(req.params.id)
+    // Never build a $where clause from user input, which would otherwise allow arbitrary
+    // JS execution against the NoSQL store. Reviews store `product` as the raw route
+    // param string, so match against that same string type directly (a $where clause
+    // did loose `==` coercion; a plain query object requires an exact type match).
+    const id = req.params.id
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
