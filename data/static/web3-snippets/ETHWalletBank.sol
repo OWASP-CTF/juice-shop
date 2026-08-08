@@ -29,9 +29,11 @@ contract ETHWalletBank {
       userWithdrawing[msg.sender] = 0;
       return;
     }
+    // Checks-effects-interactions: the balance is settled before any external call is made,
+    // so a re-entering callee can no longer withdraw against a stale balance
+    balances[msg.sender] -= _amount;
     (bool result, ) = msg.sender.call{ value: _amount }(""); // vuln-code-snippet neutral-line web3WalletChallenge
     require(result, "Withdrawal call failed"); // vuln-code-snippet neutral-line web3WalletChallenge
-    balances[msg.sender] -= _amount; // vuln-code-snippet vuln-line web3WalletChallenge
     if(userWithdrawing[msg.sender] == 2) // vuln-code-snippet hide-line
     { // vuln-code-snippet hide-line
       emit ContractExploited(tx.origin); // vuln-code-snippet hide-line
