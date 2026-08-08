@@ -58,6 +58,7 @@ export const promotionVideo = () => {
 
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
+      const subtitles = config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt'
       template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
       template = template.replace(/_favicon_/g, favicon())
       template = template.replace(/_bgColor_/g, theme.bgColor)
@@ -65,11 +66,10 @@ export const promotionVideo = () => {
       template = template.replace(/_navColor_/g, theme.navColor)
       template = template.replace(/_primLight_/g, theme.primLight)
       template = template.replace(/_primDark_/g, theme.primDark)
+      template = template.replace(/_subtitles_/g, entities.encode(subtitles))
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + entities.encode(subs) + '</script>')
-      res.send(compiledTemplate)
+      res.send(fn())
     })
   }
   function favicon () {

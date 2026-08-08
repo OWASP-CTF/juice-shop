@@ -101,7 +101,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       },
       profileImage: {
         type: DataTypes.STRING,
-        defaultValue: '/assets/public/images/uploads/default.svg'
+        defaultValue: '/assets/public/images/uploads/default.svg',
+        set (profileImage: string) {
+          const cleaned = String(profileImage ?? '').split(';')[0].replace(/[^a-zA-Z0-9/_.\-:]/g, '')
+          this.setDataValue('profileImage', cleaned || '/assets/public/images/uploads/default.svg')
+        }
       },
       totpSecret: {
         type: DataTypes.STRING,

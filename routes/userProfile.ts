@@ -70,7 +70,8 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      const safeImageSrc = String(user?.profileImage ?? '').split(';')[0].replace(/[^a-zA-Z0-9/_.\-:]/g, '')
+      const CSP = `img-src 'self' ${safeImageSrc}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')

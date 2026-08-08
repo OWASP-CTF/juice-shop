@@ -40,15 +40,15 @@ export const forgedFeedbackChallenge = () => (req: Request, res: Response, next:
 }
 
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  if (challengeUtils.notSolved(challenges.captchaBypassChallenge)) {
-    if (req.app.locals.captchaReqId >= 10) {
-      if ((new Date().getTime() - req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 10]) <= 20000) {
-        challengeUtils.solve(challenges.captchaBypassChallenge)
-      }
-    }
-    req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 1] = new Date().getTime()
-    req.app.locals.captchaReqId++
+  const now = Date.now()
+  const times: number[] = req.app.locals.captchaBypassReqTimes ?? []
+  if (times.length >= 9 && (now - times[times.length - 9]) <= 20000) {
+    res.status(429).send(res.__('Too many requests. Please try again later.'))
+    return
   }
+  times.push(now)
+  req.app.locals.captchaBypassReqTimes = times.slice(-20)
+  req.app.locals.captchaReqId = (req.app.locals.captchaReqId ?? 1) + 1
   next()
 }
 
@@ -129,7 +129,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
