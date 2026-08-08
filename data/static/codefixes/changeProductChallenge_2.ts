@@ -34,7 +34,10 @@
   /* SecurityQuestions: Only GET list of questions allowed. */
   app.post('/api/SecurityQuestions', security.denyAll())
   app.use('/api/SecurityQuestions/:id', security.denyAll())
-  /* SecurityAnswers: Only POST of answer allowed. */
+  /* SecurityAnswers: Only POST of an answer for the authenticated user themselves.
+     Taking the UserId from the request body would let anyone plant a security answer
+     on an account that has none and then reset its password. */
+  app.post('/api/SecurityAnswers', security.isAuthorized(), security.appendUserId())
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */

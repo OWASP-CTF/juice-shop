@@ -68,6 +68,9 @@ export const sanitizeSecure = (html: string): string => {
     return sanitizeSecure(sanitized)
   }
 }
+// Rejects values that could break out of a CSP directive if interpolated raw
+// (e.g. "; script-src 'unsafe-inline'"). Used for profileImage-derived CSP sources.
+export const isCspSafeUrl = (candidate: string): boolean => !/[\s;'"<>`]/.test(candidate)
 
 export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
