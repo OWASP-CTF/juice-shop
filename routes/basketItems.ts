@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -47,6 +48,15 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      /* Items withdrawn from the assortment are only flagged as deleted, never removed, so the
+         default soft-delete filter has to be relied on here: without this lookup a product that
+         is no longer offered could still be put in a basket - and then ordered - via the API. */
+      const stillOffered = basketItem.ProductId !== undefined ? await ProductModel.findOne({ where: { id: basketItem.ProductId } }) : null
+      if (stillOffered == null) {
+        res.status(400).json({ error: 'This product is not available.' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {

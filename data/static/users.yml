@@ -181,8 +181,8 @@
   role: 'deluxe'
   profileImage: '13.jpg'
   securityQuestion:
-    id: 7
-    answer: 'Mv5e-Ky93-Ptn2-Zhc7' # replaces the answer that used to be findable via a public social media post
+    id: 13 # "favorite pet" is answerable from this account holder's public appearances, so it is not used
+    answer: 'Mv5e-Ky93-Ptn2-Zhc7'
 -
   email: chris.pike
   password: 'uss enterprise'
