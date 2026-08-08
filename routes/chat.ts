@@ -215,7 +215,7 @@ export function chat () {
           case 'text-delta':
             res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: event.text } }] })}\n\n`)
             break
-          case 'tool-call':
+          case 'tool-call': {
             challengeUtils.solveIf(challenges.aiDebuggingChallenge, () => {
               const token = utils.jwtFrom(req)
               const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
@@ -223,18 +223,30 @@ export function chat () {
               return req.cookies.show_tool_calls === 'true' && role !== roles.admin
             })
             metricToolCalls.labels({ tool: event.toolName }).inc()
-            res.write(`data: ${JSON.stringify({
-              choices: [{
-                delta: {
-                  tool_calls: [{
-                    id: event.toolCallId,
-                    type: 'function',
-                    function: { name: event.toolName, arguments: JSON.stringify(event.input) }
-                  }]
-                }
-              }]
-            })}\n\n`)
+            // The show_tool_calls cookie is a client-side display preference only - it must
+            // never be trusted as an access control decision, since any client can set it.
+            // Whether tool-call debugging info is actually sent over the wire has to be
+            // decided server-side from the caller's *signature-verified* JWT role - decoding
+            // without verifying would let a forged/unsigned token claim the admin role.
+            const debugToken = utils.jwtFrom(req)
+            const debugDecoded = (debugToken && security.verify(debugToken))
+              ? security.decode(debugToken) as { data?: { role?: string } }
+              : undefined
+            if (debugDecoded?.data?.role === roles.admin) {
+              res.write(`data: ${JSON.stringify({
+                choices: [{
+                  delta: {
+                    tool_calls: [{
+                      id: event.toolCallId,
+                      type: 'function',
+                      function: { name: event.toolName, arguments: JSON.stringify(event.input) }
+                    }]
+                  }
+                }]
+              })}\n\n`)
+            }
             break
+          }
           case 'finish':
             res.write(`data: ${JSON.stringify({ choices: [{ finish_reason: event.finishReason }] })}\n\n`)
             if (event.totalUsage.inputTokens) {
