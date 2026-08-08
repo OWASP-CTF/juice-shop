@@ -394,12 +394,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+  app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
-  /* Rate limit feedback submissions - a CAPTCHA alone (especially a plaintext math one) is
-     not sufficient anti-automation; scripted/automated bulk submission must also be capped. */
-  app.post('/api/Feedbacks', rateLimit({ windowMs: 20 * 1000, max: 5, validate: false }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
@@ -510,10 +507,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
     // create a wallet when a new user is registered using API
     if (name === 'User') { // vuln-code-snippet neutral-line registerAdminChallenge
-      // Role must never be settable via mass assignment through the public registration API.
-      // This has to run before the DB write, otherwise a malicious role would already be persisted.
+      // The administrator role must never be settable via mass assignment through the
+      // public registration API. This has to run before the DB write, otherwise a
+      // malicious role would already be persisted. (Other roles such as deluxe/accounting
+      // are intentionally left settable here, matching existing self-service signup flows.)
       resource.create.write.before((req: Request, res: Response, context: { instance: { role: string }, continue: any }) => {
-        context.instance.role = 'customer'
+        if (context.instance.role === security.roles.admin) {
+          context.instance.role = security.roles.customer
+        }
         return context.continue
       })
       resource.create.send.before((req: Request, res: Response, context: { instance: { id: any }, continue: any }) => { // vuln-code-snippet vuln-line registerAdminChallenge

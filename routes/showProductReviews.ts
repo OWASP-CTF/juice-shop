@@ -28,15 +28,18 @@ global.sleep = (time: number) => {
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     // Never build a $where clause from user input, which would otherwise allow arbitrary
-    // JS execution against the NoSQL store. Reviews store `product` as the raw route
-    // param string, so match against that same string type directly (a $where clause
-    // did loose `==` coercion; a plain query object requires an exact type match).
-    const id = req.params.id
+    // JS execution against the NoSQL store. Seeded reviews store `product` as a Number
+    // while reviews created through the API store it as the raw route param String, so
+    // (unlike the old loosely-typed `==` comparison in $where) match both types explicitly
+    // instead of trusting/interpolating any user-controlled operators.
+    const rawId = req.params.id
+    const numericId = Number(rawId)
+    const idFilter = Number.isNaN(numericId) ? { product: rawId } : { $or: [{ product: rawId }, { product: numericId }] }
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ product: id }).then((reviews: Review[]) => {
+    db.reviewsCollection.find(idFilter).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)

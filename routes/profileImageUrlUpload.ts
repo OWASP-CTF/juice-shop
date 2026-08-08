@@ -60,11 +60,13 @@ export function profileImageUrlUpload () {
       if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
-        if (!isSafeExternalImageUrl(url)) {
-          next(new Error('Invalid image URL'))
-          return
-        }
         try {
+          if (!isSafeExternalImageUrl(url)) {
+            // Treated the same as any other failure to retrieve the image: fall back to
+            // storing the URL text itself rather than ever letting the server make a
+            // request to a private/internal target on the caller's behalf (SSRF).
+            throw new Error('Refusing to fetch a non-public image URL')
+          }
           const response = await fetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
