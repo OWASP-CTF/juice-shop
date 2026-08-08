@@ -28,13 +28,14 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    res.json({ captchaId, captcha: expression })
   }
 }
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
+    await captcha?.destroy()
     if ((captcha != null) && req.body.captcha === captcha.answer) {
       next()
     } else {

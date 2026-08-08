@@ -38,6 +38,10 @@ export function resetPassword () {
           where: { email }
         }]
       })
+      if (data?.UserId === users.stan.id) {
+        res.status(410).send(res.__('Password recovery with this security question is no longer supported.'))
+        return
+      }
       if ((data != null) && security.hmac(answer) === data.answer) {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {

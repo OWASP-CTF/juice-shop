@@ -1,6 +1,6 @@
 describe('/b2b/v2/order', () => {
   describe('challenge "rce"', () => {
-    it('an infinite loop deserialization payload should not bring down the server', () => {
+    it('should reject an infinite loop payload without evaluating it', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.login({ email: 'admin', password: 'admin123' })
@@ -20,18 +20,15 @@ describe('/b2b/v2/order', () => {
                 })
               }
             )
-            if (response.status === 500) {
-              console.log('Success')
-            }
+            expect(response.status).to.equal(400)
           })
-          cy.expectChallengeSolved({ challenge: 'Blocked RCE DoS' })
         }
       })
     })
   })
 
   describe('challenge "rceOccupy"', () => {
-    it('should be possible to cause request timeout using a recursive regular expression payload', () => {
+    it('should reject a recursive regular expression payload without evaluating it', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.login({ email: 'admin', password: 'admin123' })
@@ -51,11 +48,8 @@ describe('/b2b/v2/order', () => {
                 })
               }
             )
-            if (response.status === 503) {
-              console.log('Success')
-            }
+            expect(response.status).to.equal(400)
           })
-          cy.expectChallengeSolved({ challenge: 'Successful RCE DoS' })
         }
       })
     })
