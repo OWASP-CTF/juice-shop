@@ -68,7 +68,7 @@ describe('/#/forgot-password', () => {
     })
 
     describe('for his OWASP account', () => {
-      it('should be able to reset password with his security answer', () => {
+      it('should reject password recovery with his favorite pet answer', () => {
         cy.get('#email').type('bjoern@owasp.org')
         cy.wait('@securityQuestion')
         cy.get('#securityAnswer').should('not.be.disabled').focus().type('Zaya')
@@ -77,8 +77,9 @@ describe('/#/forgot-password', () => {
         cy.get('#newPasswordRepeat').focus().type('kitten lesser pooch')
         cy.get('#resetButton').click()
 
-        cy.get('.confirmation').should('not.be.hidden')
-        cy.expectChallengeSolved({ challenge: "Bjoern's Favorite Pet" })
+        cy.get('.error')
+          .should('not.be.hidden')
+          .and('contain', 'Password recovery with this security question is no longer supported.')
       })
     })
   })

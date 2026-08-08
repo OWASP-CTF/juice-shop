@@ -146,7 +146,7 @@ void describe('/rest/user/reset-password', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('POST password reset for Bjoern\u00b4s OWASP account with correct answer to his security question', async () => {
+  void it('POST password reset for Bjoern\u00b4s OWASP account rejects pet-based recovery', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
       .set({ 'content-type': 'application/json' })
@@ -157,7 +157,8 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'kitten lesser pooch karate buffoon indoors'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 410)
+    assert.ok(res.text.includes('Password recovery with this security question is no longer supported.'))
   })
 
   void it('POST password reset for Morty with correct answer to his security question', async () => {
