@@ -40,18 +40,17 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
-          if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
-            challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
-              return utils.contains(
-                sanitizedComment,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
-          }
+          // Always apply the strict sanitizer - sanitizeHtml alone is not sufficient to
+          // stop stored XSS via the feedback comment field.
+          const sanitizedComment = security.sanitizeSecure(comment)
+          // Detection stays wired up, evaluated against what we actually persist, so it
+          // can only report "solved" if the sanitizer ever stops holding.
+          challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
+            return utils.contains(
+              sanitizedComment,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
           this.setDataValue('comment', sanitizedComment)
         }
       },

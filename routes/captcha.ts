@@ -28,7 +28,10 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // The solution must stay server-side only. Echoing it back in the response lets a client
+    // solve any CAPTCHA it is given without ever evaluating the expression itself, which
+    // defeats the whole point of proving a human solved it.
+    res.json({ captchaId: captcha.captchaId, captcha: captcha.captcha })
   }
 }
 
@@ -36,6 +39,9 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      /* A CAPTCHA answer is valid for exactly one submission, otherwise it can be requested
+         once and then replayed to push through an unlimited number of automated requests. */
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

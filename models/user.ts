@@ -46,29 +46,25 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
-          this.setDataValue('username', username)
+          // Always apply the strict sanitizer - the legacy one is not sufficient to stop
+          // stored XSS via the username field.
+          this.setDataValue('username', security.sanitizeSecure(username))
         }
       },
       email: {
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
-          this.setDataValue('email', email)
+          // Always apply the strict sanitizer, and keep detection wired up against the
+          // sanitized value so it can only fire if that sanitizer ever stops holding.
+          const sanitizedEmail = security.sanitizeSecure(email)
+          challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
+            return utils.contains(
+              sanitizedEmail,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('email', sanitizedEmail)
         }
       }, // vuln-code-snippet hide-end
       password: {

@@ -43,17 +43,18 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
-          if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-            challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
-              return utils.contains(
-                description,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            description = security.sanitizeSecure(description)
-          }
-          this.setDataValue('description', description)
+          // Always sanitize - this field is reachable directly via the REST API
+          // (bypassing the Angular frontend entirely), so client-side trust bypasses
+          // do not help here. Stored/persisted XSS must be stopped at the model layer.
+          const sanitizedDescription = security.sanitizeSecure(description)
+          // Detection stays wired up, evaluated against what we actually persist.
+          challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
+            return utils.contains(
+              sanitizedDescription,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('description', sanitizedDescription)
         }
       },
       price: DataTypes.DECIMAL,
