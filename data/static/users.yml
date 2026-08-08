@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    answer: 'correct-horse-battery-staple-9f3a' # rotated — no longer publicly guessable
 -
   email: chris.pike
   password: 'uss enterprise'
