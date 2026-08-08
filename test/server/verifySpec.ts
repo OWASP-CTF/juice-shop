@@ -101,13 +101,22 @@ describe('verify', () => {
       expect(challenges.adminSectionChallenge.solved).to.equal(true)
     })
 
-    it('"tokenSaleChallenge" is solved when the 56px.png transpixel is requested', () => {
+    it('"tokenSaleChallenge" remains unsolved when the legacy 56px.png transpixel is requested', () => {
       challenges.tokenSaleChallenge = { solved: false, save } as unknown as Challenge
       req.url = 'http://juice-sh.op/public/images/padding/56px.png'
 
       verify.accessControlChallenges()(req, res, next)
 
-      expect(challenges.tokenSaleChallenge.solved).to.equal(true)
+      expect(challenges.tokenSaleChallenge.solved).to.equal(false)
+    })
+
+    it('"web3SandboxChallenge" remains unsolved when the legacy 11px.png transpixel is requested', () => {
+      challenges.web3SandboxChallenge = { solved: false, save } as unknown as Challenge
+      req.url = 'http://juice-sh.op/public/images/padding/11px.png'
+
+      verify.accessControlChallenges()(req, res, next)
+
+      expect(challenges.web3SandboxChallenge.solved).to.equal(false)
     })
 
     it('"extraLanguageChallenge" is solved when the Klingon translation file is requested', () => {
