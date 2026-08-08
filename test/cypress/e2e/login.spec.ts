@@ -117,11 +117,11 @@ describe('/#/login', () => {
   })
 
   describe('challenge "twoFactorAuthUnsafeSecretStorage"', () => {
-    it('should be able to log into a existing 2fa protected account given the right token', () => {
+    it('should log into a 2fa account without marking unsafe secret storage solved', () => {
       cy.task<string>('GetFromConfig', 'application.domain').then(
         (appDomain: string) => {
-          cy.get('#email').type(`wurstbrot@${appDomain}'--`)
-          cy.get('#password').type('Never mind...')
+          cy.get('#email').type(`wurstbrot@${appDomain}`)
+          cy.get('#password').type('EinBelegtesBrotMitSchinkenSCHINKEN!')
           cy.get('#loginButton').click()
         }
       )
@@ -132,7 +132,9 @@ describe('/#/login', () => {
           void cy.get('#totpSubmitButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Two Factor Authentication' })
+      cy.request('/api/Challenges/?name=Two Factor Authentication').then((response) => {
+        expect(response.body.data[0].solved).to.equal(false)
+      })
     })
   })
 

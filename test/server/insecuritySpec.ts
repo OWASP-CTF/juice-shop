@@ -203,4 +203,24 @@ describe('insecurity', () => {
       expect(security.hmac('')).to.equal('f052179ec5894a2e79befa8060cfcb517f1e14f7f6222af854377b6481ae953e')
     })
   })
+
+  describe('TOTP secret encryption', () => {
+    const secret = 'IFTXE3SPOEYVURT2MRYGI52TKJ4HC3KH'
+
+    it('encrypts and decrypts a TOTP secret', () => {
+      const encrypted = security.encryptTotpSecret(secret)
+
+      expect(encrypted).not.to.equal(secret)
+      expect(encrypted).to.match(/^v1:/)
+      expect(security.decryptTotpSecret(encrypted)).to.equal(secret)
+    })
+
+    it('rejects ciphertext that fails authentication', () => {
+      const encrypted = security.encryptTotpSecret(secret)
+      const parts = encrypted.split(':')
+      parts[3] = (parts[3][0] === 'A' ? 'B' : 'A') + parts[3].slice(1)
+
+      expect(() => security.decryptTotpSecret(parts.join(':'))).to.throw()
+    })
+  })
 })

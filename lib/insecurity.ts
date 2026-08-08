@@ -21,6 +21,8 @@ import * as z85 from 'z85'
 
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
 const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const totpSecretEncryptionKey = crypto.createHmac('sha256', privateKey).update('juice-shop:totp-secret:v1').digest()
+const totpSecretEncryptionVersion = 'v1'
 
 interface ResponseWithUser {
   status?: string
@@ -42,6 +44,54 @@ interface IAuthenticatedUsers {
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+
+export const encryptTotpSecret = (secret?: string) => {
+  if (!secret) {
+    return ''
+  }
+
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', totpSecretEncryptionKey, iv)
+  const ciphertext = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()])
+  const authTag = cipher.getAuthTag()
+  return [totpSecretEncryptionVersion, iv.toString('base64url'), authTag.toString('base64url'), ciphertext.toString('base64url')].join(':')
+}
+
+export const decryptTotpSecret = (encryptedSecret?: string) => {
+  if (!encryptedSecret) {
+    return ''
+  }
+
+  const [version, encodedIv, encodedAuthTag, encodedCiphertext, ...unexpected] = encryptedSecret.split(':')
+  if (version !== totpSecretEncryptionVersion || !encodedIv || !encodedAuthTag || !encodedCiphertext || unexpected.length > 0) {
+    throw new Error('Invalid encrypted TOTP secret')
+  }
+
+  const iv = Buffer.from(encodedIv, 'base64url')
+  const authTag = Buffer.from(encodedAuthTag, 'base64url')
+  if (iv.length !== 12 || authTag.length !== 16) {
+    throw new Error('Invalid encrypted TOTP secret')
+  }
+
+  const decipher = crypto.createDecipheriv('aes-256-gcm', totpSecretEncryptionKey, iv)
+  decipher.setAuthTag(authTag)
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(encodedCiphertext, 'base64url')),
+    decipher.final()
+  ])
+  return plaintext.toString('utf8')
+}
+
+const withoutTotpSecret = <T>(payload: T): T => {
+  const candidate = payload as any
+  if (!candidate?.data || typeof candidate.data !== 'object') {
+    return payload
+  }
+
+  const data = typeof candidate.data.toJSON === 'function' ? candidate.data.toJSON() : { ...candidate.data }
+  delete data.totpSecret
+  return { ...candidate, data }
+}
 
 const jwtAlgorithm = 'RS256'
 const verifyJws = jws.verify as unknown as ((signature: string, secretOrKey: string) => boolean)
@@ -98,7 +148,7 @@ export const cutOffPoisonNullByte = (str: string) => {
 
 export const isAuthorized = () => jwtAuthentication(publicKey)
 export const denyAll = () => jwtAuthentication('' + Math.random())
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
+export const authorize = (user = {}) => jwt.sign(withoutTotpSecret(user), privateKey, { expiresIn: '6h', algorithm: 'RS256' })
 export const verify = (token?: string) => verifiedJwtPayload(token) !== undefined
 export const decode = (token?: string) => verifiedJwtPayload(token)
 
@@ -118,8 +168,9 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
   put: function (token: string, user: ResponseWithUser) {
-    this.tokenMap[token] = user
-    this.idMap[user.data.id] = token
+    const safeUser = withoutTotpSecret(user)
+    this.tokenMap[token] = safeUser
+    this.idMap[safeUser.data.id] = token
   },
   get: function (token?: string) {
     return token ? this.tokenMap[utils.unquote(token)] : undefined

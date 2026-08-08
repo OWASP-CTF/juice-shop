@@ -398,6 +398,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
     if (req.body && typeof req.body === 'object') {
       req.body.role = security.roles.customer
+      delete req.body.totpSecret
     }
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
