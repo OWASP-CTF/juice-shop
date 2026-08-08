@@ -23,7 +23,7 @@ export function createProductReviews () {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        author: user?.data?.email, // Always take the author from the authenticated session, never from the request body
         likesCount: 0,
         likedBy: []
       })
