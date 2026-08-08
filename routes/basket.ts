@@ -16,25 +16,39 @@ export function retrieveBasket () {
       const id = req.params.id
       const user = security.authenticatedUsers.from(req)
 
+      if (user == null || user.bid == null) {
+        res.status(401).json({
+          error: 'Unauthorized'
+        })
+        return
+      }
+
+      const requestedBasketId = Number(id)
+      const userBasketId = Number(user.bid)
+
       if (
-        !user ||
-        !user.bid ||
-        !id ||
-        id === 'undefined' ||
-        id === 'null' ||
-        id === 'NaN' ||
-        user.bid !== parseInt(id, 10)
+        !Number.isInteger(requestedBasketId) ||
+        requestedBasketId <= 0
       ) {
+        res.status(400).json({
+          error: 'Invalid BasketId'
+        })
+        return
+      }
+
+      /*
+       * A user may only retrieve their own basket.
+       */
+      if (requestedBasketId !== userBasketId) {
         res.status(403).json({
-          status: 'error',
-          message: 'Access denied.'
+          error: 'Access denied'
         })
         return
       }
 
       const basket = await BasketModel.findOne({
         where: {
-          id: user.bid
+          id: userBasketId
         },
         include: [{
           model: ProductModel,
@@ -43,7 +57,17 @@ export function retrieveBasket () {
         }]
       })
 
-      if (basket?.Products != null && basket.Products.length > 0) {
+      if (basket == null) {
+        res.status(404).json({
+          error: 'Basket not found'
+        })
+        return
+      }
+
+      if (
+        basket.Products != null &&
+        basket.Products.length > 0
+      ) {
         for (let i = 0; i < basket.Products.length; i++) {
           basket.Products[i].name = req.__(basket.Products[i].name)
         }
