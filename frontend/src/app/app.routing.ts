@@ -182,10 +182,11 @@ const routes: Routes = [
     path: 'hacking-instructor',
     component: SearchResultComponent
   },
-  { // vuln-code-snippet neutral-line scoreBoardChallenge
-    path: 'score-board', // vuln-code-snippet vuln-line scoreBoardChallenge
-    component: ScoreBoardComponent // vuln-code-snippet neutral-line scoreBoardChallenge
-  }, // vuln-code-snippet neutral-line scoreBoardChallenge
+  { // score-board route restricted to admin only
+    path: 'score-board',
+    component: ScoreBoardComponent,
+    canActivate: [AdminGuard]
+  },
   {
     path: 'track-result',
     component: TrackResultComponent

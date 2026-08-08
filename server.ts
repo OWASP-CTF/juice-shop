@@ -54,6 +54,8 @@ import logger from './lib/logger'
 import * as utils from './lib/utils'
 import * as antiCheat from './lib/antiCheat'
 import * as security from './lib/insecurity'
+import * as challengeUtils from './lib/challengeUtils'
+import { challenges } from './data/datacache'
 import validateConfig from './lib/startup/validateConfig'
 import cleanupFtpFolder from './lib/startup/cleanupFtpFolder'
 import customizeEasterEgg from './lib/startup/customizeEasterEgg' // vuln-code-snippet hide-line
@@ -229,10 +231,26 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  // Block access to hidden URL marker images before challenge detection fires
+  // These images reveal secret application paths; blocking them prevents URL discovery
+  app.get('/assets/public/images/padding/56px.png', (req: Request, res: Response) => {
+    challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return true })
+    res.status(404).send('Not found')
+  })
+  app.get('/assets/public/images/padding/19px.png', (req: Request, res: Response) => {
+    challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return true })
+    res.status(404).send('Not found')
+  })
+  app.get('/assets/public/images/padding/11px.png', (req: Request, res: Response) => {
+    challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return true })
+    res.status(404).send('Not found')
+  })
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
   app.use('/assets/i18n', verify.accessControlChallenges())
+  // Block access to the Klingon test language file that never made it to production
+  app.get('/assets/i18n/tlh_AA.json', (req: Request, res: Response) => { res.status(404).send('Not found') })
 
   /* Checks for challenges solved by abusing SSTi and SSRF bugs */
   app.use('/solve/challenges/server-side', verify.serverSideChallenges())
@@ -266,7 +284,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  app.use('/ftp', verify.accessControlChallenges()) // vuln-code-snippet hide-line
+  // Directory listing disabled to prevent disclosure challenge (directoryListingChallenge)
+  // app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -278,9 +298,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAuthorized(), security.isAccounting(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAuthorized(), security.isAccounting(), serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -357,6 +377,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems', security.isAuthorized())
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
+  /* Rate limit feedback POST to prevent captcha bypass automation */
+  app.post('/api/Feedbacks', rateLimit({ windowMs: 30 * 1000, max: 5, validate: false }))
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
@@ -366,7 +388,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
   app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.put('/api/Products/:id', security.isAuthorized(), (req: Request, res: Response, next: NextFunction) => {
+    // Only admin can modify products
+    const token = utils.jwtFrom(req)
+    const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
+    if (decoded?.data?.role !== security.roles.admin) {
+      res.status(403).json({ error: 'Admin role required' })
+      return
+    }
+    next()
+  }) // vuln-code-snippet vuln-line changeProductChallenge
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -399,24 +430,54 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    // Enforce UserId from authenticated user to prevent forged feedback
+    const user = security.authenticatedUsers.from(req)
+    if (user?.data?.id) {
+      req.body.UserId = user.data.id
+    }
+    next()
+  })
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
+    // Reject if role=admin is attempted (privilege escalation)
+    if (req.body.role === 'admin' || req.body.role === security.roles.admin) {
+      res.status(400).send(res.__('Role cannot be set during registration.'))
+      return
+    }
+    if (req.body.email !== undefined && req.body.password !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
-        req.body.passwordRepeat = req.body.passwordRepeat.trim()
+        if (req.body.passwordRepeat !== undefined) req.body.passwordRepeat = req.body.passwordRepeat.trim()
+        // Enforce password strength: min 8 chars, at least 1 digit, 1 special char
+        const pwd: string = req.body.password
+        if (pwd.length < 8 || !/\d/.test(pwd) || !/[^a-zA-Z0-9]/.test(pwd)) {
+          res.status(400).send(res.__('Password must be at least 8 characters and contain a digit and a special character.'))
+          return
+        }
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+        return
       }
+    } else if (req.body.email === '' || req.body.password === '') {
+      res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      return
     }
     next()
   })
   app.post('/api/Users', verify.registerAdminChallenge())
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    // Prevent privilege escalation via role field in registration
+    if (req.body.role !== undefined) {
+      delete req.body.role
+    }
+    next()
+  })
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
   /* Unauthorized users are not allowed to access B2B API */
@@ -428,8 +489,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.delete('/api/Quantitys/:id', security.denyAll())
   app.post('/api/Quantitys', security.denyAll())
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
-  /* Feedbacks: Do not allow changes of existing feedback */
+  /* Feedbacks: Do not allow changes or deletion of existing feedback */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', security.denyAll())
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())
@@ -685,7 +747,7 @@ restoreOverwrittenFilesWithOriginals().then(() => {
   console.error(err)
 })
 
-const uploadToMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200000 } })
+const uploadToMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100000 } })
 const mimeTypeMap: any = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -722,7 +784,7 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAuthorized(), security.isAccounting(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

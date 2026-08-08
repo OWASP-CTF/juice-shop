@@ -32,6 +32,12 @@ export function profileImageFileUpload () {
       next(new Error(`Profile image upload does not accept this file type${uploadedFileType ? (': ' + uploadedFileType.mime) : '.'}`))
       return
     }
+    // Block SVG uploads to prevent SVG-based XSS injection (svgInjectionChallenge)
+    if (uploadedFileType.mime === 'image/svg+xml' || uploadedFileType.ext === 'svg') {
+      res.status(415)
+      next(new Error('SVG files are not allowed for profile images.'))
+      return
+    }
     const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
     if (!loggedInUser) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))

@@ -66,9 +66,21 @@ function checkUploadSize ({ file }: Request, res: Response, next: NextFunction) 
 
 function checkFileType ({ file }: Request, res: Response, next: NextFunction) {
   const fileType = file?.originalname.substr(file.originalname.lastIndexOf('.') + 1).toLowerCase()
+  // Only allow PDF and ZIP; XML/YAML are deprecated for security reasons
+  const isAllowedType = fileType === 'pdf' || fileType === 'zip'
+  // Detect deprecated interface via XML/YAML upload before blocking
+  if (fileType === 'xml' || fileType === 'yml' || fileType === 'yaml') {
+    challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
+    res.status(410).json({ error: 'B2B customer complaints via XML/YAML file upload have been deprecated for security reasons.' })
+    return
+  }
   challengeUtils.solveIf(challenges.uploadTypeChallenge, () => {
-    return !(fileType === 'pdf' || fileType === 'xml' || fileType === 'zip' || fileType === 'yml' || fileType === 'yaml')
+    return !isAllowedType
   })
+  if (!isAllowedType) {
+    res.status(415).json({ error: 'Invalid file type. Only .pdf and .zip are allowed.' })
+    return
+  }
   next()
 }
 
@@ -80,7 +92,7 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

@@ -18,6 +18,24 @@ export function profileImageUrlUpload () {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
       if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+      // Block SSRF attempts to internal addresses and server-side challenge path
+      if (url.match(/solve\/challenges\/server-side/) !== null) {
+        res.location(process.env.BASE_PATH + '/profile')
+        res.redirect(process.env.BASE_PATH + '/profile')
+        return
+      }
+      try {
+        const parsedUrl = new URL(url)
+        const hostname = parsedUrl.hostname
+        const internalPatterns = [/^127\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^::1$/, /^localhost$/i, /^0\.0\.0\.0$/, /^app$/i]
+        if (internalPatterns.some(p => p.test(hostname))) {
+          res.location(process.env.BASE_PATH + '/profile')
+          res.redirect(process.env.BASE_PATH + '/profile')
+          return
+        }
+      } catch {
+        // invalid URL, let it fail naturally
+      }
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {

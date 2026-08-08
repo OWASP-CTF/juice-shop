@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'admin123'
+  password: 'Adm1n!Str@t0r#2026'
   key: admin
   role: 'admin'
   securityQuestion:
@@ -112,7 +112,7 @@
     answer: 'Brd?j8sEMziOvvBf§Be?jFZ77H?hgm'
 -
   email: support
-  password: 'J6aVjTgOpRs@?5l!Zkq2AYnCE@RF$P'
+  password: 'Su9p0rt#T3am!S3cur3Pw2026'
   key: support
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'Am3!liafuentEs#29Kif'
   key: amy
   role: 'customer'
   walletBalance: 48

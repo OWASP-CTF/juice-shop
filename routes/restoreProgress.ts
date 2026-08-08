@@ -21,16 +21,17 @@ export function restoreProgress () {
       return res.status(404).send(invalidContinueCode)
     }
     const ids = hashids.decode(continueCode)
-    if (challengeUtils.notSolved(challenges.continueCodeChallenge) && ids.includes(999)) {
-      challengeUtils.solve(challenges.continueCodeChallenge)
-      res.end()
-    } else if (ids.length > 0) {
+    // Detect and block non-existent challenge IDs (challenge #999 exploit)
+    const validIds = new Set(Object.values(challenges).map(c => c.id))
+    challengeUtils.solveIf(challenges.continueCodeChallenge, () => (ids as number[]).includes(999))
+    const filteredIds = (ids as number[]).filter((id: number) => validIds.has(id))
+    if (filteredIds.length > 0) {
       for (const challenge of Object.values(challenges)) {
-        if (ids.includes(challenge.id)) {
+        if (filteredIds.includes(challenge.id)) {
           challengeUtils.solve(challenge, true)
         }
       }
-      res.json({ data: ids.length + ' solved challenges have been restored.' })
+      res.json({ data: filteredIds.length + ' solved challenges have been restored.' })
     } else {
       res.status(404).send(invalidContinueCode)
     }
