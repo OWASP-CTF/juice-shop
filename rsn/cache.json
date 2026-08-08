@@ -41,28 +41,40 @@
 	},
 	"changeProductChallenge_1.ts": {
 		"added": [
-			48
+			48,
+			80
 		],
-		"removed": []
+		"removed": [
+			80
+		]
 	},
 	"changeProductChallenge_2.ts": {
 		"added": [
 			18,
-			48
+			48,
+			80
 		],
-		"removed": []
+		"removed": [
+			77
+		]
 	},
 	"changeProductChallenge_3_correct.ts": {
 		"added": [
-			48
+			48,
+			80
 		],
-		"removed": []
+		"removed": [
+			79
+		]
 	},
 	"changeProductChallenge_4.ts": {
 		"added": [
-			48
+			48,
+			80
 		],
-		"removed": []
+		"removed": [
+			80
+		]
 	},
 	"chatbotGreedyInjectionChallenge_1.ts": {
 		"added": [

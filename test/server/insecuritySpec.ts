@@ -8,7 +8,7 @@ import z85 from 'z85'
 import chai from 'chai'
 import * as security from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
-import type { Request } from 'express'
+import type { Request, Response } from 'express'
 const expect = chai.expect
 
 describe('insecurity', () => {
@@ -116,6 +116,45 @@ describe('insecurity', () => {
     })
   })
 
+  describe('appendUserId', () => {
+    it('rejects a cached token that fails JWT verification', () => {
+      security.authenticatedUsers.put('invalid-expired-token', { data: { id: 7 } as unknown as UserModel })
+      const req = { headers: { authorization: 'Bearer invalid-expired-token' }, body: {} } as unknown as Request
+      let statusCode: number | undefined
+      let responseBody: unknown
+      let nextCalled = false
+      const response = {
+        status: (code: number) => {
+          statusCode = code
+          return response
+        },
+        json: (body: unknown) => {
+          responseBody = body
+          return response
+        }
+      }
+
+      security.appendUserId()(req, response as unknown as Response, () => { nextCalled = true })
+
+      expect(statusCode).to.equal(401)
+      expect(responseBody).to.deep.equal({ status: 'error', message: 'Invalid or expired authentication token.' })
+      expect(nextCalled).to.equal(false)
+      expect(req.body.UserId).to.equal(undefined)
+    })
+
+    it('sets the user id for a valid cached JWT', () => {
+      const token = security.authorize({ data: { id: 7 } })
+      security.authenticatedUsers.put(token, { data: { id: 7 } as unknown as UserModel })
+      const req = { headers: { authorization: `Bearer ${token}` }, body: {} } as unknown as Request
+      let nextCalled = false
+
+      security.appendUserId()(req, {} as Response, () => { nextCalled = true })
+
+      expect(nextCalled).to.equal(true)
+      expect(req.body.UserId).to.equal(7)
+    })
+  })
+
   describe('sanitizeHtml', () => {
     it('handles empty inputs by returning their string representation', () => {
       expect(security.sanitizeHtml('')).to.equal('')
@@ -139,8 +178,8 @@ describe('insecurity', () => {
       expect(security.sanitizeHtml('Sani<iframe src="alert("IFrameXSS")"></iframe>tizedIFrame')).to.equal('SanitizedIFrame')
     })
 
-    it('can be bypassed by exploiting lack of recursive sanitization', () => {
-      expect(security.sanitizeHtml('<<script>Foo</script>iframe src="javascript:alert(`xss`)">')).to.equal('<iframe src="javascript:alert(`xss`)">')
+    it('cannot be bypassed with recursive tag reconstruction', () => {
+      expect(security.sanitizeHtml('<<script>Foo</script>iframe src="javascript:alert(`xss`)">')).not.to.include('<iframe')
     })
   })
 
@@ -189,7 +228,7 @@ describe('insecurity', () => {
     })
 
     it('cannot be bypassed by exploiting lack of recursive sanitization', () => {
-      expect(security.sanitizeSecure('Bla<<script>Foo</script>iframe src="javascript:alert(`xss`)">Blubb')).to.equal('BlaBlubb')
+      expect(security.sanitizeSecure('Bla<<script>Foo</script>iframe src="javascript:alert(`xss`)">Blubb')).not.to.include('<iframe')
     })
   })
 

@@ -6,9 +6,8 @@
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
-import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
 import sanitizeFilenameLib from 'sanitize-filename'
 import * as utils from './utils'
@@ -90,7 +89,7 @@ export const hasExpectedJwtAlgorithm = (token?: string) => {
 }
 
 export const isAuthorized = () => {
-  const verifyToken = expressJwt(({ secret: publicKey }) as any)
+  const verifyToken = expressjwt({ secret: publicKey, algorithms: [expectedJwtAlgorithm] })
   return (req: Request, res: Response, next: NextFunction) => {
     if (!hasExpectedJwtAlgorithm(utils.jwtFrom(req))) {
       res.status(401).send()
@@ -99,7 +98,7 @@ export const isAuthorized = () => {
     verifyToken(req, res, next)
   }
 }
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const denyAll = () => expressjwt({ secret: crypto.randomBytes(32), algorithms: ['HS256'] })
 export const authorize = (payload: any = {}) => {
   if (payload?.data && typeof payload.data === 'object') {
     const exposableFields = ['id', 'username', 'email', 'role', 'deluxeToken', 'lastLoginIp', 'profileImage', 'isActive']
@@ -110,8 +109,16 @@ export const authorize = (payload: any = {}) => {
   }
   return jwt.sign(payload, privateKey, { expiresIn: '6h', algorithm: expectedJwtAlgorithm })
 }
-export const verify = (token: string) => hasExpectedJwtAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
-export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const verify = (token: string) => {
+  if (!hasExpectedJwtAlgorithm(token)) return false
+  try {
+    jwt.verify(token, publicKey, { algorithms: [expectedJwtAlgorithm] })
+    return true
+  } catch {
+    return false
+  }
+}
+export const decode = (token: string): any => jwt.decode(token)
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -249,12 +256,16 @@ export const isCustomer = (req: Request) => {
 
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
-      next()
-    } catch (error: unknown) {
-      res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
+    const token = utils.jwtFrom(req)
+    const authenticatedUser = token && verify(token) ? authenticatedUsers.get(token) : undefined
+    if (!authenticatedUser) {
+      res.status(401).json({ status: 'error', message: 'Invalid or expired authentication token.' })
+      return
     }
+
+    req.body ??= {}
+    req.body.UserId = authenticatedUser.data.id
+    next()
   }
 }
 
