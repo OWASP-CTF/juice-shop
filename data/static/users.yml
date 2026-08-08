@@ -182,7 +182,9 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    # The previous answer was stated by the account owner on camera in a public
+    # video, so it was recoverable by anyone who looked him up.
+    answer: 'Xq4mX7X0d7fmr5PWXgHFY9qzOenIeMYp'
 -
   email: chris.pike
   password: 'Rb8*wKn5Jy2Gt7Md4Xq9Zc6Hv3Fp'

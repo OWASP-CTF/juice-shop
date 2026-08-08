@@ -53,7 +53,8 @@ export function changePassword () {
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      /* Echoing the model returned the freshly stored password hash. */
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

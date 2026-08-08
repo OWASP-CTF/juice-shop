@@ -19,18 +19,28 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
-        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      /* The true-client-ip header is attacker controlled and is rendered back on
+         the profile page, so it was stored XSS whenever the value skipped the
+         sanitiser. It is now sanitised whenever the header is present, and the
+         connection address is still used when it is not. */
+      if (lastLoginIp !== undefined) {
+        lastLoginIp = security.sanitizeSecure(lastLoginIp)
       } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      }
-      if (lastLoginIp === undefined) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json(updatedUser)
+        /* Returning the model verbatim handed back every column, including the
+           stored password hash and the TOTP secret, to anyone hitting this
+           endpoint. Only the fields the caller needs are echoed. */
+        res.json({
+          id: updatedUser?.id,
+          email: updatedUser?.email,
+          lastLoginIp: updatedUser?.lastLoginIp,
+          profileImage: updatedUser?.profileImage
+        })
       } catch (error) {
         next(error)
       }

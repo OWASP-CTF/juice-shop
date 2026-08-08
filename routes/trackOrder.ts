@@ -11,8 +11,10 @@ import { challenges } from '../data/datacache'
 
 export function trackOrder () {
   return (req: Request, res: Response) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.reflectedXssChallenge) ? String(req.params.id).replace(/[^\w-]+/g, '') : utils.trunc(req.params.id, 60)
+    /* The order id is echoed back to the client, so leaving markup in it was a
+       reflected XSS. It is now always reduced to word characters and dashes,
+       instead of only when the challenge happened to be disabled. */
+    const id = String(req.params.id).replace(/[^\w-]+/g, '')
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
     db.ordersCollection.find({ orderId: id }).then((order: any) => {
