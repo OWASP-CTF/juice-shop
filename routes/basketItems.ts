@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -44,8 +45,13 @@ export function addBasketItem () {
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
 
-      const basketItemInstance = BasketItemModel.build(basketItem)
       try {
+        const product = await ProductModel.findByPk(basketItem.ProductId) // paranoid model: excludes soft-deleted products
+        if (product == null) {
+          res.status(400).json({ error: 'Product does not exist' })
+          return
+        }
+        const basketItemInstance = BasketItemModel.build(basketItem)
         const addedBasketItem = await basketItemInstance.save()
         res.json({ status: 'success', data: addedBasketItem })
       } catch (error) {
@@ -68,6 +74,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+      if (req.body.ProductId) {
+        const product = await ProductModel.findByPk(req.body.ProductId) // paranoid model: excludes soft-deleted products
+        if (product == null) {
+          res.status(400).json({ error: 'Product does not exist' })
+          return
+        }
+      }
       if (req.body.quantity) {
         if (item == null) {
           throw new Error('No such item found!')
