@@ -34,12 +34,16 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    /* Validate the very BasketId that is actually used below: checking basketIds[0] while the
+       item was built from the last entry let a duplicated key slip a foreign basket past this
+       check. */
+    const requestedBasketId = basketIds[basketIds.length - 1]
+    if (user && requestedBasketId && requestedBasketId !== 'undefined' && Number(user.bid) != Number(requestedBasketId)) { // eslint-disable-line eqeqeq
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        BasketId: requestedBasketId,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -83,6 +87,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  /* A negative or fractional quantity passed every check below and could drive an order total
+     negative, so only a positive whole number of items is ever accepted. */
+  if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
+    res.status(400).json({ error: res.__('Invalid quantity.') })
+    return
+  }
+
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')

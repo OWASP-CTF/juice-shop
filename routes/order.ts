@@ -32,7 +32,10 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
-    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+    /* Products that were taken out of the assortment are only flagged as deleted, not actually
+       removed. Overriding the soft-delete filter here is what let a discontinued item still be
+       ordered, so it is honoured like everywhere else in the app. */
+    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: true, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)

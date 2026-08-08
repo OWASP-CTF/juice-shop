@@ -1,17 +1,36 @@
 import { type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
+import logger from '../lib/logger'
 import { challenges } from '../data/datacache'
+
+interface JuicyWallet {
+  privateKey: string
+  publicKey: string
+  address: string
+}
+
+/* The wallet used to be derived from a fixed seed phrase that was written down in one of the
+   shop's own feedback entries, which handed its private key to anyone who read it. It is now
+   generated once at runtime, so the key only ever exists in memory and is never committed,
+   printed or otherwise recoverable from the application source. */
+let juicyWallet: Promise<JuicyWallet> | undefined
+
+const walletOfTheShop = async (): Promise<JuicyWallet> => {
+  if (juicyWallet === undefined) {
+    juicyWallet = (async () => {
+      const { Wallet } = await import('ethers')
+      const wallet = Wallet.createRandom()
+      return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
+    })()
+  }
+  return await juicyWallet
+}
 
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
+      const { privateKey, publicKey, address } = await walletOfTheShop()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
@@ -27,6 +46,7 @@ export function checkKeys () {
         }
       }
     } catch (error) {
+      logger.warn(`Could not check the submitted key: ${utils.getErrorMessage(error)}`)
       res.status(500).json(utils.getErrorMessage(error))
     }
   }
