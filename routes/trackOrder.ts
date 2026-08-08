@@ -14,12 +14,14 @@ export function trackOrder () {
     // Never build a $where clause from user input (NoSQL injection / exfiltration), and
     // always strip anything that isn't a safe order-id character before ever reflecting
     // it back in a response (reflected XSS).
-    const rawId = utils.trunc(req.params.id, 60)
-    const id = String(req.params.id).replace(/[^\w-]+/g, '')
+    const id = utils.trunc(String(req.params.id).replace(/[^\w-]+/g, ''), 60)
 
-    challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(rawId, '<iframe src="javascript:alert(`xss`)">') })
+    // Challenge detection stays in place and is evaluated against the value we actually
+    // reflect, so it reports "still vulnerable" only if the sanitizer ever fails to hold.
+    challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
     db.ordersCollection.find({ orderId: id }).then((order: any) => {
       const result = utils.queryResultToJson(order)
+      challengeUtils.solveIf(challenges.noSqlOrdersChallenge, () => { return result.data.length > 1 })
       if (result.data[0] === undefined) {
         result.data[0] = { orderId: id }
       }

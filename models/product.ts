@@ -4,6 +4,8 @@
  */
 
 /* jslint node: true */
+import * as utils from '../lib/utils'
+import * as challengeUtils from '../lib/challengeUtils'
 import {
   Model,
   type InferAttributes,
@@ -13,6 +15,7 @@ import {
   type Sequelize
 } from 'sequelize'
 import { type BasketItemModel } from './basketitem'
+import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
 class Product extends Model<
@@ -43,7 +46,15 @@ const ProductModelInit = (sequelize: Sequelize) => {
           // Always sanitize - this field is reachable directly via the REST API
           // (bypassing the Angular frontend entirely), so client-side trust bypasses
           // do not help here. Stored/persisted XSS must be stopped at the model layer.
-          this.setDataValue('description', security.sanitizeSecure(description))
+          const sanitizedDescription = security.sanitizeSecure(description)
+          // Detection stays wired up, evaluated against what we actually persist.
+          challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
+            return utils.contains(
+              sanitizedDescription,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('description', sanitizedDescription)
         }
       },
       price: DataTypes.DECIMAL,

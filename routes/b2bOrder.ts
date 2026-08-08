@@ -5,7 +5,10 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 
+import * as challengeUtils from '../lib/challengeUtils'
+import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
+import * as utils from '../lib/utils'
 
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
@@ -18,6 +21,10 @@ export function b2bOrder () {
       try {
         JSON.parse(orderLinesData)
       } catch (err) {
+        // Detection stays wired up on the same conditions as upstream. Parsing inert JSON
+        // can neither spin forever nor exhaust the event loop, so neither can now fire.
+        challengeUtils.solveIf(challenges.rceOccupyChallenge, () => { return utils.getErrorMessage(err).match(/Script execution timed out.*/) != null })
+        challengeUtils.solveIf(challenges.rceChallenge, () => { return utils.getErrorMessage(err) === 'Infinite loop detected - reached max iterations' })
         res.status(400)
         next(new Error('Invalid order line data'))
         return

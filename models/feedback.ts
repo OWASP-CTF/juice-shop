@@ -4,6 +4,7 @@
  */
 
 /* jslint node: true */
+import * as utils from '../lib/utils'
 import * as challengeUtils from '../lib/challengeUtils'
 import {
   Model,
@@ -41,7 +42,16 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
         set (comment: string) {
           // Always apply the strict sanitizer - sanitizeHtml alone is not sufficient to
           // stop stored XSS via the feedback comment field.
-          this.setDataValue('comment', security.sanitizeSecure(comment))
+          const sanitizedComment = security.sanitizeSecure(comment)
+          // Detection stays wired up, evaluated against what we actually persist, so it
+          // can only report "solved" if the sanitizer ever stops holding.
+          challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
+            return utils.contains(
+              sanitizedComment,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('comment', sanitizedComment)
         }
       },
       rating: {
