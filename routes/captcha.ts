@@ -28,7 +28,7 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    res.json({ captchaId, captcha: expression })
   }
 }
 
