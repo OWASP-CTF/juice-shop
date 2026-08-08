@@ -68,7 +68,11 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
+      // Subtitle content is embedded inline inside a <script> element - it must never be
+      // allowed to contain a closing </script> tag, or it could break out and inject
+      // arbitrary markup/script into the page.
+      const safeSubs = subs.replace(/<\/script/gi, '&lt;/script')
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + safeSubs + '</script>')
       res.send(compiledTemplate)
     })
   }
