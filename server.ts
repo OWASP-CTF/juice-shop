@@ -269,8 +269,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
-  /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
+  /* /encryptionkeys direct file access only — directory browsing removed */
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing and access log download removed */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
