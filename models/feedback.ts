@@ -58,6 +58,13 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        /* Only the Angular form enforced the one-to-five star range, so posting
+           straight to the API accepted a zero (or otherwise out-of-range)
+           rating. The bound is now enforced server-side. */
+        validate: {
+          min: 1,
+          max: 5
+        },
         set (rating: number) {
           this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {
