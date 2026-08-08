@@ -181,8 +181,8 @@
   role: 'deluxe'
   profileImage: '13.jpg'
   securityQuestion:
-    id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    id: 13
+    answer: '58c4f3d1-793b-4eb7-a490-39c05b66f62e'
 -
   email: chris.pike
   password: 'uss enterprise'
