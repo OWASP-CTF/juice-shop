@@ -450,6 +450,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* Self-registration must never be able to set attributes beyond an ordinary customer's own
+     email/password - any of these being client-settable would be mass assignment into
+     privileged/internal state. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body) {
+      for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privilegedAttribute]
+      }
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
