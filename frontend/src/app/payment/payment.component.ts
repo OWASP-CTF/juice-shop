@@ -70,9 +70,7 @@ export class PaymentComponent implements OnInit {
   public blueSkyUrl = null
   public redditUrl = null
   public applicationName = 'OWASP Juice Shop'
-  private campaignCoupon: string
-  public couponControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.minLength(10), Validators.maxLength(10)])
-  public clientDate: any
+  public couponControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.minLength(55), Validators.maxLength(55)])
   public paymentId: any = undefined
   public couponPanelExpanded = false
   public paymentPanelExpanded = false
@@ -81,18 +79,6 @@ export class PaymentComponent implements OnInit {
   public walletBalanceStr: string
   public totalPrice: any = 0
   public paymentMode = 'card'
-  private readonly campaigns = {
-    WMNSDY2019: { validOn: 1551999600000, discount: 75 },
-    WMNSDY2020: { validOn: 1583622000000, discount: 60 },
-    WMNSDY2021: { validOn: 1615158000000, discount: 60 },
-    WMNSDY2022: { validOn: 1646694000000, discount: 60 },
-    WMNSDY2023: { validOn: 1678230000000, discount: 60 },
-    ORANGE2020: { validOn: 1588546800000, discount: 50 },
-    ORANGE2021: { validOn: 1620082800000, discount: 40 },
-    ORANGE2022: { validOn: 1651618800000, discount: 40 },
-    ORANGE2023: { validOn: 1683154800000, discount: 40 }
-  }
-
   ngOnInit (): void {
     this.initTotal()
     this.walletService.get().subscribe({
@@ -150,42 +136,16 @@ export class PaymentComponent implements OnInit {
   }
 
   applyCoupon () {
-    this.campaignCoupon = this.couponControl.value
-    this.clientDate = new Date()
-
-    const offsetTimeZone = (this.clientDate.getTimezoneOffset() + 60) * 60 * 1000
-    this.clientDate.setHours(0, 0, 0, 0)
-    this.clientDate = this.clientDate.getTime() - offsetTimeZone
-
-    sessionStorage.setItem('couponDetails', `${this.campaignCoupon}-${this.clientDate}`)
-    const campaign = this.campaigns[this.couponControl.value]
-    if (campaign) {
-      if (this.clientDate === campaign.validOn) {
-        this.showConfirmation(campaign.discount)
-      } else {
+    this.basketService.applyCoupon(Number(sessionStorage.getItem('bid')), encodeURIComponent(this.couponControl.value)).subscribe({
+      next: (discount: any) => {
+        this.showConfirmation(discount)
+      },
+      error: (err) => {
         this.couponConfirmation = undefined
-        this.translate.get('INVALID_COUPON').subscribe({
-          next: (invalidCoupon) => {
-            this.couponError = { error: invalidCoupon }
-          },
-          error: (translationId) => {
-            this.couponError = { error: translationId }
-          }
-        })
+        this.couponError = err
         this.resetCouponForm()
       }
-    } else {
-      this.basketService.applyCoupon(Number(sessionStorage.getItem('bid')), encodeURIComponent(this.couponControl.value)).subscribe({
-        next: (discount: any) => {
-          this.showConfirmation(discount)
-        },
-        error: (err) => {
-          this.couponConfirmation = undefined
-          this.couponError = err
-          this.resetCouponForm()
-        }
-      })
-    }
+    })
   }
 
   showConfirmation (discount) {

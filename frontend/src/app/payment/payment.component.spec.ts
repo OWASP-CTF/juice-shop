@@ -213,6 +213,19 @@ describe('PaymentComponent', () => {
         expect(component.couponError).toBe('Error')
     })
 
+    it('should send historical campaign codes to the server for validation', () => {
+        basketService.applyCoupon.mockReturnValue(throwError('Error'))
+        sessionStorage.setItem('bid', '2')
+        sessionStorage.removeItem('couponDetails')
+        component.couponControl.setValue('WMNSDY2019')
+
+        component.applyCoupon()
+
+        expect(basketService.applyCoupon).toHaveBeenCalledWith(2, 'WMNSDY2019')
+        expect(sessionStorage.getItem('couponDetails')).toBeNull()
+        expect(component.couponConfirmation).toBeUndefined()
+    })
+
     it('should accept a valid coupon code', () => {
         basketService.applyCoupon.mockReturnValue(of(42))
         translateService.get.mockReturnValue(of('DISCOUNT_APPLIED'))

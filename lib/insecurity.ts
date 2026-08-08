@@ -16,13 +16,20 @@ import * as utils from './utils'
 
 /* jslint node: true */
 
-// @ts-expect-error FIXME no typescript definitions for z85 :(
-import * as z85 from 'z85'
-
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
 const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
 const totpSecretEncryptionKey = crypto.createHmac('sha256', privateKey).update('juice-shop:totp-secret:v1').digest()
 const totpSecretEncryptionVersion = 'v1'
+const configuredCouponSecret = process.env.JUICE_SHOP_COUPON_SECRET
+if (configuredCouponSecret !== undefined && Buffer.byteLength(configuredCouponSecret, 'utf8') < 32) {
+  throw new Error('JUICE_SHOP_COUPON_SECRET must contain at least 32 bytes')
+}
+const couponSigningKey = configuredCouponSecret === undefined
+  ? crypto.randomBytes(32)
+  : crypto.createHash('sha256').update(configuredCouponSecret).digest()
+const couponVersion = 'v1'
+const maximumCouponDiscount = 75
+const couponPattern = /^(v1):((?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2}):(\d{2})\.([A-Za-z0-9_-]{43})$/
 
 interface ResponseWithUser {
   status?: string
@@ -193,27 +200,45 @@ export const userEmailFrom = ({ headers }: any) => {
 }
 
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  if (!Number.isInteger(discount) || discount < 1 || discount > maximumCouponDiscount) {
+    throw new RangeError(`Coupon discount must be an integer between 1 and ${maximumCouponDiscount}`)
+  }
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError('Coupon date must be valid')
+  }
+
+  const payload = `${couponVersion}:${utils.toMMMYY(date)}:${discount.toString().padStart(2, '0')}`
+  const signature = crypto.createHmac('sha256', couponSigningKey).update(payload).digest('base64url')
+  return `${payload}.${signature}`
 }
 
 export const discountFromCoupon = (coupon?: string) => {
   if (!coupon) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
-  }
-}
 
-function hasValidFormat (coupon: string) {
-  return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
+  const match = coupon.match(couponPattern)
+  if (!match) {
+    return undefined
+  }
+
+  const [, version, validity, encodedDiscount, encodedSignature] = match
+  const discount = Number(encodedDiscount)
+  if (version !== couponVersion || !Number.isInteger(discount) || discount < 1 || discount > maximumCouponDiscount) {
+    return undefined
+  }
+
+  const payload = `${version}:${validity}:${encodedDiscount}`
+  const expectedSignature = crypto.createHmac('sha256', couponSigningKey).update(payload).digest()
+  const providedSignature = Buffer.from(encodedSignature, 'base64url')
+  if (providedSignature.length !== expectedSignature.length || providedSignature.toString('base64url') !== encodedSignature) {
+    return undefined
+  }
+  if (!crypto.timingSafeEqual(providedSignature, expectedSignature)) {
+    return undefined
+  }
+
+  return utils.toMMMYY(new Date()) === validity ? discount : undefined
 }
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge

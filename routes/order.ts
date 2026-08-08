@@ -35,6 +35,18 @@ export function placeOrder () {
     BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
+          const customer = security.authenticatedUsers.from(req)
+          const userId = customer?.data?.id
+          const email = customer?.data?.email
+          if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0 || typeof email !== 'string' || email.length === 0) {
+            res.status(401).json({ error: res.__('Invalid authentication data.') })
+            return
+          }
+          if (basket.UserId !== userId) {
+            res.status(403).json({ error: res.__('Basket does not belong to the authenticated user.') })
+            return
+          }
+
           const hasInvalidQuantity = basket.Products?.some(({ BasketItem }) => {
             return BasketItem != null && (!Number.isInteger(BasketItem.quantity) || BasketItem.quantity <= 0)
           })
@@ -43,8 +55,6 @@ export function placeOrder () {
             return
           }
 
-          const customer = security.authenticatedUsers.from(req)
-          const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
           const { default: PDFDocument } = await import('pdfkit')
@@ -112,7 +122,7 @@ export function placeOrder () {
             }
           }
           doc.moveDown()
-          const discount = calculateApplicableDiscount(basket, req) ?? 0
+          const discount = calculateApplicableDiscount(basket) ?? 0
           let discountAmount = '0'
           if (discount > 0) {
             discountAmount = (totalPrice * (discount / 100)).toFixed(2)
@@ -145,25 +155,24 @@ export function placeOrder () {
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
-          if (req.body.UserId) {
-            if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
-              const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
-              if ((wallet != null) && wallet.balance >= totalPrice) {
-                await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } })
-              } else {
-                next(new Error('Insufficient wallet balance.'))
-                return
-              }
-            }
-            try {
-              await WalletModel.increment({ balance: totalPoints }, { where: { UserId: req.body.UserId } })
-            } catch (error: unknown) {
-              next(error)
+          if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
+            const wallet = await WalletModel.findOne({ where: { UserId: userId } })
+            if ((wallet != null) && wallet.balance >= totalPrice) {
+              await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: userId } })
+            } else {
+              next(new Error('Insufficient wallet balance.'))
               return
             }
           }
+          try {
+            await WalletModel.increment({ balance: totalPoints }, { where: { UserId: userId } })
+          } catch (error: unknown) {
+            next(error)
+            return
+          }
 
           db.ordersCollection.insert({
+            UserId: userId,
             promotionalAmount: discountAmount,
             paymentId: req.body.orderDetails ? req.body.orderDetails.paymentId : null,
             addressId: req.body.orderDetails ? req.body.orderDetails.addressId : null,
@@ -187,33 +196,10 @@ export function placeOrder () {
   }
 }
 
-function calculateApplicableDiscount (basket: BasketModel, req: Request) {
+function calculateApplicableDiscount (basket: BasketModel) {
   const discount = security.discountFromCoupon(basket.coupon ?? undefined)
   if (discount) {
-    challengeUtils.solveIf(challenges.forgedCouponChallenge, () => { return (discount ?? 0) >= 80 })
     return discount
-  } else if (req.body.couponData) {
-    const couponData = Buffer.from(req.body.couponData, 'base64').toString().split('-')
-    const couponCode = couponData[0]
-    const couponDate = Number(couponData[1])
-    const campaign = campaigns[couponCode as keyof typeof campaigns]
-
-    if (campaign && couponDate == campaign.validOn) { // eslint-disable-line eqeqeq
-      challengeUtils.solveIf(challenges.manipulateClockChallenge, () => { return campaign.validOn < new Date().getTime() })
-      return campaign.discount
-    }
   }
   return 0
-}
-
-const campaigns = {
-  WMNSDY2019: { validOn: new Date('Mar 08, 2019 00:00:00 GMT+0100').getTime(), discount: 75 },
-  WMNSDY2020: { validOn: new Date('Mar 08, 2020 00:00:00 GMT+0100').getTime(), discount: 60 },
-  WMNSDY2021: { validOn: new Date('Mar 08, 2021 00:00:00 GMT+0100').getTime(), discount: 60 },
-  WMNSDY2022: { validOn: new Date('Mar 08, 2022 00:00:00 GMT+0100').getTime(), discount: 60 },
-  WMNSDY2023: { validOn: new Date('Mar 08, 2023 00:00:00 GMT+0100').getTime(), discount: 60 },
-  ORANGE2020: { validOn: new Date('May 04, 2020 00:00:00 GMT+0100').getTime(), discount: 50 },
-  ORANGE2021: { validOn: new Date('May 04, 2021 00:00:00 GMT+0100').getTime(), discount: 40 },
-  ORANGE2022: { validOn: new Date('May 04, 2022 00:00:00 GMT+0100').getTime(), discount: 40 },
-  ORANGE2023: { validOn: new Date('May 04, 2023 00:00:00 GMT+0100').getTime(), discount: 40 }
 }

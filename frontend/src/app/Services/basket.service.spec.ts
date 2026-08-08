@@ -91,12 +91,14 @@ describe('BasketService', () => {
     it('should place order for basket via the rest api', () => {
         const service = TestBed.inject(BasketService)
         const httpMock = TestBed.inject(HttpTestingController)
+        const orderDetails = { paymentId: '1', addressId: '2', deliveryMethodId: '3' }
 
         let res: any
-        service.checkout(1).subscribe((data) => (res = data))
+        service.checkout(1, orderDetails).subscribe((data) => (res = data))
         const req = httpMock.expectOne('http://localhost:3000/rest/basket/1/checkout')
         req.flush({ orderConfirmation: 'apiResponse' })
         expect(req.request.method).toBe('POST')
+        expect(req.request.body).toEqual({ orderDetails })
         expect(res).toBe('apiResponse')
         httpMock.verify()
     })

@@ -76,78 +76,37 @@ describe('/#/basket', () => {
       cy.login({ email: 'jim', password: 'ncc-1701' })
     })
     describe('challenge "manipulateClock"', () => {
-      it('should be possible to enter WMNSDY2019 coupon & place order with this expired coupon', () => {
-        cy.window().then(() => {
-          window.localStorage.couponPanelExpanded = false
-        })
-        cy.visit('/#/payment/shop')
-
+      it('should reject historical campaign coupons without solving the challenge', () => {
         cy.window().then((win) => {
-          cy.on('uncaught:exception', (_err, _runnable) => {
-            // Introduced to disable the uncaught:exception we get after the eval under this as TypeError: Date.now is not a function
-            return false
-          })
-          win.eval(
-            'event = new Date("March 08, 2019 00:00:00"); Date = function(Date){return function() {date = event; return date; }}(Date);'
-          )
+          const basketId = win.sessionStorage.getItem('bid')
+          cy.request({
+            method: 'PUT',
+            url: `/rest/basket/${basketId}/coupon/WMNSDY2019`,
+            failOnStatusCode: false,
+            headers: { Authorization: `Bearer ${win.localStorage.getItem('token')}` }
+          }).its('status').should('equal', 404)
         })
-        cy.get('#collapseCouponElement').click()
-
-        cy.get('#coupon').type('WMNSDY2019')
-        cy.get('#applyCouponButton').click()
-        cy.get('.mat-mdc-radio-button').first().click()
-        cy.get('.nextButton').click()
-        cy.get('#checkoutButton').click()
-        cy.expectChallengeSolved({ challenge: 'Expired Coupon' })
+        cy.request('/api/Challenges/?name=Expired Coupon').then((response) => {
+          expect(response.body.data[0].solved).to.equal(false)
+        })
       })
     })
 
     describe('challenge "forgedCoupon"', () => {
-      it('should be able to access file /ftp/coupons_2013.md.bak with poison null byte attack', () => {
-        cy.request(`${Cypress.config('baseUrl')}/ftp/coupons_2013.md.bak%2500.md`)
-      })
-
-      it('should be possible to add a product in the basket', () => {
-        cy.window().then(async () => {
-          const response = await fetch(
-            `${Cypress.config('baseUrl')}/api/BasketItems/`,
-            {
-              method: 'POST',
-              cache: 'no-cache',
-              headers: {
-                'Content-type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              },
-              body: JSON.stringify({
-                BasketId: `${sessionStorage.getItem('bid')}`,
-                ProductId: 1,
-                quantity: 1
-              })
-            }
-          )
-          if (response.status === 201) {
-            console.log('Success')
-          }
+      it('should reject a source-forged coupon without solving the challenge', () => {
+        const forgedCoupon = `v1:AUG26:90.${'A'.repeat(43)}`
+        cy.window().then((win) => {
+          const basketId = win.sessionStorage.getItem('bid')
+          cy.request({
+            method: 'PUT',
+            url: `/rest/basket/${basketId}/coupon/${encodeURIComponent(forgedCoupon)}`,
+            failOnStatusCode: false,
+            headers: { Authorization: `Bearer ${win.localStorage.getItem('token')}` }
+          }).its('status').should('equal', 404)
         })
-      })
-
-      it('should be possible to enter a coupon that gives an 80% discount', () => {
-        cy.window().then(() => {
-          window.localStorage.couponPanelExpanded = false
+        cy.request('/api/Challenges/?name=Forged Coupon').then((response) => {
+          expect(response.body.data[0].solved).to.equal(false)
         })
-
-        cy.visit('/#/payment/shop')
-        cy.get('#collapseCouponElement').click()
-        cy.task<string>('GenerateCoupon', 90).then((coupon: string) => {
-          cy.get('#coupon').type(coupon)
-          cy.get('#applyCouponButton').click()
-        })
-      })
-
-      it('should be possible to place an order with a forged coupon', () => {
-        cy.visit('/#/order-summary')
-        cy.get('#checkoutButton').click()
-        cy.expectChallengeSolved({ challenge: 'Forged Coupon' })
       })
     })
   })

@@ -76,12 +76,11 @@ export class OrderSummaryComponent implements OnInit {
       addressId: sessionStorage.getItem('addressId'),
       deliveryMethodId: sessionStorage.getItem('deliveryMethodId')
     }
-    this.basketService.checkout(Number(sessionStorage.getItem('bid')), btoa(sessionStorage.getItem('couponDetails')), orderDetails).subscribe({
+    this.basketService.checkout(Number(sessionStorage.getItem('bid')), orderDetails).subscribe({
       next: (orderConfirmationId) => {
         sessionStorage.removeItem('paymentId')
         sessionStorage.removeItem('addressId')
         sessionStorage.removeItem('deliveryMethodId')
-        sessionStorage.removeItem('couponDetails')
         sessionStorage.removeItem('couponDiscount')
         this.basketService.updateNumberOfCartItems()
         this.ngZone.run(async () => await this.router.navigate(['/order-completion', orderConfirmationId]))
