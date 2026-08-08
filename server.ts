@@ -343,7 +343,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    // Key on the actual socket peer address only - a client-supplied header like
+    // X-Forwarded-For must never be trusted to identify the caller for rate limiting,
+    // since an attacker can send a different value on every request to get a fresh
+    // bucket and brute force the security question indefinitely. // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket }: { socket: { remoteAddress?: string } }) { return socket.remoteAddress ?? 'unknown' }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
