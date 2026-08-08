@@ -34,7 +34,7 @@
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'Samuel' # https://en.wikipedia.org/wiki/James_T._Kirk
+    answer: 'Tq8n-Vhe3-Xrz6-Klp1' # replaces the answer findable via public James T. Kirk trivia
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -65,7 +65,7 @@
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: "Stop'n'Drop" # http://futurama.wikia.com/wiki/Suicide_booth
+    answer: 'Bfy4-Nqc9-Wdt2-Ash7' # replaces the answer findable via the Futurama wiki
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -112,7 +112,7 @@
     answer: 'Brd?j8sEMziOvvBf§Be?jFZ77H?hgm'
 -
   email: support
-  password: 'J6aVjTgOpRs@?5l!Zkq2AYnCE@RF$P'
+  password: 'Rk9#pLm3-Wq7zXsE!2yT'
   key: support
   role: 'admin'
   securityQuestion:
@@ -126,10 +126,10 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
+    answer: 'Ryk6-Ejp3-Ftm8-Cnq5' # replaces the leetspeak-obfuscated but still-guessable original answer
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  password: 'Gv6$Jz1nHq4-TuC8we'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -138,7 +138,7 @@
     answer: 'I even shared my pizza bagels with you!'
 -
   email: J12934
-  password: '0Y8rMnww$*9VFYE§59-!Fg1L6t&6lB'
+  password: 'Fq8@LmZ4-XcT6uHr1w'
   key: jannik
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'Ux3&VbN7-QeR2ktS9j'
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    answer: 'Dxu7-Gvk2-Pns5-Lwe9' # replaces the historical-postal-code answer findable online
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'q7Vt-nGx4-Lm2s-Rd9E' # not derivable from any public profile or social media post
+    answer: 'Mv5e-Ky93-Ptn2-Zhc7' # replaces the answer that used to be findable via a public social media post
 -
   email: chris.pike
   password: 'uss enterprise'
@@ -209,7 +209,7 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
+    answer: 'Zmt4-Hqc8-Rvy1-Bdn6' # replaces the answer findable via OSINT on his aliases
 -
   email: demo
   password: 'demo'
@@ -269,7 +269,7 @@
     answer: "Used Emporium"
 -
   email: testing
-  password: 'IamUsedForTesting'
+  password: 'Nw5#YtG2-BpM9vQr3z'
   key: LetUsTest
   role: 'admin'
 -
