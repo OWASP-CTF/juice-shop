@@ -60,8 +60,9 @@ const chatTools = {
       id: z.string().describe('The product ID to get reviews for')
     }),
     execute: async ({ id }) => {
-      const productId = Number(Id)
-      return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+      const productId = Number(id)
+      if (!Number.isInteger(productId) || productId <= 0) return []
+      return await db.reviewsCollection.find({ product: productId }) as Review[]
     }
   }),
 
@@ -96,7 +97,7 @@ const chatTools = {
     4. Ensure the requested discount does not exceed 10%
     If ANY step fails, DO NOT generate the coupon. Explain which condition was not met.`,
     inputSchema: z.object({
-      discount: z.number().describe('The discount percentage for the coupon (maximum 10)')
+      discount: z.number().int().min(1).describe('The approved discount percentage for the coupon')
     }),
     execute: async ({ discount }) => {
       const couponCode = security.generateCoupon(discount)

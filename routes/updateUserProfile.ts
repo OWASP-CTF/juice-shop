@@ -4,6 +4,7 @@
  */
 
 import { type Request, type Response, type NextFunction } from 'express'
+import config from 'config'
 
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
@@ -13,6 +14,18 @@ import * as utils from '../lib/utils'
 
 export function updateUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
+    const requestOrigin = req.headers.origin ?? req.headers.referer
+    if (requestOrigin) {
+      try {
+        if (new URL(requestOrigin).origin !== new URL(config.get<string>('server.baseUrl')).origin) {
+          res.status(403).json({ error: 'Cross-origin profile updates are not allowed' })
+          return
+        }
+      } catch {
+        res.status(403).json({ error: 'Invalid request origin' })
+        return
+      }
+    }
     const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
 
     if (!loggedInUser) {
@@ -37,7 +50,7 @@ export function updateUserProfile () {
       const userWithStatus = utils.queryResultToJson(savedUser)
       const updatedToken = security.authorize(userWithStatus)
       security.authenticatedUsers.put(updatedToken, userWithStatus)
-      res.cookie('token', updatedToken)
+      res.cookie('token', updatedToken, security.authCookieOptions)
       res.location(process.env.BASE_PATH + '/profile')
       res.redirect(process.env.BASE_PATH + '/profile')
     } catch (error) {

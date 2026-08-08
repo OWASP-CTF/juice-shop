@@ -5,13 +5,10 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as challengeUtils from '../lib/challengeUtils'
-import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
-import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
-const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
+const pendingLikes = new Set<string>()
 
 export function likeProductReviews () {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -20,6 +17,14 @@ export function likeProductReviews () {
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    if (typeof id !== 'string') {
+      return res.status(400).json({ error: 'Wrong Params' })
+    }
+    const likeKey = `${user.data.email}:${id}`
+    if (pendingLikes.has(likeKey)) {
+      return res.status(403).json({ error: 'Not allowed' })
+    }
+    pendingLikes.add(likeKey)
 
     try {
       const review = await db.reviewsCollection.findOne({ _id: id })
@@ -27,36 +32,18 @@ export function likeProductReviews () {
         return res.status(404).json({ error: 'Not found' })
       }
 
-      const likedBy = review.likedBy
-      if (likedBy.includes(user.data.email)) {
+      const result = await db.reviewsCollection.update(
+        { _id: id, likedBy: { $ne: user.data.email } },
+        { $inc: { likesCount: 1 }, $addToSet: { likedBy: user.data.email } }
+      )
+      if (result.modified === 0) {
         return res.status(403).json({ error: 'Not allowed' })
       }
-
-      await db.reviewsCollection.update(
-        { _id: id },
-        { $inc: { likesCount: 1 } }
-      )
-
-      // Artificial wait for timing attack challenge
-      await sleep(150)
-      try {
-        const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
-        const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
-
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
-        challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
-
-        const result = await db.reviewsCollection.update(
-          { _id: id },
-          { $set: { likedBy: updatedLikedBy } }
-        )
-        res.json(result)
-      } catch (err) {
-        res.status(500).json(err)
-      }
+      res.json(result)
     } catch (err) {
       res.status(400).json({ error: 'Wrong Params' })
+    } finally {
+      pendingLikes.delete(likeKey)
     }
   }
 }

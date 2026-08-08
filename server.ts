@@ -83,7 +83,6 @@ import { retrieveBasket } from './routes/basket'
 import { searchProducts } from './routes/search'
 import { trackOrder } from './routes/trackOrder'
 import { saveLoginIp } from './routes/saveLoginIp'
-import { serveKeyFiles } from './routes/keyServer'
 import * as basketItems from './routes/basketItems'
 import { performRedirect } from './routes/redirect'
 import { serveEasterEgg } from './routes/easterEgg'
@@ -109,7 +108,6 @@ import { updateUserProfile } from './routes/updateUserProfile'
 import { getVideo, promotionVideo } from './routes/videoHandler'
 import { likeProductReviews } from './routes/likeProductReviews'
 import { repeatNotification } from './routes/repeatNotification'
-import { serveQuarantineFiles } from './routes/quarantineServer'
 import { showProductReviews } from './routes/showProductReviews'
 import { nftMintListener, walletNFTVerify } from './routes/nftMint'
 import { createProductReviews } from './routes/createProductReviews'
@@ -208,6 +206,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
 
+  // vuln-code-snippet start exposedMetricsChallenge
+  app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+  // vuln-code-snippet end exposedMetricsChallenge
+
   /* Security Policy */
   const securityTxtExpiration = new Date()
   securityTxtExpiration.setFullYear(securityTxtExpiration.getFullYear() + 1)
@@ -268,16 +270,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  app.get('/ftp', (_req: Request, res: Response) => { res.status(404).end() }) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/quarantine', (_req: Request, res: Response) => { res.status(404).end() }) // vuln-code-snippet neutral-line directoryListingChallenge
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
   /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
-  app.use('/encryptionkeys/:file', serveKeyFiles())
+  app.use('/encryptionkeys', (_req: Request, res: Response) => { res.status(404).end() })
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
@@ -366,6 +367,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     req.body.email = req.body.email.trim()
     req.body.password = req.body.password.trim()
+    if (typeof req.body.passwordRepeat === 'string') {
+      req.body.passwordRepeat = req.body.passwordRepeat.trim()
+      if (req.body.passwordRepeat !== req.body.password) {
+        res.status(400).json({ error: 'Passwords do not match' })
+        return
+      }
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email) || req.body.password.length < 8) {
       res.status(400).json({ error: 'A valid email and password of at least 8 characters are required' })
       return
@@ -680,18 +688,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/chat', utils.asyncHandler(chat()))
 
   /* Web3 API endpoints */
-  app.post('/rest/web3/submitKey', utils.asyncHandler(checkKeys()))
-  app.get('/rest/web3/nftUnlocked', nftUnlocked())
-  app.get('/rest/web3/nftMintListen', utils.asyncHandler(nftMintListener()))
-  app.post('/rest/web3/walletNFTVerify', walletNFTVerify())
-  app.post('/rest/web3/walletExploitAddress', utils.asyncHandler(contractExploitListener()))
+  app.post('/rest/web3/submitKey', security.isAuthorized(), utils.asyncHandler(checkKeys()))
+  app.get('/rest/web3/nftUnlocked', security.isAuthorized(), nftUnlocked())
+  app.get('/rest/web3/nftMintListen', security.isAuthorized(), utils.asyncHandler(nftMintListener()))
+  app.post('/rest/web3/walletNFTVerify', security.isAuthorized(), walletNFTVerify())
+  app.post('/rest/web3/walletExploitAddress', security.isAuthorized(), utils.asyncHandler(contractExploitListener()))
 
   /* B2B Order API */
   app.post('/b2b/v2/orders', b2bOrder())
 
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
-  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
+  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', security.isAuthorized(), security.isDeluxeUser(), servePremiumContent())
   app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
 
   /* Route for dataerasure page */
@@ -761,11 +769,9 @@ while (!expectedModels.every(model => Object.keys(sequelize.models).includes(mod
 }
 logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.toString())} of ${colors.bold(expectedModels.length.toString())} are initialized (${colors.green('SUCCESS')})`)
 
-// vuln-code-snippet start exposedMetricsChallenge
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
@@ -808,8 +814,6 @@ export function close (exitCode: number | undefined) {
     process.exit(exitCode)
   }
 }
-// vuln-code-snippet end exposedMetricsChallenge
-
 export async function createApp (options?: { inMemoryDb?: boolean }) {
   const seq = options?.inMemoryDb ? createSequelize({ inMemory: true }) : sequelize
   if (options?.inMemoryDb) {

@@ -1,12 +1,13 @@
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer with a verified damaged order. Requires a valid order ID.',
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
+          discount: z.number().int().min(1).max(10).describe('The approved discount percentage for the coupon'),
           orderId: z.string().describe('The order ID of the damaged order (format: xxxx-xxxxxxxxxxxxxxxx)')
         }),
         execute: async ({ discount, orderId, authenticatedUser }) => {
           const order = await db.ordersCollection.findOne({ orderId, email: authenticatedUser?.email, status: OrderStatus.DAMAGED })
           if (!order) return { error: 'No verified damaged order found for this order ID.' }
+          if (!Number.isInteger(discount) || discount < 1 || discount > 10) return { error: 'Invalid discount.' }
           const couponCode = security.generateCoupon(discount)
           return { couponCode, discount }
         }

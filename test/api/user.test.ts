@@ -172,6 +172,19 @@ void describe('/api/Users', () => {
     assert.equal(res.body.data.role, 'customer')
   })
 
+  void it('POST rejects a mismatched repeated password', async () => {
+    const res = await request(app)
+      .post('/api/Users')
+      .set(jsonHeader)
+      .send({
+        email: 'mismatch@example.test',
+        password: 'long-enough',
+        passwordRepeat: 'different-password'
+      })
+
+    assert.equal(res.status, 400)
+  })
+
   if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
     void it('POST new user with XSS attack in email address', async () => {
       const res = await request(app)

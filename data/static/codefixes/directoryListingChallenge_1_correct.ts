@@ -2,8 +2,7 @@
   app.use('/.well-known', express.static('.well-known'))
 
   /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
-  app.use('/encryptionkeys/:file', serveKeyFiles())
+  app.use('/encryptionkeys', (_req: Request, res: Response) => { res.status(404).end() })
 
   /* /logs directory browsing */
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))

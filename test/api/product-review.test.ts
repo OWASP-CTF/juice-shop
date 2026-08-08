@@ -126,6 +126,16 @@ void describe('/rest/products/reviews', () => {
     assert.equal(res.status, 200)
   })
 
+  void it('POST concurrent likes from one user are accepted only once', async () => {
+    const responses = await Promise.all([
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId }),
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId }),
+      request(app).post('/rest/products/reviews').set(authHeader).send({ id: reviewId })
+    ])
+
+    assert.deepEqual(responses.map(response => response.status).sort(), [200, 403, 403])
+  })
+
   void it('PATCH multiple product review via injection is rejected', async () => {
     const res = await request(app)
       .patch('/rest/products/reviews')

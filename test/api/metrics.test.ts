@@ -19,6 +19,11 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('/metrics', () => {
+  void it('GET metrics is forbidden without administrator authentication', async () => {
+    const res = await request(app).get('/metrics')
+    assert.equal(res.status, 401)
+  })
+
   void it('GET metrics via public API that are available instantaneously', { skip: 'FIXME Flaky on CI/CD on at least Windows' }, async () => {
     const res = await request(app)
       .get('/metrics')

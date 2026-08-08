@@ -52,7 +52,7 @@ async function validateImageUrl (value: unknown): Promise<{ url: URL, extension:
   }
 
   const extension = imageUrl.pathname.split('.').pop()?.toLowerCase() ?? ''
-  if (!['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(extension)) {
+  if (!['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
     throw new Error('Invalid image URL extension')
   }
 

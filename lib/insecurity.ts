@@ -26,6 +26,11 @@ const privateKey = configuredPrivateKey ?? crypto.generateKeyPairSync('rsa', {
 }).privateKey
 export const publicKey = crypto.createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString()
 const applicationHmacKey = process.env.APPLICATION_HMAC_KEY ?? crypto.createHash('sha256').update(privateKey).digest('hex')
+export const authCookieOptions = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  secure: process.env.NODE_ENV === 'production'
+}
 
 interface ResponseWithUser {
   status?: string
@@ -167,9 +172,6 @@ export const discountFromCoupon = (coupon?: string) => {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -196,6 +198,16 @@ export const isAdmin = () => {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isDeluxeUser = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (isDeluxe(req)) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Deluxe membership required' })
     }
   }
 }
@@ -244,7 +256,7 @@ export const updateAuthenticatedUsers = () => (req: Request, res: Response, next
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          res.cookie('token', token, authCookieOptions)
         }
       }
     })

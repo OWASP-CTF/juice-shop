@@ -10,6 +10,10 @@ import { SecurityQuestionModel } from '../models/securityQuestion'
 
 export function securityQuestion () {
   return async ({ query }: Request, res: Response, next: NextFunction) => {
+    if (process.env.ENABLE_LEGACY_SECURITY_QUESTION_RESET !== 'true') {
+      res.status(410).json({ error: 'Security-question password reset is disabled' })
+      return
+    }
     const email = query.email
     try {
       const answer = await SecurityAnswerModel.findOne({

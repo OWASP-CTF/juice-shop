@@ -51,4 +51,15 @@ void describe('/profile', () => {
 
     assert.equal(res.status, 302)
   })
+
+  void it('POST rejects a cross-origin profile update', async () => {
+    const res = await request(app)
+      .post('/profile')
+      .set('Cookie', authHeader.Cookie)
+      .set('Origin', 'https://attacker.invalid')
+      .field('username', 'Cross-site attacker')
+      .redirects(0)
+
+    assert.equal(res.status, 403)
+  })
 })

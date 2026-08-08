@@ -132,12 +132,10 @@ void describe('/public/images/padding', () => {
 })
 
 void describe('/encryptionkeys', () => {
-  void it('GET serves a directory listing', async () => {
+  void it('GET does not serve a directory listing', async () => {
     const res = await request(app)
       .get('/encryptionkeys')
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<title>listing directory /encryptionkeys</title>'))
+    assert.equal(res.status, 404)
   })
 
   void it('GET a non-existing file in will return a 404 error', async () => {
@@ -149,14 +147,13 @@ void describe('/encryptionkeys', () => {
   void it('GET the Premium Content AES key', async () => {
     const res = await request(app)
       .get('/encryptionkeys/premium.key')
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 404)
   })
 
   void it('GET a key file whose name contains a "/" fails with a 403 error', async () => {
     const res = await request(app)
       .get('/encryptionkeys/%2fetc%2fos-release%2500.md')
-    assert.equal(res.status, 403)
-    assert.ok(res.text.includes('Error: File names cannot contain forward slashes!'))
+    assert.equal(res.status, 404)
   })
 })
 
@@ -169,11 +166,10 @@ void describe('Hidden URL', () => {
     assert.ok(res.text.includes('<title>Welcome to Planet Orangeuze</title>'))
   })
 
-  void it('GET the premium content by visiting the AES decrypted URL', async () => {
+  void it('GET the premium content requires authentication', async () => {
     const res = await request(app)
       .get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us')
-    assert.equal(res.status, 200)
-    assert.equal(res.headers['content-type'], 'image/jpeg')
+    assert.equal(res.status, 401)
   })
 
   void it('GET the missing "Thank you!" image for assembling the URL hidden in the Privacy Policy', async () => {

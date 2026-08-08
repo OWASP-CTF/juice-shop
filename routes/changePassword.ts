@@ -22,6 +22,9 @@ export function changePassword () {
     } else if (newPassword !== repeatPassword) {
       res.status(401).send(res.__('New and repeated password do not match.'))
       return
+    } else if (newPasswordInString.length < 8) {
+      res.status(400).send(res.__('Password must be at least 8 characters long.'))
+      return
     }
 
     const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
