@@ -29,7 +29,7 @@ contract ETHWalletBank {
       userWithdrawing[msg.sender] = 0;
       return;
     }
-    balances[msg.sender] = balances[msg.sender].sub(_amount); // vuln-code-snippet neutral-line web3WalletChallenge
+    balances[msg.sender] -= _amount; // vuln-code-snippet neutral-line web3WalletChallenge
     (bool result, ) = msg.sender.call{ value: _amount }(""); // vuln-code-snippet neutral-line web3WalletChallenge
     require(result, "Withdrawal call failed"); // vuln-code-snippet neutral-line web3WalletChallenge
     if(userWithdrawing[msg.sender] == 2) // vuln-code-snippet hide-line
