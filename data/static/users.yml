@@ -262,7 +262,7 @@
   key: evm
   role: 'deluxe'
   feedback:
-    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft : "legal winner thank year wave sausage worth useful legal winner thank yellow"'
+  comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft'
     rating: 1
   securityQuestion:
     id: 10
