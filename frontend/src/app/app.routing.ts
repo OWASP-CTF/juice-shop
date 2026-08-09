@@ -75,14 +75,11 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  /* TODO: Externalize admin functions into separate application
-           that is only accessible inside corporate network.
-   */
-  // { // vuln-code-snippet neutral-line adminSectionChallenge
-  //   path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-  //   component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-  //   canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  // }, // vuln-code-snippet neutral-line adminSectionChallenge
+  { // vuln-code-snippet neutral-line adminSectionChallenge
+    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
+    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+  }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -238,8 +235,13 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  // The web3 sandbox is a development-only feature and is not routed in production.
-  // vuln-code-snippet neutral-line web3SandboxChallenge
+  { // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox is an internal development tool. It stays routed so the feature still
+    // exists, but reaching it now requires the admin role instead of knowing the path.
+    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line web3SandboxChallenge
+  }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -258,8 +260,13 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  // The unreleased token sale page is not routed. Obscuring its path was never a control.
-  // vuln-code-snippet neutral-line tokenSaleChallenge
+  { // vuln-code-snippet neutral-line tokenSaleChallenge
+    // The sale page stays reachable so the feature is not lost, but an unreleased
+    // internal page is now access-controlled rather than merely hard to guess.
+    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line tokenSaleChallenge
+  }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
