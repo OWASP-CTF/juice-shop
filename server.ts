@@ -231,6 +231,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The pre-release token-sale page (removed above) embedded an unlisted
+     56px.png tracking pixel under the public padding folder, which let anyone
+     discover and reach the token sale before its official launch. The resource
+     no longer exists, so deny any residual/probing request for it before the
+     access-control tracking middleware can treat the fetch as a solve. */
+  app.use('/assets/public/images/padding', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path === '/56px.png') {
+      res.status(404).end()
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
