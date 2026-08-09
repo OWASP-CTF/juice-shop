@@ -1,30 +1,38 @@
+# A security question is a second password, not a quiz about the account owner. Every prompt here
+# used to ask for a fact about the customer - a pet, a home town, a first employer, a favourite
+# film. Facts like those are published on social media, sit in interviews and appear in public
+# records, so the answer is discoverable by anyone willing to read about the person. Bjoern's
+# favourite pet, for instance, is named out loud in a video he posted himself.
+#
+# Every prompt now asks for a secret the customer invents for this account and nothing else, so
+# the answer carries the entropy of a password rather than the entropy of a biography.
 # vuln-code-snippet start resetPasswordBjoernOwaspChallenge resetPasswordBjoernChallenge resetPasswordJimChallenge resetPasswordBenderChallenge resetPasswordUvoginChallenge
 - # vuln-code-snippet neutral-line resetPasswordJimChallenge
-  question: 'Your eldest siblings middle name?' # vuln-code-snippet vuln-line resetPasswordJimChallenge
+  question: 'A word only you would pick, that no one could look up about you?' # vuln-code-snippet vuln-line resetPasswordJimChallenge
 -
-  question: "Mother's maiden name?"
+  question: "A phrase you have never written down anywhere else?"
 -
-  question: "Mother's birth date? (MM/DD/YY)"
+  question: "A number sequence you have chosen for this account alone?"
 -
-  question: "Father's birth date? (MM/DD/YY)"
+  question: "A passphrase of at least four unrelated words?"
 -
-  question: "Maternal grandmother's first name?"
+  question: "A made-up name you have never used in public?"
 -
-  question: "Paternal grandmother's first name?"
+  question: "A sentence you invented for this account?"
 - # vuln-code-snippet neutral-line resetPasswordBjoernOwaspChallenge
-  question: 'Name of your favorite pet?' # vuln-code-snippet vuln-line resetPasswordBjoernOwaspChallenge
+  question: 'A secret word you chose for this account, known only to you?' # vuln-code-snippet vuln-line resetPasswordBjoernOwaspChallenge
 -
-  question: "Last name of dentist when you were a teenager? (Do not include 'Dr.')"
+  question: "A combination of letters and digits you picked at random?"
 - # vuln-code-snippet neutral-line resetPasswordBjoernChallenge
-  question: 'Your ZIP/postal code when you were a teenager?' # vuln-code-snippet vuln-line resetPasswordBjoernChallenge
+  question: 'A code you made up that appears nowhere in your records?' # vuln-code-snippet vuln-line resetPasswordBjoernChallenge
 - # vuln-code-snippet neutral-line resetPasswordBenderChallenge
-  question: 'Company you first work for as an adult?' # vuln-code-snippet vuln-line resetPasswordBenderChallenge
+  question: 'A label you invented that has no connection to your life?' # vuln-code-snippet vuln-line resetPasswordBenderChallenge
 -
-  question: 'Your favorite book?'
+  question: 'A string of words you generated for this account?'
 - # vuln-code-snippet neutral-line resetPasswordUvoginChallenge
-  question: 'Your favorite movie?' # vuln-code-snippet vuln-line resetPasswordUvoginChallenge
+  question: 'A phrase you have never told anyone?' # vuln-code-snippet vuln-line resetPasswordUvoginChallenge
 -
-  question: 'Number of one of your customer or ID cards?'
+  question: 'A number you chose at random and stored in your password manager?'
 -
-  question: "What's your favorite place to go hiking?"
+  question: "A place name you invented, that exists on no map?"
 # vuln-code-snippet end resetPasswordBjoernOwaspChallenge resetPasswordBjoernChallenge resetPasswordJimChallenge resetPasswordBenderChallenge resetPasswordUvoginChallenge
