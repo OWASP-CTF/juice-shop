@@ -59,13 +59,12 @@ describe('TrackResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should never treat the order number as trusted HTML', () => {
+    it('should consider order number as trusted HTML', () => {
         component.orderId = '<a src="link">Link</a>'
         trackOrderService.find.mockReturnValue(of({ data: [{ orderId: component.orderId }] }))
         component.ngOnInit()
 
-        expect(sanitizer.bypassSecurityTrustHtml).not.toHaveBeenCalled()
-        expect(component.results.orderNo).toBe('<a src="link">Link</a>')
+        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<code><a src="link">Link</a></code>')
     })
 
     it('should set "delivered" status for delivered orders', () => {

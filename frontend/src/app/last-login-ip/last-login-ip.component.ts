@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Component, OnInit } from '@angular/core'
+import { Component, inject, OnInit } from '@angular/core'
+import { DomSanitizer } from '@angular/platform-browser'
 import { jwtDecode } from 'jwt-decode'
 import { TranslateModule } from '@ngx-translate/core'
 import { MatCardModule } from '@angular/material/card'
@@ -16,7 +17,9 @@ import { MatCardModule } from '@angular/material/card'
 })
 
 export class LastLoginIpComponent implements OnInit {
-  lastLoginIp = '?'
+  private readonly sanitizer = inject(DomSanitizer)
+
+  lastLoginIp: any = '?'
 
   ngOnInit (): void {
     try {
@@ -32,8 +35,8 @@ export class LastLoginIpComponent implements OnInit {
     if (token) {
       payload = jwtDecode(token)
       if (payload.data.lastLoginIp) {
-        /* An address is data, not markup. Wrapping it in trusted HTML meant anything the
-           login request put in the IP header was rendered as markup on this page. */
+        // The address arrives from a request header and is rendered as text, so it is
+        // held as a plain string and Angular escapes it at the binding.
         this.lastLoginIp = payload.data.lastLoginIp
       }
     }

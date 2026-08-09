@@ -9,6 +9,8 @@ import { provideHttpClientTesting } from '@angular/common/http/testing'
 import { RouterTestingModule } from '@angular/router/testing'
 import { ErrorPageComponent } from './error-page/error-page.component'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
+import { UserService } from './Services/user.service'
+import { of, throwError } from 'rxjs'
 
 describe('LoginGuard', () => {
     beforeEach(() => {
@@ -68,12 +70,16 @@ describe('LoginGuard', () => {
 
 describe('AdminGuard', () => {
     let loginGuard: any
+    let userService: any
 
     beforeEach(() => {
         loginGuard = {
             tokenDecode: vi.fn().mockName("LoginGuard.tokenDecode"),
             forbidRoute: vi.fn().mockName("LoginGuard.forbidRoute")
         }
+        // The guard asks the server for the role now, so the role under test is the one
+        // /rest/user/whoami reports - not one decoded from a token the client could edit.
+        userService = { whoAmI: vi.fn().mockName("UserService.whoAmI") }
 
         TestBed.configureTestingModule({
             imports: [RouterTestingModule.withRoutes([
@@ -82,11 +88,18 @@ describe('AdminGuard', () => {
             providers: [
                 AdminGuard,
                 { provide: LoginGuard, useValue: loginGuard },
+                { provide: UserService, useValue: userService },
                 provideHttpClient(withInterceptorsFromDi()),
                 provideHttpClientTesting()
             ]
         })
     })
+
+    const activate = (guard: any) => {
+        let result: boolean | undefined
+        guard.canActivate().subscribe((allowed: boolean) => { result = allowed })
+        return result
+    }
 
     it('should be created', () => {
         const guard = TestBed.inject(AdminGuard)
@@ -97,43 +110,63 @@ describe('AdminGuard', () => {
     it('should open for admins', () => {
         const guard = TestBed.inject(AdminGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'admin' } })
-        expect(guard.canActivate()).toBe(true)
+        userService.whoAmI.mockReturnValue(of({ role: 'admin' }))
+        expect(activate(guard)).toBe(true)
     })
 
     it('should close for regular customers', () => {
         const guard = TestBed.inject(AdminGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'customer' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'customer' }))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 
     it('should close for deluxe customers', () => {
         const guard = TestBed.inject(AdminGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'deluxe' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'deluxe' }))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 
     it('should close for accountants', () => {
         const guard = TestBed.inject(AdminGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'accounting' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'accounting' }))
+        expect(activate(guard)).toBe(false)
+        expect(loginGuard.forbidRoute).toHaveBeenCalled()
+    })
+
+    it('should close when a forged token claims the admin role', () => {
+        const guard = TestBed.inject(AdminGuard)
+
+        // The client-side token says admin; the server says customer. The server wins.
+        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'admin' } })
+        userService.whoAmI.mockReturnValue(of({ role: 'customer' }))
+        expect(activate(guard)).toBe(false)
+        expect(loginGuard.forbidRoute).toHaveBeenCalled()
+    })
+
+    it('should close when the role lookup fails', () => {
+        const guard = TestBed.inject(AdminGuard)
+
+        userService.whoAmI.mockReturnValue(throwError(() => new Error('network down')))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 })
 
 describe('AccountingGuard', () => {
     let loginGuard: any
+    let userService: any
 
     beforeEach(() => {
         loginGuard = {
             tokenDecode: vi.fn().mockName("LoginGuard.tokenDecode"),
             forbidRoute: vi.fn().mockName("LoginGuard.forbidRoute")
         }
+        userService = { whoAmI: vi.fn().mockName("UserService.whoAmI") }
 
         TestBed.configureTestingModule({
             imports: [RouterTestingModule.withRoutes([
@@ -142,11 +175,18 @@ describe('AccountingGuard', () => {
             providers: [
                 AccountingGuard,
                 { provide: LoginGuard, useValue: loginGuard },
+                { provide: UserService, useValue: userService },
                 provideHttpClient(withInterceptorsFromDi()),
                 provideHttpClientTesting()
             ]
         })
     })
+
+    const activate = (guard: any) => {
+        let result: boolean | undefined
+        guard.canActivate().subscribe((allowed: boolean) => { result = allowed })
+        return result
+    }
 
     it('should be created', () => {
         const guard = TestBed.inject(AccountingGuard)
@@ -157,31 +197,40 @@ describe('AccountingGuard', () => {
     it('should open for accountants', () => {
         const guard = TestBed.inject(AccountingGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'accounting' } })
-        expect(guard.canActivate()).toBe(true)
+        userService.whoAmI.mockReturnValue(of({ role: 'accounting' }))
+        expect(activate(guard)).toBe(true)
     })
 
     it('should close for regular customers', () => {
         const guard = TestBed.inject(AccountingGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'customer' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'customer' }))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 
     it('should close for deluxe customers', () => {
         const guard = TestBed.inject(AccountingGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'deluxe' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'deluxe' }))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 
     it('should close for admins', () => {
         const guard = TestBed.inject(AccountingGuard)
 
-        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'admin' } })
-        expect(guard.canActivate()).toBe(false)
+        userService.whoAmI.mockReturnValue(of({ role: 'admin' }))
+        expect(activate(guard)).toBe(false)
+        expect(loginGuard.forbidRoute).toHaveBeenCalled()
+    })
+
+    it('should close when a forged token claims the accounting role', () => {
+        const guard = TestBed.inject(AccountingGuard)
+
+        loginGuard.tokenDecode.mockReturnValue({ data: { role: 'accounting' } })
+        userService.whoAmI.mockReturnValue(of({ role: 'customer' }))
+        expect(activate(guard)).toBe(false)
         expect(loginGuard.forbidRoute).toHaveBeenCalled()
     })
 })

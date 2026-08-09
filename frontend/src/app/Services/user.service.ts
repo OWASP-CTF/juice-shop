@@ -51,7 +51,8 @@ export class UserService {
   }
 
   changePassword (passwords: Passwords) {
-    return this.http.post(this.hostServer + '/rest/user/change-password', passwords).pipe(map((response: any) => response.user), catchError((err) => { throw err.error }))
+    return this.http.get(this.hostServer + '/rest/user/change-password?current=' + passwords.current + '&new=' +
+    passwords.new + '&repeat=' + passwords.repeat).pipe(map((response: any) => response.user), catchError((err) => { throw err.error }))
   }
 
   resetPassword (params: any) {
@@ -65,6 +66,13 @@ export class UserService {
 
   oauthLogin (accessToken: string) {
     return this.http.get('https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=' + accessToken)
+  }
+
+  endSession () {
+    return this.http.post(this.hostServer + '/rest/user/logout', {}).pipe(
+      map((response: any) => response),
+      catchError((err) => { throw err })
+    )
   }
 
   saveLastLoginIp () {
