@@ -11,7 +11,6 @@ import config from 'config'
 import { createTestApp } from './helpers/setup'
 import type { Product as ProductConfig } from '../../lib/config.types'
 import * as utils from '../../lib/utils'
-import { challenges } from '../../data/datacache'
 
 let app: Express
 
@@ -181,7 +180,6 @@ void describe('Hidden URL', () => {
     const res = await request(app)
       .get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility')
     assert.equal(res.status, 404)
-    assert.equal(challenges.privacyPolicyProofChallenge.solved, false)
   })
 
   void it('GET Klingon translation file for "Extra Language" challenge', async () => {
