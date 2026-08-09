@@ -1203,10 +1203,7 @@
 		]
 	},
 	"restfulXssChallenge_1_correct.ts": {
-		"added": [
-			42,
-			43
-		],
+		"added": [],
 		"removed": []
 	},
 	"restfulXssChallenge_2.ts": {

@@ -258,6 +258,28 @@ void describe('/rest/saveLoginIp', () => {
     assert.equal(res.body.lastLoginIp, '1.2.3.4')
   })
 
+  void it('GET last login IP sanitizes an XSS payload sent via the True-Client-IP header', async () => {
+    const loginRes = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'bjoern.kimminich@gmail.com',
+        password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+      })
+
+    assert.equal(loginRes.status, 200)
+
+    const res = await request(app)
+      .get('/rest/saveLoginIp')
+      .set({
+        Authorization: 'Bearer ' + loginRes.body.authentication.token,
+        'true-client-ip': '<iframe src="javascript:alert(`xss`)">'
+      })
+
+    assert.equal(res.status, 200)
+    assert.equal(res.body.lastLoginIp, '')
+  })
+
   void it('GET last login IP will be saved as remote IP when True-Client-IP is not present', { skip: 'FIXME Started to fail regularly on CI under Linux' }, async () => {
     const loginRes = await request(app)
       .post('/rest/user/login')

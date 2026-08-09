@@ -7,9 +7,12 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
+import fs from 'node:fs'
+import path from 'node:path'
 import { createTestApp } from './helpers/setup'
 
 let app: Express
+const subtitlePath = path.join('frontend/dist/frontend/assets/public/videos/', 'owasp_promo.vtt')
 
 before(async () => {
   const result = await createTestApp()
@@ -35,6 +38,20 @@ void describe('/promotion', () => {
       .get('/promotion')
     assert.ok(res.headers['content-type']?.includes('text/html'))
     assert.ok(res.text.includes('<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">'))
+  })
+
+  void it('GET promotion video page HTML-encodes script-injection content from the subtitle file', async () => {
+    const originalSubs = fs.readFileSync(subtitlePath, 'utf8')
+    fs.writeFileSync(subtitlePath, originalSubs + '</script><script>alert(`xss`)</script>')
+    try {
+      const res = await request(app)
+        .get('/promotion')
+      assert.ok(res.headers['content-type']?.includes('text/html'))
+      assert.ok(!res.text.includes('</script><script>alert(`xss`)</script>'))
+      assert.ok(res.text.includes('&lt;/script&gt;&lt;script&gt;alert(`xss`)&lt;/script&gt;'))
+    } finally {
+      fs.writeFileSync(subtitlePath, originalSubs)
+    }
   })
 })
 

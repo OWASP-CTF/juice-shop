@@ -8,9 +8,7 @@ import config from 'config'
 import { type Request, type Response } from 'express'
 import { AllHtmlEntities as Entities } from 'html-entities'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { themes } from '../views/themes/themes'
-import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
 
 const entities = new Entities()
@@ -54,8 +52,6 @@ export const promotionVideo = () => {
       let template = buf.toString()
       const subs = getSubsFromFile()
 
-      challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
-
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
       template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
@@ -68,7 +64,11 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
+      // HTML-encode the subtitle content before embedding it: it is read from a .vtt
+      // file on disk (which can be replaced, e.g. via file upload) and otherwise a
+      // literal '</script>' in it would close this element and let injected markup
+      // (e.g. a following '<script>...</script>') execute in the page.
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + entities.encode(subs) + '</script>')
       res.send(compiledTemplate)
     })
   }
