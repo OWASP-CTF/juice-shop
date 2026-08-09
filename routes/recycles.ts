@@ -9,10 +9,13 @@ import { RecycleModel } from '../models/recycle'
 import * as utils from '../lib/utils'
 
 export const getRecycleItem = () => (req: Request, res: Response) => {
+  // Parsing the id as JSON let a caller pass an operator object straight into the where clause.
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id)) {
+    return res.status(400).send('Invalid recycle id.')
+  }
   RecycleModel.findAll({
-    where: {
-      id: JSON.parse(req.params.id)
-    }
+    where: { id }
   }).then((Recycle) => {
     return res.send(utils.queryResultToJson(Recycle))
   }).catch((_: unknown) => {

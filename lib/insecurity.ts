@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { BasketModel } from '../models/basket'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -19,8 +19,15 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+// A session signing key shipped in the source signs a valid token for every reader of the source,
+// so the pair is minted per boot. Nothing outside this module needs the private half.
+const sessionKeyPair = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'pkcs1', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs1', format: 'pem' }
+})
+export const publicKey = sessionKeyPair.publicKey
+const privateKey = sessionKeyPair.privateKey
 
 interface ResponseWithUser {
   status?: string
@@ -38,6 +45,8 @@ interface IAuthenticatedUsers {
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
+  invalidate: (token: string) => void
+  invalidateAllFor: (userId: number, exceptToken?: string) => void
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
@@ -51,10 +60,67 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+const tokenAlgorithm = 'RS256'
+
+// Sessions live in an in-memory map, so a token stays usable until it is explicitly revoked here.
+const invalidatedTokens = new Set<string>()
+export const isInvalidated = (token?: string) => !!token && invalidatedTokens.has(utils.unquote(token))
+
+// express-jwt@0.1.3 forwards no algorithm restriction, so the header has to be pinned here.
+const isSignedWithTokenAlgorithm = (token: string) => {
+  try {
+    return jws.decode(token)?.header.alg === tokenAlgorithm
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const requireValidToken = expressjwt({ secret: publicKey, algorithms: [tokenAlgorithm] })
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (token && (!isSignedWithTokenAlgorithm(token) || isInvalidated(token))) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    requireValidToken(req, res, next)
+  }
+}
+// A state change authorised by the ambient token cookie must not be triggerable from another site.
+export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
+  const source = req.headers.origin ?? req.headers.referer
+  let sourceHost
+  if (source !== undefined) {
+    try {
+      sourceHost = new URL(source).host
+    } catch {
+      sourceHost = undefined
+    }
+  }
+  // An absent or unparsable Origin/Referer proves nothing about the caller, so it cannot pass either.
+  if (sourceHost === undefined || sourceHost !== req.headers.host) {
+    res.status(403).json({ error: 'Cross-origin request blocked' })
+    return
+  }
+  next()
+}
+
+// Not a JWT check: these routes have no authorized caller at all, so no token can ever pass.
+export const denyAll = () => (req: Request, res: Response) => {
+  res.status(401).json({ error: 'Unauthorized' })
+}
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: tokenAlgorithm })
+export const verify = (token: string) => {
+  if (!token || isInvalidated(token)) {
+    return false
+  }
+  try {
+    jwt.verify(token, publicKey, { algorithms: [tokenAlgorithm] })
+    return true
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -77,7 +143,10 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token || !verify(utils.unquote(token))) {
+      return undefined
+    }
+    return this.tokenMap[utils.unquote(token)]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -89,6 +158,23 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
     this.put(token, user)
+  },
+  invalidate: function (token: string) {
+    const key = utils.unquote(token)
+    const session = this.tokenMap[key]
+    if (session && this.idMap[session.data.id] === key) {
+      delete this.idMap[session.data.id]
+    }
+    delete this.tokenMap[key]
+    invalidatedTokens.add(key)
+  },
+  invalidateAllFor: function (userId: number, exceptToken?: string) {
+    const kept = exceptToken ? utils.unquote(exceptToken) : undefined
+    for (const [token, session] of Object.entries(this.tokenMap)) {
+      if (session.data.id === userId && token !== kept) {
+        this.invalidate(token)
+      }
+    }
   }
 }
 
@@ -96,18 +182,28 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+// z85 is an encoding, not a signature, so a bare encoded coupon lets anyone mint whatever
+// discount they please. The key lives only in memory: coupons are valid for the current
+// month and never have to survive a restart.
+const couponKey = crypto.randomBytes(32)
+const COUPON_SIGNATURE_LENGTH = 16
+
+const couponSignature = (coupon: string) => {
+  return crypto.createHmac('sha256', couponKey).update(coupon).digest('hex').substring(0, COUPON_SIGNATURE_LENGTH)
+}
+
 export const generateCoupon = (discount: number, date = new Date()) => {
   const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  return z85.encode(coupon) + couponSignature(coupon)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
-  if (!coupon) {
+  if (!coupon || coupon.length <= COUPON_SIGNATURE_LENGTH) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
+  const decoded = z85.decode(coupon.slice(0, -COUPON_SIGNATURE_LENGTH))?.toString()
+  if (decoded && (hasValidFormat(decoded) != null) && coupon.slice(-COUPON_SIGNATURE_LENGTH) === couponSignature(decoded)) {
+    const parts = decoded.split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
       const discount = parts[1]
@@ -123,9 +219,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +228,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -153,10 +246,31 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
+// Browser-driven pages (e.g. /support/logs) send the session as a cookie, not an Authorization header.
+const tokenFrom = (req: Request) => req.cookies?.token || utils.jwtFrom(req)
+
+// 'secure' is omitted on purpose: the shop is also served over plain HTTP.
+export const sessionCookieOptions = { httpOnly: true, sameSite: 'strict' } as const
+
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    const decodedToken = verify(tokenFrom(req)) && decode(tokenFrom(req))
     if (decodedToken?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isAdminRequest = (req: Request) => {
+  const decodedToken = verify(tokenFrom(req)) && decode(tokenFrom(req))
+  return decodedToken?.data?.role === roles.admin
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (isAdminRequest(req)) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -177,7 +291,7 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      req.body.UserId = authenticatedUsers.get(utils.jwtFrom(req))!.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -185,14 +299,31 @@ export const appendUserId = () => {
   }
 }
 
+// The basket id is taken from the path, so a valid token alone says nothing about who owns that row.
+export const isBasketOwner = () => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = authenticatedUsers.from(req)
+      const basket = await BasketModel.findByPk(req.params.id)
+      if (!user || (basket != null && basket.UserId !== user.data.id)) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+      next()
+    } catch (error: unknown) {
+      next(error)
+    }
+  }
+}
+
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
-  const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+  const token = tokenFrom(req)
+  if (token && !isInvalidated(token)) {
+    jwt.verify(token, publicKey, { algorithms: [tokenAlgorithm] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          res.cookie('token', token, sessionCookieOptions)
         }
       }
     })
