@@ -37,12 +37,12 @@ function rememberConnectedWallet (address: string) {
 
 export function contractExploitListener () {
   return async (req: Request, res: Response) => {
+    // Only a well-formed address is remembered; anything else is ignored rather than rejected,
+    // so creating the subscription stays a side effect of the request exactly as it was before.
     const metamaskAddress = asWalletAddress(req.body?.walletAddress)
-    if (metamaskAddress === null) {
-      res.status(400).json({ success: false, message: 'A valid Ethereum wallet address is required' })
-      return
+    if (metamaskAddress !== null) {
+      rememberConnectedWallet(metamaskAddress)
     }
-    rememberConnectedWallet(metamaskAddress)
     try {
       if (!isEventListenerCreated) {
         const { WebSocketProvider, Contract } = await import('ethers')

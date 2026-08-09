@@ -67,9 +67,11 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
+      // Same 200 / success:false shape the caller already handles for an unknown wallet, so a
+      // malformed address is answered rather than turned into a client-side error.
       const metamaskAddress = asWalletAddress(req.body?.walletAddress)
       if (metamaskAddress === null) {
-        res.status(400).json({ success: false, message: 'A valid Ethereum wallet address is required', status: challenges.nftMintChallenge })
+        res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })
         return
       }
       // The proof is the on-chain mint, so it is the predicate the challenge is scored on as
