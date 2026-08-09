@@ -8,6 +8,8 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+const exposableFields = ['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -20,7 +22,8 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        // Only ever hand out fields that are safe to expose, no matter what was requested
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => exposableFields.includes(f)) : []
 
         let baseUser: any = {}
 
@@ -51,11 +54,13 @@ export function retrieveLoggedInUser () {
     // Solve passwordHashLeakChallenge when password field is included in response
     challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
 
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    // Answered as JSON whatever ?callback= says. JSONP replies with executable JavaScript, and
+    // this endpoint is authenticated by a cookie the browser attaches to any request -- including
+    // one made by <script src="/rest/user/whoami?callback=leak"> on an attacker's page. That
+    // script tag is not subject to the same-origin policy, so the callback runs in the attacker's
+    // document with the logged-in user's identity, e-mail and last login IP as its argument, and
+    // no CORS header is involved anywhere. Serving JSON means a cross-origin reader has to go
+    // through fetch/XHR, where the same-origin policy applies.
+    res.json(response)
   }
 }
