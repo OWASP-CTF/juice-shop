@@ -2,8 +2,13 @@
 // vuln-code-snippet start web3WalletChallenge
 pragma solidity ^0.6.12;
 import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v3.3/contracts/math/SafeMath.sol';
+import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v3.3/contracts/utils/ReentrancyGuard.sol';
 
-contract ETHWalletBank {
+// Settling the balance before the transfer stops the caller profiting from a nested
+// withdraw, but it does not stop the nesting itself: msg.sender.call hands control to
+// attacker code that can call withdraw again. The audited guard from OpenZeppelin is
+// applied so re-entry is refused outright rather than merely made unprofitable.
+contract ETHWalletBank is ReentrancyGuard {
   using SafeMath for uint256;
 
   mapping(address => uint) public balances;
@@ -19,7 +24,7 @@ contract ETHWalletBank {
     return balances[_who];
   }
 
-  function withdraw(uint _amount) public {
+  function withdraw(uint _amount) public nonReentrant {
     require(_amount <= 0.1 ether, "Withdrawal amount must be less than or equal to 0.1 ether");
     require(balances[msg.sender] >= _amount, "Insufficient balance");
     if (userWithdrawing[msg.sender] <= 1) {
