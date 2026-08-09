@@ -8,7 +8,7 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
-const exposableFields = ['id', 'email', 'lastLoginIp', 'profileImage', 'username', 'role']
+const secretFields = ['password', 'totpSecret', 'deluxeToken']
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
@@ -22,7 +22,7 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => exposableFields.includes(f)) : []
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => !secretFields.includes(f)) : []
 
         let baseUser: any = {}
 
