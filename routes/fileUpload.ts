@@ -63,7 +63,7 @@ function expandsBeyondBudget (data: string) {
 // before they are ever resolved. This runs in addition to - not instead of - the
 // containment check on the resolved path, so a name that slips past one still meets the
 // other.
-function isUnsafeEntryName (fileName: unknown): fileName is string {
+function isUnsafeEntryName (fileName: unknown): boolean {
   if (typeof fileName !== 'string' || fileName === '' || fileName.includes('\0')) {
     return true
   }
@@ -91,9 +91,13 @@ function parentResolvesInsideUploadRoot (absolutePath: string, uploadRoot: strin
 
 // Opening with O_NOFOLLOW closes the remaining gap: if the final path component is itself
 // a symlink the open fails instead of quietly writing through it to the link's target.
-function openContainedFileForWriting (absolutePath: string) {
+function openContainedFileForWriting (absolutePath: string): number | null {
   const noFollow = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0
-  return fs.openSync(absolutePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | noFollow)
+  try {
+    return fs.openSync(absolutePath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | noFollow)
+  } catch {
+    return null
+  }
 }
 
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
@@ -125,28 +129,26 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .on('entry', function (entry: any) {
                 const fileName = entry.path
                 const uploadRoot = path.resolve('uploads/complaints')
-                const absolutePath = path.resolve(uploadRoot, fileName)
+                const absolutePath = isUnsafeEntryName(fileName) ? null : path.resolve(uploadRoot, String(fileName))
                 // The resolved destination must sit beneath the upload directory, so an
                 // entry name containing ../ cannot escape it. The name check and the
                 // real-path check are layered on top of that string check, not in place of
                 // it: the name must be an ordinary relative name, the resolved path must be
                 // lexically below the upload directory, and the directory it lands in must
                 // physically be the upload directory once symlinks are resolved.
-                if (!isUnsafeEntryName(fileName) && absolutePath.startsWith(uploadRoot + path.sep) && parentResolvesInsideUploadRoot(absolutePath, uploadRoot)) {
+                if (absolutePath !== null && absolutePath.startsWith(uploadRoot + path.sep) && parentResolvesInsideUploadRoot(absolutePath, uploadRoot)) {
                   // Only a destination we really write to counts. Asking for a path
                   // outside the upload directory no longer writes anything, so it is not
                   // an overwrite either.
                   challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                  let fd: number
-                  try {
-                    fd = openContainedFileForWriting(absolutePath)
-                  } catch {
+                  const outFd = openContainedFileForWriting(absolutePath)
+                  if (outFd === null) {
                     // The destination could not be opened without following a link out of
                     // the upload directory, so nothing is written for this entry.
                     entry.autodrain()
                     return
                   }
-                  entry.pipe(fs.createWriteStream(absolutePath, { fd }).on('error', function (err) { next(err) }))
+                  entry.pipe(fs.createWriteStream(absolutePath, { fd: outFd }).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }

@@ -112,12 +112,45 @@ export const serverSideChallenges = () => (req: Request, res: Response, next: Ne
   next()
 }
 
+// A token is only ever minted by this application with RS256 (see the single call to
+// jwt.sign in lib/insecurity), so any other algorithm in the header belongs to a token
+// this application never issued. jws reads the algorithm out of the token's own header
+// when it is not told which one to use, which is what let a header of none, or an HS256
+// signature made with the RSA public key published at /encryptionkeys/jwt.pub, pass a
+// signature check. The algorithm is therefore pinned to the literal RS256 here before the
+// signature is looked at, in this file, so the answer does not depend on any other module
+// continuing to pin it.
+function isGenuinelySignedToken (token: string) {
+  try {
+    if (jws.decode(token)?.header?.alg !== 'RS256') {
+      return false
+    }
+    // The algorithm handed to jws is the literal RS256 and never the one the token asks
+    // for, so the signature is checked as an RSA signature over the published key or not
+    // at all.
+    return jws.verify(token, 'RS256', security.publicKey)
+  } catch {
+    return false
+  }
+}
+
+// jws.decode parses the payload as JSON whenever the header says typ JWT, and does not
+// guard that parse, so a token carrying a payload that is not JSON threw out of the
+// middleware below and into the error handler instead of being ignored as the junk it is.
+function decodedPayloadOf (token: string): unknown {
+  try {
+    return jws.decode(token) ? jwt.decode(token) : null
+  } catch {
+    return null
+  }
+}
+
 function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, email: string | RegExp) {
   const token = utils.jwtFrom(req)
   if (token) {
-    const decoded = jws.decode(token) ? jwt.decode(token) : null
+    const decoded = decodedPayloadOf(token)
 
-    if (decoded === null || typeof decoded === 'string') {
+    if (decoded === null || decoded === undefined || typeof decoded === 'string') {
       return
     }
 
@@ -126,7 +159,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
     // one signed HS256 with the published public key, verified here even though every
     // other path had been pinned to RS256. The detector is unchanged; it now simply asks
     // the same question the rest of the application asks.
-    if (security.verify(token)) {
+    if (isGenuinelySignedToken(token) && security.verify(token)) {
       challengeUtils.solveIf(challenge, () => {
         return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
       })
@@ -134,8 +167,18 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
   }
 }
 
+// A header that does not parse is not a header claiming any algorithm at all, so this
+// answers with nothing rather than throwing out of the middleware it is called from.
+function headerOf (token: string): { alg?: string } | null {
+  try {
+    return JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+  } catch {
+    return null
+  }
+}
+
 function hasAlgorithm (token: string, algorithm: string) {
-  const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+  const header = headerOf(token)
   return token && header && header.alg === algorithm
 }
 
