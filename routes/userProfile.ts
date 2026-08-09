@@ -51,18 +51,14 @@ export function getUserProfile () {
 
     let username = user.username
 
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
+    // `username` is inserted directly into the raw Pug template source below (not
+    // through Pug's own `#{}` interpolation), so it is prefixed with a backslash to
+    // force Pug to always treat the resulting line as plain text. Note this file
+    // used to also feed a `#{...}` substring of the username into a server-side
+    // eval() call as a "templating" gadget - that was a Server-Side Template
+    // Injection (CWE-95) allowing arbitrary code execution, and was removed
+    // entirely since it served no legitimate purpose.
+    if (username) {
       username = '\\' + username
     }
 
@@ -85,10 +81,17 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      // `profileImage` is user-controlled (see routes/profileImageUrlUpload.ts and
+      // profileImageFileUpload.ts) and must never be interpolated verbatim into the
+      // CSP header string: an attacker could smuggle characters like `;`, `'` or
+      // whitespace to terminate the `img-src` directive early and inject additional
+      // directives/keywords (e.g. `'unsafe-inline'`), defeating the CSP entirely.
+      // Strip anything that isn't legitimately part of a CSP source expression.
+      const sanitizedProfileImageSrc = (user?.profileImage ?? '').replace(/[\s;'"]/g, '')
+      const CSP = `img-src 'self'${sanitizedProfileImageSrc ? ' ' + sanitizedProfileImageSrc : ''}; script-src 'self' 'unsafe-eval'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
+        return username && CSP.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
       })
 
       res.set({
