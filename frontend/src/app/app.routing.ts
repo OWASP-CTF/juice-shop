@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
