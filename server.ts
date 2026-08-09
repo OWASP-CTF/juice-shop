@@ -277,7 +277,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  /* /logs directory browsing, restricted to administrators */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  // Access logs record the request path, query string and bearer token of every caller the
+  // shop has ever served, so they are operator data and not a support self-service page.
+  // The guard is mounted ahead of everything else on this path so an unauthorised caller is
+  // refused before any handler on it runs. Deleting the routes would be worse than guarding
+  // them: the request then falls through to the Angular catch-all and is answered 200 with
+  // the single-page app, which reads as reachable rather than as refused.
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
   app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
