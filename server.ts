@@ -127,6 +127,23 @@ import { orderHistory, allOrders, toggleDeliveryStatus } from './routes/orderHis
 import { continueCode, continueCodeFindIt, continueCodeFixIt } from './routes/continueCode'
 import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType, handleXmlUpload, handleYamlUpload } from './routes/fileUpload'
 
+/* A restricted screen's spacer image is part of that screen. Serving it to anyone let a caller
+   claim to have been somewhere they could not go. The session is read from the Cookie header
+   directly: these are plain asset requests, made without an Authorization header and served
+   before cookie parsing runs. */
+const restrictedBeacon = (req: Request, res: Response, next: NextFunction) => {
+  const bearer = utils.jwtFrom(req)
+  const raw = req.headers.cookie ?? ''
+  const match = raw.match(/(?:^|;\s*)token=([^;]+)/)
+  const token = bearer || (match ? decodeURIComponent(match[1]) : '')
+  const payload: any = token && security.verify(token) ? security.decode(token) : null
+  if (typeof payload?.data?.role !== 'string') {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  next()
+}
+
 const app = express()
 const server = new http.Server(app)
 
@@ -229,6 +246,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  app.use('/assets/public/images/padding/11px.png', restrictedBeacon)
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
