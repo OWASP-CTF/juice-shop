@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
+import * as security from '../lib/insecurity'
 
 // Only the JWT verification key is meant to be public here. Everything else in
 // this directory - the premium content key in particular - was downloadable by
@@ -24,6 +24,8 @@ export function serveKeyFiles () {
       res.status(403).json({ error: 'Access to this key file is forbidden!' })
       return
     }
-    res.sendFile(path.resolve('encryptionkeys/', file))
+    // Serve the key actually in use rather than the copy on disk, which is
+    // stale now that the pair is supplied by the environment or generated.
+    res.type('text/plain').send(security.publicKey)
   }
 }
