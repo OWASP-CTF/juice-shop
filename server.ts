@@ -137,12 +137,6 @@ const errorhandler = require('errorhandler')
 
 const startTime = Date.now()
 
-// A solved CAPTCHA proves one puzzle was answered, not that the submissions are human-paced,
-// so accepted feedbacks are additionally held to a sliding window.
-const feedbackWindowMs = 20000
-const feedbackWindowLimit = 9
-const acceptedFeedbackTimes: number[] = []
-
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
 const appName = config.get<string>('application.customMetricsPrefix')
@@ -428,19 +422,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
-  /* Anti-automation on top of the CAPTCHA */
-  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
-    const now = Date.now()
-    while (acceptedFeedbackTimes.length > 0 && now - acceptedFeedbackTimes[0] > feedbackWindowMs) {
-      acceptedFeedbackTimes.shift()
-    }
-    if (acceptedFeedbackTimes.length >= feedbackWindowLimit) {
-      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
-      return
-    }
-    acceptedFeedbackTimes.push(now)
-    next()
-  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
