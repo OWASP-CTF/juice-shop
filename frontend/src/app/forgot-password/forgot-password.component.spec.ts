@@ -148,10 +148,27 @@ describe('ForgotPasswordComponent', () => {
         expect(component.repeatPasswordControl.value).toBe('')
     })
 
-    it('should clear form and show confirmation after changing password', () => {
+    it('should only request a reset link when no one-time token has been entered yet', () => {
         userService.resetPassword.mockReturnValue(of({}))
         vi.spyOn(component, 'resetForm')
         component.resetPassword()
+        expect(userService.resetPassword).toHaveBeenCalledWith(
+            expect.not.objectContaining({ token: expect.anything() })
+        )
+        expect(component.awaitingToken).toBe(true)
+        expect(component.confirmation).toBeDefined()
+        expect(component.resetForm).not.toHaveBeenCalled()
+    })
+
+    it('should clear form and show confirmation after changing password with the one-time token', () => {
+        userService.resetPassword.mockReturnValue(of({}))
+        component.tokenControl.enable()
+        component.tokenControl.setValue('a'.repeat(64))
+        vi.spyOn(component, 'resetForm')
+        component.resetPassword()
+        expect(userService.resetPassword).toHaveBeenCalledWith(
+            expect.objectContaining({ token: 'a'.repeat(64) })
+        )
         expect(component.confirmation).toBeDefined()
         expect(component.resetForm).toHaveBeenCalled()
     })

@@ -12,6 +12,7 @@ import {
   type CreationOptional,
   type Sequelize
 } from 'sequelize'
+import * as security from '../lib/insecurity'
 class Card extends Model<
 InferAttributes<Card>,
 InferCreationAttributes<Card>
@@ -35,7 +36,12 @@ const CardModelInit = (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true
       },
-      fullName: DataTypes.STRING,
+      fullName: {
+        type: DataTypes.STRING,
+        set (fullName: string) {
+          this.setDataValue('fullName', security.sanitizeSecure(fullName ?? ''))
+        }
+      },
       cardNum: {
         type: DataTypes.INTEGER,
         validate: {

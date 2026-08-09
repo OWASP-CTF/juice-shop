@@ -1,13 +1,13 @@
 import { type Request, type Response } from 'express'
 
 import logger from '../lib/logger'
-import * as challengeUtils from '../lib/challengeUtils'
 import { nftABI } from '../data/static/contractABIs'
 import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
-const addressesMinted = new Set()
+const EVM_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/
+const addressesMinted = new Set<string>()
 let isEventListenerCreated = false
 
 export function nftMintListener () {
@@ -22,9 +22,7 @@ export function nftMintListener () {
         }
         const contract = new Contract(nftAddress, nftABI, provider as any)
         void contract.on('NFTMinted', (minter: string) => {
-          if (!addressesMinted.has(minter)) {
-            addressesMinted.add(minter)
-          }
+          addressesMinted.add(minter.toLowerCase())
         })
         isEventListenerCreated = true
       }
@@ -38,14 +36,17 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      const metamaskAddress = req.body.walletAddress
-      if (addressesMinted.has(metamaskAddress)) {
-        addressesMinted.delete(metamaskAddress)
-        challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
-        res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })
-      } else {
-        res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })
+      const metamaskAddress = req.body?.walletAddress
+      if (typeof metamaskAddress !== 'string' || !EVM_ADDRESS_PATTERN.test(metamaskAddress)) {
+        res.status(400).json({ success: false, message: 'Invalid wallet address' })
+        return
       }
+      const hasMinted = addressesMinted.delete(metamaskAddress.toLowerCase())
+      res.status(200).json({
+        success: hasMinted,
+        message: hasMinted ? 'Wallet minted the NFT' : 'Wallet did not mint the NFT',
+        status: challenges.nftMintChallenge
+      })
     } catch (error) {
       res.status(500).json(utils.getErrorMessage(error))
     }

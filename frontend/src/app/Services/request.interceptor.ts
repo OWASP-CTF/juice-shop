@@ -10,7 +10,9 @@ import { type Observable } from 'rxjs'
 @Injectable()
 export class RequestInterceptor implements HttpInterceptor {
   intercept (req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    if (localStorage.getItem('token')) {
+    /* An explicitly supplied header wins, so a caller can act as someone other than
+       the currently stored session (e.g. the freshly registered account). */
+    if (localStorage.getItem('token') && !req.headers.has('Authorization')) {
       req = req.clone({
         setHeaders: {
           Authorization: `Bearer ${localStorage.getItem('token')}`

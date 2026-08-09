@@ -68,6 +68,9 @@ export const sanitizeSecure = (html: string): string => {
     return sanitizeSecure(sanitized)
   }
 }
+// Rejects values that could break out of a CSP directive if interpolated raw
+// (e.g. "; script-src 'unsafe-inline'"). Used for profileImage-derived CSP sources.
+export const isCspSafeUrl = (candidate: string): boolean => !/[\s;'"<>`]/.test(candidate)
 
 export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
@@ -153,16 +156,22 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
-export const isAccounting = () => {
+/* Verifies the JWT signature before trusting the role claim, so it cannot be
+   forged the way the client-side route guards can be. */
+const hasRole = (role: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-    if (decodedToken?.data?.role === roles.accounting) {
+    if (decodedToken?.data?.role === role) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
     }
   }
 }
+
+export const isAccounting = () => hasRole(roles.accounting)
+
+export const isAdmin = () => hasRole(roles.admin)
 
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
