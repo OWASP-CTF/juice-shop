@@ -3,28 +3,51 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Request, type Response } from 'express'
+import { type NextFunction, type Request, type Response } from 'express'
 import { RecycleModel } from '../models/recycle'
+import { AddressModel } from '../models/address'
 
 import * as utils from '../lib/utils'
 
-export const getRecycleItem = () => (req: Request, res: Response) => {
+export const getRecycleItem = () => async (req: Request, res: Response) => {
   // The id was run through JSON.parse and handed to the query builder, so a caller could
-  // supply an array or an object where a scalar was expected and widen the selector
-  // instead of naming one row. It is read as a plain integer.
+  // supply an array or an object where a scalar was expected and widen the selector. It is
+  // read as a plain integer, and the row is scoped to the caller so naming somebody else's
+  // recycle request returns nothing rather than their address.
   const id = Number.parseInt(req.params.id, 10)
   if (!Number.isSafeInteger(id) || id < 1) {
-    return res.status(400).send(utils.queryResultToJson({ err: 'Invalid recycle id.' }))
+    res.status(400).json({ error: 'Invalid recycle item id.' })
+    return
   }
-  RecycleModel.findAll({
-    where: {
-      id
+  try {
+    const recycle = await RecycleModel.findAll({ where: { id, UserId: req.body.UserId } })
+    res.send(utils.queryResultToJson(recycle))
+  } catch {
+    res.status(500).send('Error fetching recycled items. Please try again')
+  }
+}
+
+// A recycle request names the address the collection goes to. Without this the address can
+// be one belonging to somebody else.
+export const prepareRecycleItem = () => async (req: Request, res: Response, next: NextFunction) => {
+  const addressId = Number(req.body.AddressId)
+  const userId = Number(req.body.UserId)
+  if (!Number.isSafeInteger(addressId) || !Number.isSafeInteger(userId)) {
+    res.status(400).json({ error: 'A valid address is required.' })
+    return
+  }
+  try {
+    const address = await AddressModel.findOne({ where: { id: addressId, UserId: userId } })
+    if (!address) {
+      res.status(403).json({ error: 'Address does not belong to the authenticated user.' })
+      return
     }
-  }).then((Recycle) => {
-    return res.send(utils.queryResultToJson(Recycle))
-  }).catch((_: unknown) => {
-    return res.send('Error fetching recycled items. Please try again')
-  })
+    req.body.AddressId = addressId
+    req.body.UserId = userId
+    next()
+  } catch (error) {
+    next(error)
+  }
 }
 
 export const blockRecycleItems = () => (req: Request, res: Response) => {
