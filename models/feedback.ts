@@ -40,18 +40,17 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
-          if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
-            challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
-              return utils.contains(
-                sanitizedComment,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
-          }
+          /* A single sanitising pass is not enough: stripping an inner tag can reveal an outer
+             one that was not there before, so `<<script>Foo</script>iframe src="...">` comes back
+             out as a working iframe. Sanitising to a fixed point is the only version of this
+             check that holds, so it is the one used for every comment. */
+          const sanitizedComment = security.sanitizeSecure(comment)
+          challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
+            return utils.contains(
+              sanitizedComment,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
           this.setDataValue('comment', sanitizedComment)
         }
       },
