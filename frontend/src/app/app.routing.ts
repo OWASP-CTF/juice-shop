@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -52,6 +53,11 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
+const loadWeb3SandboxModule = async () => {
+  const module = await import('./web3-sandbox/web3-sandbox.module')
+  return module.Web3SandboxModule
+}
+
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -69,14 +75,11 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  /* TODO: Externalize admin functions into separate application
-           that is only accessible inside corporate network.
-   */
-  // { // vuln-code-snippet neutral-line adminSectionChallenge
-  //   path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-  //   component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-  //   canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  // }, // vuln-code-snippet neutral-line adminSectionChallenge
+  { // vuln-code-snippet neutral-line adminSectionChallenge
+    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
+    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+  }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -232,8 +235,15 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  // The web3 sandbox is a development-only feature and is not routed in production.
-  // vuln-code-snippet neutral-line web3SandboxChallenge
+  // The sandbox compiles and deploys contracts the caller writes. Its only protection was
+  // that the path went unadvertised, which is not a restriction - anyone who guesses or
+  // reads the route table reaches it. It is gated on the administrator role like every
+  // other privileged area.
+  { // vuln-code-snippet neutral-line web3SandboxChallenge
+    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line web3SandboxChallenge
+  }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -252,8 +262,14 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  // The unreleased token sale page is not routed. Obscuring its path was never a control.
-  // vuln-code-snippet neutral-line tokenSaleChallenge
+  // The token sale is unreleased. It was reachable through a matcher that rebuilt its path
+  // from arithmetic at runtime so the name would not appear in the bundle - obscurity, not
+  // access control. The matcher stays, but reaching the page now requires the role.
+  { // vuln-code-snippet neutral-line tokenSaleChallenge
+    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line tokenSaleChallenge
+  }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
@@ -283,6 +299,33 @@ export function oauthMatcher (url: UrlSegment[]): UrlMatchResult {
   return null as unknown as UrlMatchResult
 }
 
-// The token sale page was reachable only through an obfuscated path matcher. Hiding a
-// route is not access control, so the matcher and its two decoders are gone with it.
+export function tokenMatcher (url: UrlSegment[]): UrlMatchResult { // vuln-code-snippet neutral-line tokenSaleChallenge
+  if (url.length === 0) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
+  } // vuln-code-snippet neutral-line tokenSaleChallenge
+ // vuln-code-snippet neutral-line tokenSaleChallenge
+  const path = url[0].toString() // vuln-code-snippet neutral-line tokenSaleChallenge
+
+  if (path.match((token1(25, 184, 174, 179, 182, 186) + (36669).toString(36).toLowerCase() + token2(13, 144, 87, 152, 139, 144, 83, 138) + (10).toString(36).toLowerCase()))) { // vuln-code-snippet vuln-line tokenSaleChallenge
+    return ({ consumed: url }) // vuln-code-snippet neutral-line tokenSaleChallenge
+  } // vuln-code-snippet neutral-line tokenSaleChallenge
+ // vuln-code-snippet neutral-line tokenSaleChallenge
+  return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
+
+export function token1 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
+  const L = Array.prototype.slice.call(args) // vuln-code-snippet neutral-line tokenSaleChallenge
+  const D = L.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
+  return L.reverse().map(function (C, A) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return String.fromCharCode(C - D - 45 - A) // vuln-code-snippet neutral-line tokenSaleChallenge
+  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
+
+export function token2 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
+  const T = Array.prototype.slice.call(arguments) // vuln-code-snippet neutral-line tokenSaleChallenge
+  const M = T.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
+  return T.reverse().map(function (m, H) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return String.fromCharCode(m - M - 24 - H) // vuln-code-snippet neutral-line tokenSaleChallenge
+  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
 // vuln-code-snippet end tokenSaleChallenge
