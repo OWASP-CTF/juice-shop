@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -44,6 +45,14 @@ export function addBasketItem () {
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
 
+      // A product already in the basket is a request to change its quantity, not a second row.
+      // Letting it through raises a constraint error and reports a server fault for a request
+      // the customer is entitled to make.
+      const existing = await BasketItemModel.findOne({ where: { BasketId: basketItem.BasketId, ProductId: basketItem.ProductId } })
+      if (existing != null) {
+        res.status(400).json({ error: res.__('This product is already in your basket.') })
+        return
+      }
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
         const addedBasketItem = await basketItemInstance.save()
@@ -72,7 +81,9 @@ export function quantityCheckBeforeBasketItemUpdate () {
         if (item == null) {
           throw new Error('No such item found!')
         }
-        void quantityCheck(req, res, next, item.ProductId, req.body.quantity)
+        void quantityCheck(req, res, next, item.ProductId, req.body.quantity).catch((error: Error) => {
+          next(error)
+        })
       } else {
         next()
       }
@@ -86,6 +97,13 @@ async function quantityCheck (req: Request, res: Response, next: NextFunction, i
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')
+  }
+
+  // ProductModel is paranoid, so a withdrawn product resolves to null. Refusing the request is
+  // the answer here - raising instead reports a server fault for something the caller asked for.
+  if (await ProductModel.findByPk(id) == null) {
+    res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })
+    return
   }
 
   // is product limited per user and order, except if user is deluxe?
