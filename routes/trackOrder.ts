@@ -11,15 +11,17 @@ import { challenges } from '../data/datacache'
 
 export function trackOrder () {
   return (req: Request, res: Response) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.reflectedXssChallenge) ? String(req.params.id).replace(/[^\w-]+/g, '') : utils.trunc(req.params.id, 60)
+    const id = String(req.params.id).replace(/[^\w-]+/g, '')
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
-    db.ordersCollection.find({ $where: `this.orderId === '${id}'` }).then((order: any) => {
+    db.ordersCollection.find({ orderId: id }).then((order: any) => {
       const result = utils.queryResultToJson(order)
       challengeUtils.solveIf(challenges.noSqlOrdersChallenge, () => { return result.data.length > 1 })
-      if (result.data[0] === undefined) {
-        result.data[0] = { orderId: id }
+      if (result.data.length === 0) {
+        // An identifier that matches no order is a request for somebody else's order or for one
+        // that never existed. Inventing a row to answer with tells the caller the difference.
+        res.status(404).json({ error: 'No order found for that identifier.' })
+        return
       }
       res.json(result)
     }, () => {
