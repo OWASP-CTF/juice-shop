@@ -85,7 +85,7 @@
 -
   email: bjoern.kimminich@gmail.com
   username: bkimminich
-  password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+  password: 'aUHonOo7lOudgGE8NJqfSfNTEZUD'
   customDomain: true
   key: bjoernGoogle
   role: 'admin'
@@ -129,7 +129,7 @@
     answer: 'Hj2QcVn7ZsRt4WmXp9Ld'
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  password: 'IqVSXJEG1wxOQ90w0NrhKyDcfkmT'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -138,7 +138,7 @@
     answer: 'I even shared my pizza bagels with you!'
 -
   email: J12934
-  password: '0Y8rMnww$*9VFYE§59-!Fg1L6t&6lB'
+  password: '8MzTxzqXjEOrj9Qwmfw2uWJXKdaS'
   key: jannik
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'rOx0dErGbBYGasWUPbccPMFk4Wiz'
   key: amy
   role: 'customer'
   walletBalance: 48
