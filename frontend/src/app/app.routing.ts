@@ -237,7 +237,11 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox is internal tooling for writing smart contracts, not customer-facing
+    // functionality - it was reachable by anyone who found the route in the bundle. An
+    // unlinked URL is not access control, so a real guard now stands in front of it.
+    canActivate: [AdminGuard]
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
