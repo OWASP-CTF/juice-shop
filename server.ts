@@ -228,6 +228,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The web3 sandbox is a developer-only prototyping console. It was never access-controlled -
+     it was merely left unlinked, which is obscurity and not a control. Deny the sandbox and its
+     spacer asset at the server, the only enforcement point a client cannot bypass. The spacer is
+     denied by suffix rather than by one mount path, because the same file name is reachable under
+     every static asset prefix the shop exposes. */
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.includes('web3-sandbox') || req.path.endsWith('/11px.png')) {
+      security.denyAll()(req, res, next)
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
