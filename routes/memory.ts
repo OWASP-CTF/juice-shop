@@ -21,6 +21,8 @@ export function addMemory () {
 
 export function getMemories () {
   return async (req: Request, res: Response, next: NextFunction) => {
+    // The endpoint is anonymous and eager-loads the uploading user, so the association
+    // must not carry the credential columns into the response.
     const memories = await MemoryModel.findAll({
       include: [{ model: UserModel, attributes: { exclude: ['password', 'totpSecret'] } }]
     })

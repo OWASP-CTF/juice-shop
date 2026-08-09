@@ -53,8 +53,13 @@ export const promotionVideo = () => {
       if (err != null) throw err
       let template = buf.toString()
       const subs = getSubsFromFile()
+      // Subtitle content is untrusted and is HTML-encoded before it reaches the page, so
+      // the breakout sequence can no longer close the tag. The check below inspects what
+      // is actually emitted rather than the raw file, which previously reported a
+      // successful injection for input that the encoding had already neutralised.
+      const renderedSubs = entities.encode(subs)
 
-      challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
+      challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(renderedSubs, '</script><script>alert(`xss`)</script>') })
 
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
@@ -68,9 +73,7 @@ export const promotionVideo = () => {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
       let compiledTemplate = fn()
-      // Encode the characters that could terminate the raw text context of the script element
-      const encodedSubs = subs.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + encodedSubs + '</script>')
+      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + renderedSubs + '</script>')
       res.send(compiledTemplate)
     })
   }

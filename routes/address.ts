@@ -24,6 +24,20 @@ export function getAddressById () {
   }
 }
 
+export function delAddressById () {
+  return async (req: Request, res: Response) => {
+    const address = await AddressModel.destroy({ where: { id: req.params.id, UserId: req.body.UserId } })
+    if (address) {
+      res.status(200).json({ status: 'success', data: 'Address deleted successfully.' })
+    } else {
+      res.status(400).json({ status: 'error', data: 'Malicious activity detected.' })
+    }
+  }
+}
+
+// finale updates the row named in the path, and appendUserId only decides which id is
+// written into the body - it does not constrain which row is addressed. This refuses an
+// update aimed at an address the caller does not own.
 export function enforceAddressOwnership () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -35,17 +49,6 @@ export function enforceAddressOwnership () {
       next()
     } catch (error) {
       next(error)
-    }
-  }
-}
-
-export function delAddressById () {
-  return async (req: Request, res: Response) => {
-    const address = await AddressModel.destroy({ where: { id: req.params.id, UserId: req.body.UserId } })
-    if (address) {
-      res.status(200).json({ status: 'success', data: 'Address deleted successfully.' })
-    } else {
-      res.status(400).json({ status: 'error', data: 'Malicious activity detected.' })
     }
   }
 }

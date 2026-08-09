@@ -3,41 +3,38 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
-/* The seed phrase of this wallet used to be written out right here in the source. A mnemonic is
-   the credential - whoever reads it owns every key the wallet can ever derive - so committing it
-   put the wallet in every clone, every fork, every published container image and every search
-   result for the phrase. Secrets are configuration, not code: the phrase now comes from the
-   environment, and when the operator supplies none the shop derives a throw-away wallet at boot
-   so there is nothing left to leak. */
-let walletKeys: Promise<{ privateKey: string, publicKey: string, address: string }> | undefined
+// The seed phrase that used to be written out here derived the very key this endpoint
+// checks for, and the phrase travelled with the source, so the key it protects was known
+// to anybody holding a copy. The wallet is generated once per process instead: the check
+// and its hints behave exactly as before, the key simply is not written down anywhere.
+let walletPromise: Promise<{ privateKey: string, publicKey: string, address: string }> | null = null
 
-const soulBoundWallet = async () => {
-  if (!walletKeys) {
-    walletKeys = (async () => {
-      const { HDNodeWallet, Wallet } = await import('ethers')
-      const phrase = process.env.NFT_WALLET_MNEMONIC
-      const wallet = phrase ? HDNodeWallet.fromPhrase(phrase) : Wallet.createRandom()
+async function juicyNftWallet () {
+  if (walletPromise === null) {
+    walletPromise = import('ethers').then(({ Wallet }) => {
+      const wallet = Wallet.createRandom()
       return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
-    })()
+    }).catch((error: unknown) => {
+      walletPromise = null
+      throw error
+    })
   }
-  return await walletKeys
+  return await walletPromise
 }
 
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { privateKey, publicKey, address } = await soulBoundWallet()
-      const submittedKey = typeof req.body?.privateKey === 'string' ? req.body.privateKey : ''
-
+      const { privateKey, publicKey, address } = await juicyNftWallet()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
-        return submittedKey === privateKey
+        return req.body.privateKey === privateKey
       })
-      if (submittedKey === privateKey) {
+      if (req.body.privateKey === privateKey) {
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftUnlockChallenge })
       } else {
-        if (submittedKey === address) {
+        if (req.body.privateKey === address) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else if (submittedKey === publicKey) {
+        } else if (req.body.privateKey === publicKey) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
         } else {
           res.status(401).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })

@@ -11,8 +11,9 @@ import { challenges } from '../data/datacache'
 
 export function trackOrder () {
   return (req: Request, res: Response) => {
-    // Restrict the order id to harmless characters so it can never be reflected as markup
-    const id = String(req.params.id).replace(/[^\w-]+/g, '')
+    // Strip anything that is not part of a legitimate order id, always - not only when
+    // the challenge happens to be disabled.
+    const id = String(req.params.id).replace(/[^0-9a-zA-Z_-]+/g, '')
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
     db.ordersCollection.find({ orderId: id }).then((order: any) => {

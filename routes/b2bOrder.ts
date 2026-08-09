@@ -9,8 +9,18 @@ import * as security from '../lib/insecurity'
 
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
-    /* Order lines are payload data and are never interpreted as code. Neither a real nor a
-       "safe" sandboxed evaluation of client-supplied input happens here anymore. */
+    const orderLinesData = body.orderLinesData
+    // Order lines are data. They are parsed, never evaluated, so no caller input
+    // reaches an interpreter.
+    if (typeof orderLinesData === 'string' && orderLinesData !== '') {
+      try {
+        JSON.parse(orderLinesData)
+      } catch {
+        res.status(400)
+        next(new Error('Invalid orderLinesData: expected JSON'))
+        return
+      }
+    }
     res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 

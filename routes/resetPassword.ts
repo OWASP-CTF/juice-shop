@@ -43,7 +43,9 @@ export function resetPassword () {
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
           verifySecurityAnswerChallenges(updatedUser, answer)
-          res.json({ user: { id: updatedUser.id, email: updatedUser.email } })
+          // The whole model used to go back, so a successful reset handed the caller the
+          // password hash and the TOTP secret of the account they had just reset.
+          res.json({ user: security.publicUserView(updatedUser) })
         }
       } else {
         res.status(401).send(res.__('Wrong answer to security question.'))

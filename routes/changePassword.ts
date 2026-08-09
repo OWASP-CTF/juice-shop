@@ -10,17 +10,25 @@ import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
 
 export function changePassword () {
-  return async ({ body, query, headers, connection }: Request, res: Response, next: NextFunction) => {
-    const currentPassword = (body?.current ?? query.current) as string
-    const newPassword = (body?.new ?? query.new) as string
+  return async ({ query, headers, connection }: Request, res: Response, next: NextFunction) => {
+    const currentPassword = query.current as string
+    const newPassword = query.new as string
     const newPasswordInString = newPassword?.toString()
-    const repeatPassword = body?.repeat ?? query.repeat
+    const repeatPassword = query.repeat
 
     if (!newPassword || newPassword === 'undefined') {
       res.status(401).send(res.__('Password cannot be empty.'))
       return
     } else if (newPassword !== repeatPassword) {
       res.status(401).send(res.__('New and repeated password do not match.'))
+      return
+    }
+
+    // Same policy as registration, from the same source, so a weak password cannot be
+    // introduced through the back door of a password change.
+    const violation = security.validatePasswordPolicy(newPasswordInString)
+    if (violation) {
+      res.status(401).send(violation)
       return
     }
 
@@ -36,8 +44,6 @@ export function changePassword () {
       return
     }
 
-    /* Changing a password always requires proving knowledge of the current one, otherwise a
-       leaked or ridden session is enough to take an account over permanently */
     if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
@@ -51,13 +57,12 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
-      /* The detector stays in place: the fix above is what makes it unreachable, since a change
-         without the current password is now rejected before ever getting here. */
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user: { id: user.id, email: user.email } })
+      // Returning the model here handed back the freshly written password hash.
+      res.json({ user: security.publicUserView(user) })
     } catch (error) {
       next(error)
     }

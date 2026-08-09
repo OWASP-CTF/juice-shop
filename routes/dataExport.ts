@@ -23,6 +23,8 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
+          // The export belongs to the signed-in account. Taking the id from the body let a
+          // caller name somebody else's user id and export their memories.
           memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
@@ -30,7 +32,15 @@ export function dataExport () {
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          // Orders are stored against the vowel-masked address, so two different accounts
+          // can share one masked string and each would export the other's orders. The
+          // order id carries a hash of the real address, so the rows are narrowed to the
+          // ones this account actually placed.
+          const accountOrderPrefix = security.hash(email).slice(0, 4) + '-'
+          const ordersForMaskedEmail = await db.ordersCollection.find({ email: updatedEmail })
+          orders = ordersForMaskedEmail.filter((order: { orderId?: unknown }) =>
+            typeof order.orderId === 'string' && order.orderId.startsWith(accountOrderPrefix)
+          )
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return

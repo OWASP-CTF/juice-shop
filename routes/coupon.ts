@@ -20,8 +20,11 @@ export function applyCoupon () {
         next(new Error(`Basket with id=${id} does not exist.`))
         return
       }
+
+      // The basket id comes from the path. Without this the endpoint writes a coupon onto
+      // whichever basket is named, not the one belonging to the caller.
       const customer = security.authenticatedUsers.from(req)
-      if (basket.UserId !== customer?.data.id) {
+      if (!customer?.data?.id || basket.UserId !== customer.data.id) {
         res.status(403).json({ error: 'Malicious activity detected.' })
         return
       }

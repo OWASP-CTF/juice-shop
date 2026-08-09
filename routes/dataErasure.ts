@@ -99,8 +99,11 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
         _logo_: utils.extractFilename(config.get('application.logo'))
       }
 
-      // A caller-controlled layout is a path handed to the view engine. The erasure form
-      // does not need one, so reject it and keep the rendered template server-selected.
+      // The layout is a path the caller supplies, handed straight to the view engine. The
+      // denylist it used to rely on only covered ftp/, ctf.key and encryptionkeys/, so any
+      // other file on disk could be rendered and its first hundred characters returned.
+      // The erasure form does not send a layout, so the parameter is refused rather than
+      // filtered, and the template it renders is fixed.
       if (req.body.layout) {
         challengeUtils.solveIf(challenges.lfrChallenge, () => { return false })
         next(new Error('File access not allowed'))
