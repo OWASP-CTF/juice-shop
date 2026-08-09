@@ -50,39 +50,43 @@ describe('redirect', () => {
     expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
   })
 
-  it('redirecting to https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm should solve the "redirectCryptoCurrencyChallenge"', () => {
+  it('no longer redirects to the outdated crypto address https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm and does not solve "redirectCryptoCurrencyChallenge"', () => {
     req.query.to = 'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm'
     challenges.redirectCryptoCurrencyChallenge = { solved: false, save } as unknown as Challenge
 
     performRedirect()(req, res, next)
 
-    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(true)
+    expect(res.redirect).to.have.not.been.calledWith(sinon.match.any)
+    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(false)
   })
 
-  it('redirecting to https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW should solve the "redirectCryptoCurrencyChallenge"', () => {
+  it('no longer redirects to the outdated crypto address https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW and does not solve "redirectCryptoCurrencyChallenge"', () => {
     req.query.to = 'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW'
     challenges.redirectCryptoCurrencyChallenge = { solved: false, save } as unknown as Challenge
 
     performRedirect()(req, res, next)
 
-    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(true)
+    expect(res.redirect).to.have.not.been.calledWith(sinon.match.any)
+    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(false)
   })
 
-  it('redirecting to https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 should solve the "redirectCryptoCurrencyChallenge"', () => {
+  it('no longer redirects to the outdated crypto address https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 and does not solve "redirectCryptoCurrencyChallenge"', () => {
     req.query.to = 'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6'
     challenges.redirectCryptoCurrencyChallenge = { solved: false, save } as unknown as Challenge
 
     performRedirect()(req, res, next)
 
-    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(true)
+    expect(res.redirect).to.have.not.been.calledWith(sinon.match.any)
+    expect(challenges.redirectCryptoCurrencyChallenge.solved).to.equal(false)
   })
 
-  it('tricking the allowlist should solve "redirectChallenge"', () => {
+  it('no longer lets an allowlisted URL smuggled into the query string solve "redirectChallenge"', () => {
     req.query.to = 'http://kimminich.de?to=https://github.com/juice-shop/juice-shop'
     challenges.redirectChallenge = { solved: false, save } as unknown as Challenge
 
     performRedirect()(req, res, next)
 
-    expect(challenges.redirectChallenge.solved).to.equal(true)
+    expect(res.redirect).to.have.not.been.calledWith(sinon.match.any)
+    expect(challenges.redirectChallenge.solved).to.equal(false)
   })
 })

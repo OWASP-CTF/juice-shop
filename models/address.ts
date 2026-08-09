@@ -11,6 +11,7 @@ import {
   DataTypes,
   type Sequelize
 } from 'sequelize'
+import * as security from '../lib/insecurity'
 /* jslint node: true */
 class Address extends Model<
 InferAttributes<Address>,
@@ -39,7 +40,10 @@ const AddressModelInit = (sequelize: Sequelize) => {
         autoIncrement: true
       },
       fullName: {
-        type: DataTypes.STRING
+        type: DataTypes.STRING,
+        set (fullName: string) {
+          this.setDataValue('fullName', security.sanitizeSecure(fullName ?? ''))
+        }
       },
       mobileNum: {
         type: DataTypes.INTEGER,
@@ -59,11 +63,29 @@ const AddressModelInit = (sequelize: Sequelize) => {
         type: DataTypes.STRING,
         validate: {
           len: [1, 160]
+        },
+        set (streetAddress: string) {
+          this.setDataValue('streetAddress', security.sanitizeSecure(streetAddress ?? ''))
         }
       },
-      city: DataTypes.STRING,
-      state: DataTypes.STRING,
-      country: DataTypes.STRING
+      city: {
+        type: DataTypes.STRING,
+        set (city: string) {
+          this.setDataValue('city', security.sanitizeSecure(city ?? ''))
+        }
+      },
+      state: {
+        type: DataTypes.STRING,
+        set (state: string | null) {
+          this.setDataValue('state', state == null ? state : security.sanitizeSecure(state))
+        }
+      },
+      country: {
+        type: DataTypes.STRING,
+        set (country: string) {
+          this.setDataValue('country', security.sanitizeSecure(country ?? ''))
+        }
+      }
     },
     {
       tableName: 'Addresses',

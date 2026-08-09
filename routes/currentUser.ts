@@ -8,6 +8,8 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+const ALLOWED_WHOAMI_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -25,9 +27,10 @@ export function retrieveLoggedInUser () {
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only those fields that are on the allow-list
+          // (never leak sensitive fields such as password or totpSecret, no matter what is requested)
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
+            if (ALLOWED_WHOAMI_FIELDS.includes(field) && user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
           }

@@ -143,8 +143,7 @@ export class FaucetComponent implements OnInit {
         signer
       )
       const balance = await contract.balance()
-      console.log(balance)
-      this.BEEBalance = balance
+      this.BEEBalance = balance.toNumber()
     } catch (error) {
       console.error('Error fetching BEE balance:', error)
     }
@@ -208,11 +207,30 @@ export class FaucetComponent implements OnInit {
     }
   }
 
+  private validateWithdrawAmount (amount: number): string | null {
+    if (!Number.isInteger(amount)) {
+      return 'Enter a whole number of BEEs to claim.'
+    }
+    if (amount <= 0) {
+      return 'The number of BEEs to claim must be greater than zero.'
+    }
+    if (amount > this.BEEBalance) {
+      return `The faucet only holds ${this.BEEBalance} BEEs.`
+    }
+    return null
+  }
+
   async extractBEETokens (amount = this.withdrawAmount) {
     if (!this.session) {
       this.snackBarHelperService.open('PLEASE_CONNECT_WEB3_WALLET', 'errorBar')
       return
     }
+    const validationError = this.validateWithdrawAmount(amount)
+    if (validationError) {
+      this.errorMessage = validationError
+      return
+    }
+    this.errorMessage = ''
     try {
       const provider = new ethers.providers.Web3Provider(window.ethereum)
       const signer = provider.getSigner()

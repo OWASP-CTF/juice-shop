@@ -17,8 +17,11 @@ export class SecurityAnswerService {
   private readonly hostServer = environment.hostServer
   private readonly host = this.hostServer + '/api/SecurityAnswers'
 
-  save (params: any) {
-    return this.http.post(this.host + '/', params).pipe(
+  /* The token is passed explicitly for the registration flow, which has to authenticate
+     as the brand new account without starting a session for it. */
+  save (params: any, token?: string) {
+    const options = token ? { headers: { Authorization: `Bearer ${token}` } } : {}
+    return this.http.post(this.host + '/', params, options).pipe(
       map((response: any) => response.data),
       catchError((err) => { throw err })
     )
