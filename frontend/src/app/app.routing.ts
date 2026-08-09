@@ -254,9 +254,19 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
+  /* The token sale page describes an offering that has not been announced yet, so it is internal
+     material until it is not. What used to stand between a visitor and that page was nothing but a
+     hard-to-read address: the route matched a string that was assembled at runtime out of
+     arithmetic instead of being written down. That is not a permission check. The routing table is
+     part of the bundle every browser downloads, so the address can be recovered by anyone who
+     cares to run the same arithmetic, and once recovered it opens the page for everybody - there is
+     no notion of who is allowed in. The route is spelled out plainly now and admission is decided
+     by the same role check that guards the shop's other internal areas, so the page is withheld
+     from visitors who were never granted access rather than merely hidden from them. */
   { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+    path: 'tokensale-ico-ea', // vuln-code-snippet vuln-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line tokenSaleChallenge
   }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
@@ -287,33 +297,4 @@ export function oauthMatcher (url: UrlSegment[]): UrlMatchResult {
   return null as unknown as UrlMatchResult
 }
 
-export function tokenMatcher (url: UrlSegment[]): UrlMatchResult { // vuln-code-snippet neutral-line tokenSaleChallenge
-  if (url.length === 0) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
-  } // vuln-code-snippet neutral-line tokenSaleChallenge
- // vuln-code-snippet neutral-line tokenSaleChallenge
-  const path = url[0].toString() // vuln-code-snippet neutral-line tokenSaleChallenge
-
-  if (path.match((token1(25, 184, 174, 179, 182, 186) + (36669).toString(36).toLowerCase() + token2(13, 144, 87, 152, 139, 144, 83, 138) + (10).toString(36).toLowerCase()))) { // vuln-code-snippet vuln-line tokenSaleChallenge
-    return ({ consumed: url }) // vuln-code-snippet neutral-line tokenSaleChallenge
-  } // vuln-code-snippet neutral-line tokenSaleChallenge
- // vuln-code-snippet neutral-line tokenSaleChallenge
-  return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
-
-export function token1 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
-  const L = Array.prototype.slice.call(args) // vuln-code-snippet neutral-line tokenSaleChallenge
-  const D = L.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
-  return L.reverse().map(function (C, A) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return String.fromCharCode(C - D - 45 - A) // vuln-code-snippet neutral-line tokenSaleChallenge
-  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
-
-export function token2 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
-  const T = Array.prototype.slice.call(arguments) // vuln-code-snippet neutral-line tokenSaleChallenge
-  const M = T.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
-  return T.reverse().map(function (m, H) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return String.fromCharCode(m - M - 24 - H) // vuln-code-snippet neutral-line tokenSaleChallenge
-  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
 // vuln-code-snippet end tokenSaleChallenge
