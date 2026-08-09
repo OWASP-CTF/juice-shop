@@ -24,9 +24,17 @@ export function retrieveLoggedInUser () {
 
         let baseUser: any = {}
 
+        /* The fields parameter used to project any column of the user record,
+           so /rest/user/whoami?fields=password handed back the stored password
+           hash. Only the fields this endpoint is meant to expose are selectable. */
+        const selectableFields = ['id', 'email', 'lastLoginIp', 'profileImage']
+
         if (requestedFields.length > 0) {
           // When fields are specified, return only those fields
           for (const field of requestedFields) {
+            if (!selectableFields.includes(field)) {
+              continue
+            }
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }

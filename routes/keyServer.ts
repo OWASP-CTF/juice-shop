@@ -3,18 +3,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
+import * as security from '../lib/insecurity'
 
 export function serveKeyFiles () {
   return ({ params }: Request, res: Response, next: NextFunction) => {
     const file = params.file
 
-    if (!file.includes('/')) {
-      res.sendFile(path.resolve('encryptionkeys/', file))
+    if (file === 'jwt.pub') {
+      /* A verification key is public by design, but no other file from the key
+         directory is remotely retrievable. */
+      res.type('text/plain').send(security.publicKey)
     } else {
-      res.status(403)
-      next(new Error('File names cannot contain forward slashes!'))
+      res.status(404)
+      next(new Error('Key not found'))
     }
   }
 }

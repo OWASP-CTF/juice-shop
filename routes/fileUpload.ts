@@ -39,10 +39,13 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
+                const uploadRoot = path.resolve('uploads/complaints')
+                const absolutePath = path.resolve(uploadRoot, fileName)
                 challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                /* Only extract entries that stay inside the upload directory, so a
+                   crafted archive cannot traverse out of it and overwrite app files. */
+                if (absolutePath.startsWith(uploadRoot + path.sep)) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -58,17 +61,17 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
 }
 
 function checkUploadSize ({ file }: Request, res: Response, next: NextFunction) {
-  if (file != null) {
-    challengeUtils.solveIf(challenges.uploadSizeChallenge, () => { return file?.size > 100000 })
+  if (file != null && file.size > 100000) {
+    return res.status(400).json({ error: 'File too large' })
   }
   next()
 }
 
 function checkFileType ({ file }: Request, res: Response, next: NextFunction) {
   const fileType = file?.originalname.substr(file.originalname.lastIndexOf('.') + 1).toLowerCase()
-  challengeUtils.solveIf(challenges.uploadTypeChallenge, () => {
-    return !(fileType === 'pdf' || fileType === 'xml' || fileType === 'zip' || fileType === 'yml' || fileType === 'yaml')
-  })
+  if (!(fileType === 'pdf' || fileType === 'xml' || fileType === 'zip' || fileType === 'yml' || fileType === 'yaml')) {
+    return res.status(400).json({ error: 'Unsupported file type' })
+  }
   next()
 }
 
@@ -80,7 +83,7 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

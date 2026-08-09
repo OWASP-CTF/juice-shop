@@ -40,24 +40,30 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          let sanitizedComment: string
+          const sanitizedComment = security.sanitizeHtml(comment)
           if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-            sanitizedComment = security.sanitizeHtml(comment)
             challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
               return utils.contains(
                 sanitizedComment,
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            sanitizedComment = security.sanitizeSecure(comment)
           }
-          this.setDataValue('comment', sanitizedComment)
+          /* Always reach a sanitization fixed point before storing, regardless
+             of challenge enablement or application safety mode. */
+          this.setDataValue('comment', security.sanitizeSecure(sanitizedComment))
         }
       },
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        /* Only the Angular form enforced the one-to-five star range, so posting
+           straight to the API accepted a zero (or otherwise out-of-range)
+           rating. The bound is now enforced server-side. */
+        validate: {
+          min: 1,
+          max: 5
+        },
         set (rating: number) {
           this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {

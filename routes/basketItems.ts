@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -34,12 +35,26 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+    /* Validate the very BasketId that is used below: checking basketIds[0] while
+       building the item from the last entry let a duplicated key slip a foreign
+       basket past the check. */
+    const requestedBasketId = basketIds[basketIds.length - 1]
+    if (user && requestedBasketId && requestedBasketId !== 'undefined' && Number(user.bid) !== Number(requestedBasketId)) {
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
+      const requestedProductId = Number(productIds[productIds.length - 1])
+      if (!Number.isInteger(requestedProductId) || requestedProductId < 1) {
+        res.status(400).json({ error: 'Invalid product.' })
+        return
+      }
+      const onSale = await ProductModel.findOne({ where: { id: requestedProductId } })
+      if (onSale == null) {
+        res.status(400).json({ error: 'This product is no longer available.' })
+        return
+      }
       const basketItem = {
-        ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        ProductId: requestedProductId,
+        BasketId: requestedBasketId,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -83,6 +98,12 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  /* A negative or fractional quantity passed every check below and produced a
+     negative order total, so reject anything that is not a positive integer. */
+  if (!Number.isInteger(Number(quantity)) || Number(quantity) < 1) {
+    res.status(400).json({ error: res.__('Invalid quantity.') })
+    return
+  }
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')

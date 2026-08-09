@@ -36,7 +36,7 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }
@@ -49,11 +49,13 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
+      security.authenticatedUsers.remove(token)
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      /* Echoing the model returned the freshly stored password hash. */
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

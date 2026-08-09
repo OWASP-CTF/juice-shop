@@ -20,6 +20,22 @@ export function updateUserProfile () {
       return
     }
 
+    /* This form is authenticated by cookie alone, so without an origin check a
+       page on another site could silently submit it on the victim's behalf. */
+    const origin = req.headers.origin ?? req.headers.referer
+    if (origin) {
+      let originHost: string | null = null
+      try {
+        originHost = new URL(origin).host
+      } catch {
+        originHost = null
+      }
+      if (originHost === null || originHost !== req.headers.host) {
+        res.status(403).send('Cross-site request blocked.')
+        return
+      }
+    }
+
     try {
       const user = await UserModel.findByPk(loggedInUser.data.id)
       if (!user) {

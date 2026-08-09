@@ -11,8 +11,6 @@ import * as security from '../lib/insecurity'
 import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
-const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
-
 export function likeProductReviews () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const id = req.body.id
@@ -37,12 +35,16 @@ export function likeProductReviews () {
         { $inc: { likesCount: 1 } }
       )
 
-      // Artificial wait for timing attack challenge
-      await sleep(150)
       try {
         const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
         const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
+        /* The read-modify-write below used to be separated from the check above
+           by an artificial delay, so concurrent requests could each append the
+           same address and like a review repeatedly. Appending only when absent
+           makes the update idempotent. */
+        if (!updatedLikedBy.includes(user.data.email)) {
+          updatedLikedBy.push(user.data.email)
+        }
 
         const count = updatedLikedBy.filter(email => email === user.data.email).length
         challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)

@@ -43,17 +43,17 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
-          if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-            challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
-              return utils.contains(
-                description,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            description = security.sanitizeSecure(description)
-          }
-          this.setDataValue('description', description)
+          challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
+            return utils.contains(
+              description,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          /* The description is rendered as markup on the search page, so a
+             product written through the REST API was persisted XSS for every
+             visitor. It is now sanitised on every write, not only when this
+             challenge happened to be disabled. */
+          this.setDataValue('description', security.sanitizeSecure(description))
         }
       },
       price: DataTypes.DECIMAL,

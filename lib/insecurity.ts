@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -16,11 +14,20 @@ import * as utils from './utils'
 
 /* jslint node: true */
 
-// @ts-expect-error FIXME no typescript definitions for z85 :(
-import * as z85 from 'z85'
-
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+const configuredPrivateKey = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, '\n')
+const configuredPublicKey = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, '\n')
+if ((configuredPrivateKey && !configuredPublicKey) || (!configuredPrivateKey && configuredPublicKey)) {
+  throw new Error('JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured together')
+}
+const generatedKeys = configuredPrivateKey && configuredPublicKey
+  ? null
+  : crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  })
+export const publicKey = configuredPublicKey ?? generatedKeys?.publicKey ?? ''
+const privateKey = configuredPrivateKey ?? generatedKeys?.privateKey ?? ''
 
 interface ResponseWithUser {
   status?: string
@@ -38,9 +45,14 @@ interface IAuthenticatedUsers {
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
+  remove: (token: string) => void
+  removeByUserId: (userId: number) => void
 }
 
-export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
+/* MD5 is a broken hash and unsuitable for storing credentials. Both the
+   password setter and every comparison go through this function, so moving to
+   SHA-256 keeps them consistent. */
+export const hash = (data: string) => crypto.createHash('sha256').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
 export const cutOffPoisonNullByte = (str: string) => {
@@ -51,11 +63,33 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
+export const verify = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const decodedToken = decode(token)
+    const expiresAt = typeof decodedToken === 'object' && decodedToken !== null ? decodedToken.exp : undefined
+    return jws.verify(token, 'RS256', publicKey) && typeof expiresAt === 'number' && expiresAt > Math.floor(Date.now() / 1000)
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  if (token && authenticatedUsers.get(token)) {
+    next()
+  } else {
+    res.status(401).json({ error: 'Authentication required' })
+  }
+}
+
+export const denyAll = () => (_req: Request, res: Response) => {
+  res.status(401).json({ error: 'Access denied' })
+}
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -73,14 +107,36 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
   put: function (token: string, user: ResponseWithUser) {
+    const previousToken = this.idMap[user.data.id]
+    if (previousToken && previousToken !== token) {
+      delete this.tokenMap[previousToken]
+    }
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const rawToken = utils.unquote(token)
+    const user = this.tokenMap[rawToken]
+    if (!user) {
+      return undefined
+    }
+    try {
+      if (!verify(rawToken)) {
+        this.remove(rawToken)
+        return undefined
+      }
+      return user
+    } catch {
+      this.remove(rawToken)
+      return undefined
+    }
   },
   tokenOf: function (user: UserModel) {
-    return user ? this.idMap[user.id] : undefined
+    const token = user ? this.idMap[user.id] : undefined
+    return token && this.get(token) ? token : undefined
   },
   from: function (req: Request) {
     const token = utils.jwtFrom(req)
@@ -89,6 +145,20 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
     this.put(token, user)
+  },
+  remove: function (token: string) {
+    const rawToken = utils.unquote(token)
+    const user = this.tokenMap[rawToken]
+    delete this.tokenMap[rawToken]
+    if (user && this.idMap[user.data.id] === rawToken) {
+      delete this.idMap[user.data.id]
+    }
+  },
+  removeByUserId: function (userId: number) {
+    const token = this.idMap[userId]
+    if (token) {
+      this.remove(token)
+    }
   }
 }
 
@@ -96,24 +166,58 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+/* z85 is an encoding, not a signature, so anyone could mint a coupon for an
+   arbitrary discount by encoding the expected string. Coupons now carry an
+   HMAC that only the server can produce. */
+const couponSignature = (payload: string) => crypto.createHmac('sha256', privateKey).update(payload).digest('hex').substring(0, 32)
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const payload = utils.toMMMYY(date) + '-' + discount
+  return Buffer.from(payload).toString('hex') + couponSignature(payload)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
-  if (!coupon) {
+  if (!coupon || coupon.length <= 32) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  const signature = coupon.substring(coupon.length - 32)
+  const payloadHex = coupon.substring(0, coupon.length - 32)
+  if (!/^[0-9a-fA-F]*$/.test(payloadHex)) {
+    return undefined
   }
+  const payload = Buffer.from(payloadHex, 'hex').toString('utf8')
+  if (signature !== couponSignature(payload) || hasValidFormat(payload) == null) {
+    return undefined
+  }
+  const parts = payload.split('-')
+  if (utils.toMMMYY(new Date()) === parts[0]) {
+    return parseInt(parts[1])
+  }
+}
+
+/* hashids obfuscates, it does not authenticate: anyone could craft a continue
+   code that restores arbitrary challenge ids. Progress codes now carry an HMAC,
+   and stay alphanumeric so the existing format check still accepts them. */
+const progressSignature = (namespace: string, payloadHex: string) => crypto.createHmac('sha256', privateKey).update(namespace + ':' + payloadHex).digest('hex').substring(0, 32)
+
+export const encodeProgress = (namespace: string, ids: number[]) => {
+  const payloadHex = Buffer.from(ids.join('.')).toString('hex')
+  return payloadHex + progressSignature(namespace, payloadHex)
+}
+
+export const decodeProgress = (namespace: string, code?: string): number[] => {
+  if (!code || code.length <= 32) {
+    return []
+  }
+  const signature = code.substring(code.length - 32)
+  const payloadHex = code.substring(0, code.length - 32)
+  if (!/^[0-9a-fA-F]+$/.test(payloadHex) || signature !== progressSignature(namespace, payloadHex)) {
+    return []
+  }
+  return Buffer.from(payloadHex, 'hex').toString('utf8')
+    .split('.')
+    .map(Number)
+    .filter((id) => Number.isInteger(id))
 }
 
 function hasValidFormat (coupon: string) {
@@ -123,9 +227,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +236,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -155,8 +256,19 @@ export const deluxeToken = (email: string) => {
 
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-    if (decodedToken?.data?.role === roles.accounting) {
+    const user = authenticatedUsers.from(req)
+    if (user?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = authenticatedUsers.from(req)
+    if (user?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -165,13 +277,12 @@ export const isAccounting = () => {
 }
 
 export const isDeluxe = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
+  const user = authenticatedUsers.from(req)
+  return user?.data?.role === roles.deluxe && user.data.deluxeToken && user.data.deluxeToken === deluxeToken(user.data.email)
 }
 
 export const isCustomer = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.customer
+  return authenticatedUsers.from(req)?.data?.role === roles.customer
 }
 
 export const appendUserId = () => {
@@ -187,15 +298,11 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null) {
-        if (authenticatedUsers.get(token) === undefined) {
-          authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
-        }
-      }
-    })
+  /* A signed JWT is not enough to recreate a server-side session. Tokens are
+     removed from authenticatedUsers on password changes and newer logins; adding
+     them back here made revocation ineffective. */
+  if (token && authenticatedUsers.get(token) !== undefined) {
+    res.cookie('token', token, { httpOnly: true, sameSite: 'strict' })
   }
   next()
 }
