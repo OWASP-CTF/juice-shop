@@ -44,20 +44,6 @@ import { ChatbotComponent } from './chatbot/chatbot.component'
 import { ChatWelcomePageComponent } from './chatbot/chat-welcome-page/chat-welcome-page.component'
 import { ChatConversationComponent } from './chatbot/chat-conversation/chat-conversation.component'
 
-const loadFaucetModule = async () => {
-  const module = await import('./faucet/faucet.module')
-  return module.FaucetModule
-}
-const loadWeb3WalletModule = async () => {
-  const module = await import('./wallet-web3/wallet-web3.module')
-  return module.WalletWeb3Module
-}
-
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
-}
-
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -232,24 +218,12 @@ const routes: Routes = [
     component: NFTUnlockComponent
   },
   {
-    path: 'wallet-web3',
-    loadChildren: async () => await loadWeb3WalletModule()
-  },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
-  {
     path: 'chatbot',
     component: ChatbotComponent,
     children: [
       { path: '', component: ChatWelcomePageComponent },
       { path: 'conversation/:id', component: ChatConversationComponent }
     ]
-  },
-  {
-    path: 'bee-haven',
-    loadChildren: async () => await loadFaucetModule()
   },
   // vuln-code-snippet start tokenSaleChallenge
   {
