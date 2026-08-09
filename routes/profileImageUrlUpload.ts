@@ -184,10 +184,16 @@ export function profileImageUrlUpload () {
       const url = req.body.imageUrl
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
+        // Refuse the disallowed target out loud. Throwing here dropped into the shared catch
+        // below, which kept the previous picture and then answered with the same redirect to
+        // /profile that a successful upload returns - so a request the server refused to make
+        // was indistinguishable from one it made and stored. A caller aiming at an internal
+        // address now gets an explicit rejection instead of a silent no-op dressed as success.
+        if (!isSafeOutboundUrl(url)) {
+          res.status(400).json({ error: 'The image URL is not an allowed outbound target' })
+          return
+        }
         try {
-          if (!isSafeOutboundUrl(url)) {
-            throw new Error('image url is not an allowed outbound target')
-          }
           const { response, reachedInternalTarget } = await fetchWithValidatedRedirects(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
