@@ -44,8 +44,9 @@ export class TrackResultComponent implements OnInit {
   ngOnInit (): void {
     this.orderId = this.route.snapshot.queryParams.id
     this.trackOrderService.find(this.orderId).subscribe((results) => {
-
-      this.results.orderNo = this.sanitizer.bypassSecurityTrustHtml(`<code>${results.data[0].orderId}</code>`)
+      // The order id is reflected straight from the request, so it stays a string and is
+      // rendered as text rather than trusted markup.
+      this.results.orderNo = results.data[0].orderId
       this.results.email = results.data[0].email
       this.results.totalPrice = results.data[0].totalPrice
       this.results.products = results.data[0].products
