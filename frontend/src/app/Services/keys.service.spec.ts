@@ -73,7 +73,7 @@ describe('KeysService', () => {
     service.verifyNFTWallet('walletAddress').subscribe((res) => {
       expect(res).toBe('apiResponse')
     })
-    const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletNFTProof')
+    const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletNFTVerify')
     expect(req.request.method).toBe('POST')
     expect(req.request.body).toEqual({ walletAddress: 'walletAddress' })
     req.flush('apiResponse')
@@ -124,7 +124,7 @@ describe('KeysService', () => {
   it('should handle error in verifyNFTWallet', () => {
     let capturedError: any
     service.verifyNFTWallet('walletAddress').subscribe({ next: () => expect(true).toBe(false), error: (e) => { capturedError = e } })
-    const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletNFTProof')
+    const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletNFTVerify')
     req.error(new ErrorEvent('Request failed'), { status: 500, statusText: 'Internal Server Error' })
     expect(capturedError.status).toBe(500)
   })
