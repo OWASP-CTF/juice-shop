@@ -432,6 +432,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Challenge evaluation before finale takes over */
+  app.get('/api/Recycles/:id', recycles.getRecycleItem())
+  app.put('/api/Recycles/:id', security.denyAll())
+  app.delete('/api/Recycles/:id', security.denyAll())
+  /* SecurityQuestions: Only GET list of questions allowed. */
+  app.post('/api/SecurityQuestions', security.denyAll())
+  app.use('/api/SecurityQuestions/:id', security.denyAll())
+  /* SecurityAnswers: Only POST of answer allowed. */
+  app.get('/api/SecurityAnswers', security.denyAll())
+  app.use('/api/SecurityAnswers/:id', security.denyAll())
+  /* REST API */
+  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/basket/:id', security.isAuthorized())
+  app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Anti-automation: a CAPTCHA alone only proves a single interaction, so feedback
      submission is additionally rate limited. The key is the address of the actual
      connection rather than req.ip, because `trust proxy` is enabled and a client can
