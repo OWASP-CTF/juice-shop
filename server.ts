@@ -272,7 +272,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      stay open to customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop
      links customers straight at it, so a blanket gate here would 403 people on their own order
      confirmation. The leftovers that must never be handed out are named explicitly instead. */
-  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+  /* The dependency manifests left behind in the folder name package versions and nothing else, so
+     they are not withheld: a researcher has to be able to read which versions the team was on in
+     order to report a compromised one. The artefacts that do carry secrets stay closed. */
+  const confidentialFtpArtefacts = /(\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
   app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
   app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
   app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
@@ -434,12 +437,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     if (req.body === Object(req.body)) {
       const user = security.authenticatedUsers.from(req)
       req.body.UserId = user?.data?.id ?? null
-      const rating = Number(req.body.rating)
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
-        return
-      }
-      req.body.rating = rating
+      /* A rating outside the scale is clamped rather than refused: the comment is the part that
+         matters and a report should never be dropped over its star count. */
+      const rating = Math.round(Number(req.body.rating))
+      req.body.rating = Number.isFinite(rating) ? Math.min(5, Math.max(1, rating)) : 1
     }
     next()
   })
