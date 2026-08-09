@@ -516,6 +516,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     } // vuln-code-snippet neutral-line registerAdminChallenge
     // vuln-code-snippet end registerAdminChallenge
 
+    // Who wrote a complaint is administration data; the feedback carousel only ever shows the words.
+    if (name === 'Feedback') {
+      resource.list.send.before((req: Request, res: Response, context: { instance: any[], continue: any }) => {
+        if (!security.isAdministrator(req)) {
+          context.instance = context.instance.map(({ id, comment, rating }: { id: number, comment: string, rating: number }) => ({ id, comment, rating }))
+        }
+        return context.continue
+      })
+    }
+
     // translate challenge descriptions on-the-fly
     if (name === 'Challenge') {
       resource.list.fetch.after((req: Request, res: Response, context: { instance: string | any[], continue: any }) => {
