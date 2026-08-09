@@ -474,6 +474,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
+        /* The form asks for the password twice so that a typo cannot silently become the
+           credential the account is created with. Collecting the confirmation and then never
+           comparing it makes the second field decoration: the account is created from the first
+           value whatever the second one says, and the customer is locked out of an account they
+           believe they know the password to. Compared once both values have been trimmed, so
+           the comparison matches what is actually stored. */
+        if (req.body.password !== req.body.passwordRepeat) {
+          res.status(400).send(res.__('Invalid email/password cannot be empty'))
+          return
+        }
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
