@@ -32,11 +32,18 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
-    // Withdrawn products are only soft deleted; including them anyway is what keeps a
-    // discontinued item orderable.
-    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: true, as: 'Products' }] })
+    // Withdrawn products are loaded on purpose, so the order can name the item it refuses
+    // instead of quietly billing a total the basket never showed.
+    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
+          const withdrawn = (basket.Products ?? []).find((product) => {
+            return product.BasketItem != null && (product as unknown as { deletedAt?: Date | null }).deletedAt != null
+          })
+          if (withdrawn != null) {
+            res.status(400).json({ error: `${withdrawn.name} is no longer for sale and cannot be ordered.` })
+            return
+          }
           const customer = security.authenticatedUsers.from(req)
           const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)

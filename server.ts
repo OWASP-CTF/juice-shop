@@ -472,6 +472,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.delete('/api/Quantitys/:id', security.denyAll())
   app.post('/api/Quantitys', security.denyAll())
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
+  /* The stock table keeps a row for every product ever seeded, so listing it unfiltered
+     advertises the products the shop has withdrawn along with their ids. */
+  app.get('/api/Quantitys', utils.asyncHandler(async (req: Request, res: Response) => {
+    const onSale = new Set((await ProductModel.findAll({ attributes: ['id'] })).map((product) => product.id))
+    const quantities = await QuantityModel.findAll()
+    res.json({ status: 'success', data: quantities.filter((quantity) => onSale.has(quantity.ProductId)) })
+  }))
   /* Feedbacks: Do not allow changes of existing feedback */
   app.put('/api/Feedbacks/:id', security.denyAll())
   /* PrivacyRequests: Only allowed for authenticated users */
