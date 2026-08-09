@@ -28,7 +28,7 @@ export async function verify (req: Request, res: Response) {
       throw new Error('No such user found!')
     }
 
-    const isValid = verifySync({ secret: user.totpSecret, token: totpToken, epochTolerance: 30 }).valid
+    const isValid = verifySync({ secret: security.unsealTotpSecret(user.totpSecret), token: totpToken, epochTolerance: 30 }).valid
 
     const plainUser = utils.queryResultToJson(user)
 
@@ -126,7 +126,7 @@ export async function setup (req: Request, res: Response) {
       throw new Error('No such user found!')
     }
 
-    userModel.totpSecret = secret
+    userModel.totpSecret = security.sealTotpSecret(secret)
     await userModel.save()
     security.authenticatedUsers.updateFrom(req, utils.queryResultToJson(userModel))
 
