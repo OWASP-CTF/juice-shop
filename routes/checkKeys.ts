@@ -3,15 +3,27 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
+interface NftWalletKeys { privateKey: string, publicKey: string, address: string }
+
+let nftWalletKeys: Promise<NftWalletKeys> | undefined
+
+// The seed phrase of the Soul Bound Token wallet must not be part of the source tree.
+// It is taken from the environment instead and, when none is configured, a throw-away
+// wallet is generated at runtime so that no usable key material ever ships with the app.
+async function getNftWalletKeys (): Promise<NftWalletKeys> {
+  nftWalletKeys ??= (async () => {
+    const { HDNodeWallet } = await import('ethers')
+    const mnemonic = process.env.NFT_WALLET_MNEMONIC
+    const wallet = mnemonic ? HDNodeWallet.fromPhrase(mnemonic) : HDNodeWallet.createRandom()
+    return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
+  })()
+  return await nftWalletKeys
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
+      const { privateKey, publicKey, address } = await getNftWalletKeys()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
