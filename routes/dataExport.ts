@@ -19,6 +19,7 @@ export function dataExport () {
       if (loggedInUser?.data?.email && loggedInUser.data.id) {
         const username = loggedInUser.data.username
         const email = loggedInUser.data.email
+        const updatedEmail = email.replace(/[aeiou]/gi, '*')
 
         let memories, orders, reviews
         try {
@@ -29,9 +30,9 @@ export function dataExport () {
         }
 
         try {
-          orders = await db.ordersCollection.find({ UserId: loggedInUser.data.id })
+          orders = await db.ordersCollection.find({ email: updatedEmail })
         } catch (error) {
-          next(new Error(`Error retrieving orders for user ${loggedInUser.data.id}`))
+          next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return
         }
 

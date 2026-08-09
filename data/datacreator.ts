@@ -746,7 +746,6 @@ async function createOrders () {
   const adminEmail = 'admin@' + config.get<string>('application.domain')
   const orders = [
     {
-      UserId: datacache.users.admin.id,
       orderId: security.hash(adminEmail).slice(0, 4) + '-' + utils.randomHexString(16),
       email: (adminEmail.replace(/[aeiou]/gi, '*')),
       totalPrice: basket1Products[0].total + basket1Products[1].total,
@@ -756,7 +755,6 @@ async function createOrders () {
       delivered: false
     },
     {
-      UserId: datacache.users.admin.id,
       orderId: security.hash(adminEmail).slice(0, 4) + '-' + utils.randomHexString(16),
       email: (adminEmail.replace(/[aeiou]/gi, '*')),
       totalPrice: basket2Products[0].total,
@@ -766,7 +764,6 @@ async function createOrders () {
       delivered: true
     },
     {
-      UserId: datacache.users.test.id,
       orderId: security.hash('demo').slice(0, 4) + '-' + utils.randomHexString(16),
       email: 'd*m*',
       totalPrice: basket3Products[0].total + basket3Products[1].total,
@@ -778,9 +775,8 @@ async function createOrders () {
   ]
 
   return await Promise.all(
-    orders.map(({ UserId, orderId, email, totalPrice, bonus, products, eta, delivered }) =>
+    orders.map(({ orderId, email, totalPrice, bonus, products, eta, delivered }) =>
       ordersCollection.insert({
-        UserId,
         orderId,
         email,
         totalPrice,
