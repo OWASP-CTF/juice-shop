@@ -6,14 +6,16 @@ import { challenges } from '../data/datacache'
 
 interface ShopWallet { privateKey: string, publicKey: string, address: string }
 
-// A seed phrase in the source hands its private key to every reader of the source, so the shop
-// wallet is minted once per boot and never leaves memory.
+// A seed phrase in the source hands its private key to every reader of the source. The phrase is
+// configuration: the operator supplies it, and a shop that was given none mints a throw-away
+// wallet at startup rather than falling back on a value anybody could look up.
 let shopWallet: Promise<ShopWallet> | undefined
 
 const walletOfTheShop = async (): Promise<ShopWallet> => {
-  shopWallet ??= import('ethers').then(({ Wallet }) => {
-    const { privateKey, publicKey, address } = Wallet.createRandom()
-    return { privateKey, publicKey, address }
+  shopWallet ??= import('ethers').then(({ HDNodeWallet, Mnemonic, Wallet }) => {
+    const phrase = process.env.NFT_WALLET_MNEMONIC?.trim()
+    const node = phrase ? HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(phrase)) : Wallet.createRandom()
+    return { privateKey: node.privateKey, publicKey: node.publicKey, address: node.address }
   })
   return await shopWallet
 }
