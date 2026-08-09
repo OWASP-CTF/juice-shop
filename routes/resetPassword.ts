@@ -10,7 +10,7 @@ import type { Memory as MemoryConfig } from '../lib/config.types'
 import { SecurityAnswerModel } from '../models/securityAnswer'
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges, users } from '../data/datacache'
-import * as security from '../lib/insecurity'
+import { answerMatches, clearFailedAttempts, isLockedOut, recordFailedAttempt } from '../lib/passwordResetGuard'
 import { UserModel } from '../models/user'
 
 export function resetPassword () {
@@ -31,6 +31,13 @@ export function resetPassword () {
       res.status(401).send(res.__('New and repeated password do not match.'))
       return
     }
+    /* Too many wrong answers for this account, so stop answering at all for a
+       while. Checked per account rather than per IP, otherwise an attacker just
+       rotates addresses to brute force the security answer. */
+    if (isLockedOut(email)) {
+      res.status(429).send(res.__('Too many failed attempts. Please try again later.'))
+      return
+    }
     try {
       const data = await SecurityAnswerModel.findOne({
         include: [{
@@ -38,14 +45,18 @@ export function resetPassword () {
           where: { email }
         }]
       })
-      if ((data != null) && security.hmac(answer) === data.answer) {
+      if ((data != null) && answerMatches(answer, data.answer)) {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
+          clearFailedAttempts(email)
           const updatedUser = await user.update({ password: newPassword })
           verifySecurityAnswerChallenges(updatedUser, answer)
           res.json({ user: updatedUser })
         }
       } else {
+        /* Unknown addresses are counted too, so that the lockout behaviour
+           cannot be used to tell existing accounts from non-existing ones. */
+        recordFailedAttempt(email)
         res.status(401).send(res.__('Wrong answer to security question.'))
       }
     } catch (error) {
