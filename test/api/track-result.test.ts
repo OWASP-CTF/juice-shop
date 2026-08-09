@@ -44,4 +44,12 @@ void describe('/rest/track-order/:id', () => {
       assert.equal(typeof item._id, 'string')
     }
   })
+
+  void it('GET strips markup/script content from the id instead of reflecting it back', async () => {
+    const res = await request(app)
+      .get('/rest/track-order/' + encodeURIComponent('<iframe src="javascript:alert(`xss`)">'))
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data[0].orderId, 'iframesrcjavascriptalertxss')
+  })
 })
