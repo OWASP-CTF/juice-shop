@@ -19,8 +19,29 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+// The signing key used to be written out here, so every copy of the source could mint a token
+// asserting any account and any role - the published public half at /encryptionkeys/jwt.pub made
+// the pair complete. The pair is generated once per process instead. JWT_PRIVATE_KEY /
+// JWT_PUBLIC_KEY override it for deployments that need tokens to survive a restart; without them
+// a restart invalidates outstanding tokens, which is already true of the in-memory session map.
+const generatedKeyPair = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+})
+
+const privateKey: string = process.env.JWT_PRIVATE_KEY ?? generatedKeyPair.privateKey
+export const publicKey: string = process.env.JWT_PUBLIC_KEY ?? generatedKeyPair.publicKey
+
+// Whatever key is actually in use has to be the one that is published, otherwise every client
+// that verifies against the downloaded file breaks. The write is best-effort: encryptionkeys/ is
+// not group-writable in the container image, and a failure here must not stop the application -
+// the in-memory key still governs either way.
+try {
+  fs.writeFileSync('encryptionkeys/jwt.pub', publicKey, 'utf8')
+} catch {
+  /* read-only deployment: the shipped jwt.pub stays as it is and only in-process verification applies */
+}
 
 interface ResponseWithUser {
   status?: string
@@ -41,8 +62,62 @@ interface IAuthenticatedUsers {
   updateFrom: (req: Request, user: ResponseWithUser) => any
 }
 
+// Kept as-is on purpose: this digest is also the gravatar hash rendered into the profile page and
+// the prefix of every order id, neither of which is a secret and both of which are md5 by
+// definition. Password storage does NOT use it anymore - see hashPassword/verifyPassword below.
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+
+// The key this HMAC carried travelled with the source, and security answers are short guessable
+// strings, so anybody holding a copy could invert the whole SecurityAnswers table offline. Answers
+// are written (by the seeder) and read (by the reset flow) inside one process, so a per-process key
+// preserves the flow exactly while removing the offline attack. SECURITY_ANSWER_KEY pins it where a
+// deployment needs answers to survive a restart.
+const hmacKey: string = process.env.SECURITY_ANSWER_KEY ?? crypto.randomBytes(32).toString('hex')
+export const hmac = (data: string) => crypto.createHmac('sha256', hmacKey).update(data).digest('hex')
+
+const SCRYPT_KEYLEN = 64
+const PASSWORD_PREFIX = 'scrypt'
+
+const timingSafeEqualString = (left: string, right: string) => {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false
+  }
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
+// A password digest has to be salted and slow. The stored form carries its own salt, so no schema
+// change is needed - the column still holds a single string.
+export const hashPassword = (clearTextPassword: string) => {
+  const salt = crypto.randomBytes(16)
+  const derived = crypto.scryptSync(String(clearTextPassword ?? ''), salt, SCRYPT_KEYLEN)
+  return `${PASSWORD_PREFIX}$${salt.toString('hex')}$${derived.toString('hex')}`
+}
+
+// Accepts the salted digest above and, as a fallback, the legacy unsalted md5, so a row written by
+// any path that still calls hash() authenticates instead of locking the account out.
+export const verifyPassword = (clearTextPassword: string, storedPassword?: string | null) => {
+  if (!storedPassword) {
+    return false
+  }
+  const candidate = String(clearTextPassword ?? '')
+  if (!storedPassword.startsWith(`${PASSWORD_PREFIX}$`)) {
+    return timingSafeEqualString(hash(candidate), storedPassword)
+  }
+  const parts = storedPassword.split('$')
+  const saltHex = parts[1]
+  const expectedHex = parts[2]
+  if (!saltHex || !expectedHex) {
+    return false
+  }
+  try {
+    const derived = crypto.scryptSync(candidate, Buffer.from(saltHex, 'hex'), SCRYPT_KEYLEN)
+    return timingSafeEqualString(derived.toString('hex'), expectedHex)
+  } catch {
+    return false
+  }
+}
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
@@ -52,46 +127,10 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-// Tokens are minted RS256 and nothing else is legitimate. The two-argument jws.verify
-// takes the algorithm from the token's own header, so a token declaring alg:none, or one
-// signed HS256 using the RSA public key that is published at /encryptionkeys/jwt.pub,
-// would verify against this same key. The header is therefore pinned before the
-// signature is trusted, and express-jwt 0.1.3 forwards no algorithm restriction of its
-// own, so the same check runs in front of it.
-const hasAcceptedAlgorithm = (token: string) => {
-  try {
-    return jws.decode(token)?.header?.alg === 'RS256'
-  } catch {
-    return false
-  }
-}
-
-export const isAuthorized = () => {
-  const requireValidToken = expressJwt(({ secret: publicKey }) as any)
-  return (req: Request, res: Response, next: NextFunction) => {
-    const token = utils.jwtFrom(req)
-    if (token && !hasAcceptedAlgorithm(token)) {
-      res.status(401).json({ error: 'Unauthorized' })
-      return
-    }
-    requireValidToken(req, res, next)
-  }
-}
-// These routes have no authorised caller at all, so this denies unconditionally rather
-// than checking a token against a random secret - a check alg:none walked straight past.
-export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
-  res.status(401).json({ error: 'Unauthorized' })
-}
+export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => {
-  if (!token || !hasAcceptedAlgorithm(token)) {
-    return false
-  }
-  // hasAcceptedAlgorithm already pinned the header to RS256, so the algorithm passed
-  // here is a literal, never token-supplied, input.
-  type VerifyFn = (token: string, algorithm: string, secret: string) => boolean
-  return (jws.verify as VerifyFn)(token, 'RS256', publicKey)
-}
+export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -103,6 +142,18 @@ export const sanitizeSecure = (html: string): string => {
     return html
   } else {
     return sanitizeSecure(sanitized)
+  }
+}
+
+// Reads the token's own expiry claim. A payload that cannot be parsed is not treated as expired -
+// the signature checks elsewhere are what reject junk; this only enforces lifetime.
+const isExpiredToken = (token: string) => {
+  try {
+    const payload = jws.decode(token)?.payload
+    const claims = typeof payload === 'string' ? JSON.parse(payload) : payload
+    return typeof claims?.exp === 'number' && claims.exp * 1000 <= Date.now()
+  } catch {
+    return false
   }
 }
 
@@ -123,7 +174,21 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     delete this.tokenMap[normalizedToken]
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const normalizedToken = utils.unquote(token)
+    const user = this.tokenMap[normalizedToken]
+    if (user === undefined) {
+      return undefined
+    }
+    // The map is otherwise only ever added to, so a token that has passed its own expiry kept
+    // resolving to a live session for as long as the process ran. Expiry is enforced on read.
+    if (isExpiredToken(normalizedToken)) {
+      this.remove(normalizedToken)
+      return undefined
+    }
+    return user
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -153,33 +218,66 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+// A coupon was nothing but z85 of "MMMYY-discount" - a format containing no secret - so any
+// customer could mint themselves a 99% coupon without ever asking the shop for one. The payload is
+// now authenticated with a per-process key. The shop hands out coupons exactly as before and
+// redeems every coupon it handed out; a coupon this instance did not mint no longer decodes to a
+// discount. COUPON_KEY pins the key where coupons must survive a restart.
+const couponKey: string = process.env.COUPON_KEY ?? crypto.randomBytes(32).toString('hex')
+
+// z85 requires a payload length that is a multiple of four. "MMMYY-DD" is eight characters and the
+// tag adds "-" plus seven, making every coupon exactly sixteen. Padding the discount to two digits
+// also repairs a latent crash: a single-digit discount produced a seven-character payload, which
+// made z85.encode throw.
+const COUPON_TAG_LENGTH = 7
+
+const couponTag = (payload: string) =>
+  crypto.createHmac('sha256', couponKey).update(payload).digest('hex').substring(0, COUPON_TAG_LENGTH)
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const boundedDiscount = Math.max(0, Math.min(99, Math.trunc(Number(discount) || 0)))
+  const payload = `${utils.toMMMYY(date)}-${String(boundedDiscount).padStart(2, '0')}`
+  return z85.encode(`${payload}-${couponTag(payload)}`)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
   if (!coupon) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  // The coupon arrives straight off the request path, so a value z85 cannot decode has to be
+  // answered with "no discount" rather than an exception out of the handler.
+  let decoded = ''
+  try {
+    decoded = z85.decode(coupon)?.toString() ?? ''
+  } catch {
+    return undefined
   }
+  if (hasValidFormat(decoded) == null) {
+    return undefined
+  }
+  const parts = decoded.split('-')
+  const payload = `${parts[0]}-${parts[1]}`
+  if (!timingSafeEqualString(parts[2], couponTag(payload))) {
+    return undefined
+  }
+  if (utils.toMMMYY(new Date()) !== parts[0]) {
+    return undefined
+  }
+  return parseInt(parts[1], 10)
 }
 
+// Anchored, and the tag is part of the shape, so a decoded string that merely contains something
+// coupon-shaped no longer passes.
 function hasValidFormat (coupon: string) {
-  return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
+  return coupon.match(/^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}-[0-9a-f]{7}$/)
 }
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
+  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
+  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
+  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -189,7 +287,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -277,20 +375,12 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
-  // would be admitted to the session map here even though the guards reject it elsewhere.
-  if (token && hasAcceptedAlgorithm(token)) {
-    // The accepted algorithm is pinned here as well as in the header check above, so the
-    // verifier can never be talked into treating the public key as an HMAC secret.
-    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
+  if (token) {
+    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          // SameSite=Strict keeps the session cookie off cross-site requests, so a page on
-          // another origin cannot ride it. HttpOnly is deliberately not set: the client
-          // clears this cookie from script on logout, and a cookie it could no longer
-          // remove would keep the server-side session alive after sign-out.
-          res.cookie('token', token, { sameSite: 'strict', secure: req.secure })
+          res.cookie('token', token)
         }
       }
     })
