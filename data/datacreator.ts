@@ -4,6 +4,7 @@
  */
 
 /* jslint node: true */
+import { randomBytes } from 'node:crypto'
 import { AddressModel } from '../models/address'
 import { BasketModel } from '../models/basket'
 import { BasketItemModel } from '../models/basketitem'
@@ -186,7 +187,7 @@ async function createUsers () {
   const users = await loadStaticUserData()
 
   await Promise.all(
-    users.map(async ({ username, email, password, customDomain, key, role, deletedFlag, profileImage, securityQuestion, feedback, address, card, totpSecret, lastLoginIp = '' }) => {
+    users.map(async ({ username, email, password, customDomain, key, role, isActive = true, deletedFlag, profileImage, securityQuestion, feedback, address, card, totpSecret, lastLoginIp = '' }) => {
       try {
         const completeEmail = customDomain ? email : `${email}@${config.get<string>('application.domain')}`
         const user = await UserModel.create({
@@ -197,7 +198,8 @@ async function createUsers () {
           deluxeToken: role === security.roles.deluxe ? security.deluxeToken(completeEmail) : '',
           profileImage: `assets/public/images/uploads/${profileImage ?? (role === security.roles.admin ? 'defaultAdmin.png' : 'default.svg')}`,
           totpSecret,
-          lastLoginIp
+          lastLoginIp,
+          isActive
         })
         datacache.users[key] = user
         if (securityQuestion != null) await createSecurityAnswer(user.id, securityQuestion.id, securityQuestion.answer)
@@ -309,7 +311,10 @@ async function createRandomFakeUsers () {
   return await Promise.all(new Array(config.get('application.numberOfRandomFakeUsers')).fill(0).map(
     async () => await UserModel.create({
       email: getGeneratedRandomFakeUserEmail(),
-      password: makeRandomString(5)
+      // makeRandomString was written for throwaway email local-parts: 5 chars
+      // from Math.random(), which is neither long enough nor a CSPRNG for a
+      // password on a real, loginable account.
+      password: randomBytes(24).toString('base64url')
     })
   ))
 }
@@ -774,11 +779,20 @@ async function createOrders () {
     }
   ]
 
+  // Orders are looked up by their owner rather than by the lossy masked email,
+  // so the seeded ones need to carry the owner's id too.
+  const orderOwners = new Map<string, number>()
+  for (const ownerEmail of [adminEmail, 'demo']) {
+    const owner = await UserModel.findOne({ where: { email: ownerEmail } })
+    if (owner) orderOwners.set(ownerEmail.replace(/[aeiou]/gi, '*'), owner.id)
+  }
+
   return await Promise.all(
     orders.map(({ orderId, email, totalPrice, bonus, products, eta, delivered }) =>
       ordersCollection.insert({
         orderId,
         email,
+        UserId: orderOwners.get(email),
         totalPrice,
         bonus,
         products,

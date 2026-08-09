@@ -27,31 +27,28 @@ export function likeProductReviews () {
         return res.status(404).json({ error: 'Not found' })
       }
 
-      const likedBy = review.likedBy
-      if (likedBy.includes(user.data.email)) {
+      // Claim the like in a single conditional write. The previous form read
+      // likedBy, checked it, and only wrote it back after an await and a 150ms
+      // sleep, so concurrent requests all passed the check and each appended
+      // the same address; the closing $set was last-writer-wins as well.
+      const claimed = await db.reviewsCollection.update(
+        { _id: id, likedBy: { $ne: user.data.email } },
+        { $push: { likedBy: user.data.email }, $inc: { likesCount: 1 } }
+      )
+      if (!claimed?.modified) {
         return res.status(403).json({ error: 'Not allowed' })
       }
-
-      await db.reviewsCollection.update(
-        { _id: id },
-        { $inc: { likesCount: 1 } }
-      )
 
       // Artificial wait for timing attack challenge
       await sleep(150)
       try {
         const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
         const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
 
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
+        const count = updatedLikedBy.filter((email: string) => email === user.data.email).length
         challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
 
-        const result = await db.reviewsCollection.update(
-          { _id: id },
-          { $set: { likedBy: updatedLikedBy } }
-        )
-        res.json(result)
+        res.json(claimed)
       } catch (err) {
         res.status(500).json(err)
       }

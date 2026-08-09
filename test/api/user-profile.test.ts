@@ -42,10 +42,30 @@ void describe('/profile', () => {
     assert.ok(res.text.includes('id="email" type="email" name="email" value="jim@juice-sh.op"'))
   })
 
-  void it('POST update username of authenticated user', async () => {
+  void it('POST rejects a profile update without an Origin or Referer header', async () => {
     const res = await request(app)
       .post('/profile')
       .set('Cookie', authHeader.Cookie)
+      .field('username', 'CrossSite')
+      .redirects(0)
+
+    assert.equal(res.status, 403)
+  })
+
+  void it('POST rejects an Origin that merely shares the host prefix', async () => {
+    const res = await request(app)
+      .post('/profile')
+      .set({ Cookie: authHeader.Cookie, Host: 'localhost', Origin: 'http://localhost.attacker.invalid' })
+      .field('username', 'CrossSite')
+      .redirects(0)
+
+    assert.equal(res.status, 403)
+  })
+
+  void it('POST update username of authenticated user', async () => {
+    const res = await request(app)
+      .post('/profile')
+      .set({ Cookie: authHeader.Cookie, Host: 'localhost', Origin: 'http://localhost' })
       .field('username', 'Localhorst')
       .redirects(0)
 

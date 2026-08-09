@@ -4,7 +4,6 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -13,7 +12,6 @@ import { RegisterComponent } from './register/register.component'
 import { ForgotPasswordComponent } from './forgot-password/forgot-password.component'
 import { SearchResultComponent } from './search-result/search-result.component'
 import { LoginComponent } from './login/login.component'
-import { AdministrationComponent } from './administration/administration.component'
 import { ChangePasswordComponent } from './change-password/change-password.component'
 import { ComplaintComponent } from './complaint/complaint.component'
 import { RouterModule, type Routes, type UrlMatchResult, type UrlSegment } from '@angular/router'
@@ -37,7 +35,7 @@ import { OrderHistoryComponent } from './order-history/order-history.component'
 import { DeliveryMethodComponent } from './delivery-method/delivery-method.component'
 import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
-import { AccountingGuard, AdminGuard, LoginGuard } from './app.guard'
+import { AccountingGuard, LoginGuard } from './app.guard'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
 import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
@@ -75,11 +73,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -182,10 +183,10 @@ const routes: Routes = [
     path: 'hacking-instructor',
     component: SearchResultComponent
   },
-  { // vuln-code-snippet neutral-line scoreBoardChallenge
-    path: 'score-board', // vuln-code-snippet vuln-line scoreBoardChallenge
-    component: ScoreBoardComponent // vuln-code-snippet neutral-line scoreBoardChallenge
-  }, // vuln-code-snippet neutral-line scoreBoardChallenge
+  {
+    path: 'score-board', // Must remain as is! Needed for challenge tracking!
+    component: ScoreBoardComponent
+  },
   {
     path: 'track-result',
     component: TrackResultComponent
@@ -235,10 +236,12 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  /* The Web3 code sandbox is a development-only playground and must not be
+     routable in a deployed shop. */
+  // {
+  //   path: 'web3-sandbox',
+  //   loadChildren: async () => await loadWeb3SandboxModule()
+  // },
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -257,10 +260,6 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
-  }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
@@ -290,33 +289,4 @@ export function oauthMatcher (url: UrlSegment[]): UrlMatchResult {
   return null as unknown as UrlMatchResult
 }
 
-export function tokenMatcher (url: UrlSegment[]): UrlMatchResult { // vuln-code-snippet neutral-line tokenSaleChallenge
-  if (url.length === 0) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
-  } // vuln-code-snippet neutral-line tokenSaleChallenge
- // vuln-code-snippet neutral-line tokenSaleChallenge
-  const path = url[0].toString() // vuln-code-snippet neutral-line tokenSaleChallenge
-
-  if (path.match((token1(25, 184, 174, 179, 182, 186) + (36669).toString(36).toLowerCase() + token2(13, 144, 87, 152, 139, 144, 83, 138) + (10).toString(36).toLowerCase()))) { // vuln-code-snippet vuln-line tokenSaleChallenge
-    return ({ consumed: url }) // vuln-code-snippet neutral-line tokenSaleChallenge
-  } // vuln-code-snippet neutral-line tokenSaleChallenge
- // vuln-code-snippet neutral-line tokenSaleChallenge
-  return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
-
-export function token1 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
-  const L = Array.prototype.slice.call(args) // vuln-code-snippet neutral-line tokenSaleChallenge
-  const D = L.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
-  return L.reverse().map(function (C, A) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return String.fromCharCode(C - D - 45 - A) // vuln-code-snippet neutral-line tokenSaleChallenge
-  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
-
-export function token2 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
-  const T = Array.prototype.slice.call(arguments) // vuln-code-snippet neutral-line tokenSaleChallenge
-  const M = T.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
-  return T.reverse().map(function (m, H) { // vuln-code-snippet neutral-line tokenSaleChallenge
-    return String.fromCharCode(m - M - 24 - H) // vuln-code-snippet neutral-line tokenSaleChallenge
-  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
-} // vuln-code-snippet neutral-line tokenSaleChallenge
 // vuln-code-snippet end tokenSaleChallenge

@@ -49,7 +49,14 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // `!captchas[0]` used to fail OPEN: never requesting a CAPTCHA, or letting
+    // the last one age out of the 300s window, skipped the check entirely.
+    if (!captchas[0]) {
+      res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
+      return
+    }
+    if (req.body.answer === captchas[0].answer) {
+      await captchas[0].destroy() // single use, so a correct answer cannot be replayed
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

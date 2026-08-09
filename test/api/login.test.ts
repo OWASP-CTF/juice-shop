@@ -55,6 +55,32 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
+  void it('POST login inactive deluxe user', async () => {
+    const res = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'stan@' + config.get<string>('application.domain'),
+        password: 'ship coffin krypt cross estate supply insurance asbestos souvenir'
+      })
+
+    assert.equal(res.status, 401)
+  })
+
+  void it('POST login active deluxe user', async () => {
+    const res = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'bjoern@owasp.org',
+        password: 'kitten lesser pooch karate buffoon indoors'
+      })
+
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(typeof res.body.authentication.token, 'string')
+  })
+
   void it('POST login without credentials', async () => {
     const res = await request(app)
       .post('/rest/user/login')

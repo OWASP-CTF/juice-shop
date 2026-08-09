@@ -12,9 +12,9 @@ export function orderHistory () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const loggedInUser = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
     if (loggedInUser?.data?.email && loggedInUser.data.id) {
-      const email = loggedInUser.data.email
-      const updatedEmail = email.replace(/[aeiou]/gi, '*')
-      const order = await ordersCollection.find({ email: updatedEmail })
+      // The masked email collapses every vowel, so any two addresses sharing a
+      // consonant skeleton collide and could read each other's orders.
+      const order = await ordersCollection.find({ UserId: loggedInUser.data.id })
       res.status(200).json({ status: 'success', data: order })
     } else {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
