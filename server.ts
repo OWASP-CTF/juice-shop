@@ -137,7 +137,7 @@ const errorhandler = require('errorhandler')
 const startTime = Date.now()
 
 /* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
-const recentFeedbackSubmissions: number[] = []
+const recentFeedbackSubmissions = new Map<string | number, number[]>()
 
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
@@ -470,17 +470,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
      additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
-     more than nine entries into the shop within twenty seconds. */
+     more than nine entries into the shop within twenty seconds.
+     The window is counted per submitter rather than shop-wide, so one machine running a loop is
+     the only thing it slows down. A shared counter would let that loop spend everyone else's
+     allowance, and the next person to report something would be turned away for it. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const submitter = security.authenticatedUsers.from(req)?.data?.id ?? req.ip ?? 'anonymous'
     const now = Date.now()
-    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
-      recentFeedbackSubmissions.shift()
+    for (const [key, times] of recentFeedbackSubmissions) {
+      while (times.length > 0 && now - times[0] > 20000) times.shift()
+      if (times.length === 0) recentFeedbackSubmissions.delete(key)
     }
-    if (recentFeedbackSubmissions.length >= 9) {
+    const submissions = recentFeedbackSubmissions.get(submitter) ?? []
+    if (submissions.length >= 9) {
       res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
       return
     }
-    recentFeedbackSubmissions.push(now)
+    submissions.push(now)
+    recentFeedbackSubmissions.set(submitter, submissions)
     next()
   })
   /* Captcha Bypass challenge verification */
