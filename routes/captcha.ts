@@ -28,7 +28,11 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // Only the expression and its id may be sent to the client. The solution
+    // ("answer") must stay server-side (already persisted above) so that it
+    // cannot be read straight out of the API response and used to script
+    // past the CAPTCHA without ever solving it.
+    res.json({ captchaId, captcha: expression })
   }
 }
 
