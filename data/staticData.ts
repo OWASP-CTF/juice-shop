@@ -21,6 +21,7 @@ export interface StaticUser {
   profileImage?: string
   walletBalance?: number
   lastLoginIp?: string
+  isActive?: boolean
   deletedFlag?: boolean
   totpSecret?: string
   customDomain?: boolean

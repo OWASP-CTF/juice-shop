@@ -252,6 +252,7 @@
   key: stan
   profileImage: '20.jpg'
   role: 'deluxe'
+  isActive: false
   securityQuestion:
     id: 10
     answer: "Used Ship Emporium" # https://monkeyisland.fandom.com/wiki/Stan_S._Stanman
