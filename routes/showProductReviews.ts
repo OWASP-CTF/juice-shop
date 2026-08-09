@@ -12,28 +12,23 @@ import { type Review } from 'data/types'
 import * as db from '../data/mongodb'
 import * as utils from '../lib/utils'
 
-// Blocking sleep function as in native MongoDB
-// @ts-expect-error FIXME Type safety broken for global object
-global.sleep = (time: number) => {
-  // Ensure that users don't accidentally dos their servers for too long
-  if (time > 2000) {
-    time = 2000
-  }
-  const stop = new Date().getTime()
-  while (new Date().getTime() < stop + time) {
-    ;
-  }
-}
-
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.noSqlCommandChallenge) ? Number(req.params.id) : utils.trunc(req.params.id, 40)
+    // The product id is a numeric primary key: reject anything else instead of
+    // handing it to the database as an expression.
+    const rawId = String(req.params.id)
+    if (!/^\d+$/.test(rawId)) {
+      res.status(400).json({ error: 'Wrong Params' })
+      return
+    }
+    const id = Number.parseInt(rawId, 10)
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ $where: 'this.product == ' + id }).then((reviews: Review[]) => {
+    // Reviews seeded at startup store `product` as a number, reviews created through
+    // the API store it as the string from the URL, so both spellings are matched.
+    db.reviewsCollection.find({ product: { $in: [id, String(id)] } }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)

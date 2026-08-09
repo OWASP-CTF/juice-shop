@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import net from 'node:net'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as challengeUtils from '../lib/challengeUtils'
@@ -19,14 +20,14 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
-        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      }
-      if (lastLoginIp === undefined) {
+      // The header is fully attacker controlled, so it is only accepted when it really is
+      // an IP address. Anything else falls back to the address of the actual connection.
+      if (typeof lastLoginIp !== 'string' || net.isIP(lastLoginIp.trim()) === 0) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
+      } else {
+        lastLoginIp = lastLoginIp.trim()
       }
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
