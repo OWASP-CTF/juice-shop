@@ -21,7 +21,12 @@ export function updateUserProfile () {
     }
 
     const origin = req.get('origin') ?? req.get('referer')
-    if (origin && !origin.startsWith(`${req.protocol}://${req.get('host')}`)) {
+    try {
+      if (!origin || new URL(origin).origin !== `${req.protocol}://${req.get('host')}`) {
+        res.sendStatus(403)
+        return
+      }
+    } catch {
       res.sendStatus(403)
       return
     }
