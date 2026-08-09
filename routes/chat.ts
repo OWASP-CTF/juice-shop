@@ -41,7 +41,7 @@ const appName = config.get<string>('application.name')
 
 async function getUserId (req: Request): Promise<number | undefined> {
   const token = utils.jwtFrom(req)
-  if (!token) return undefined
+  if (!token || !security.verify(token)) return undefined
   const decoded = security.decode(token) as { data?: { id?: number } } | undefined
   return decoded?.data?.id
 }
@@ -218,7 +218,8 @@ export function chat () {
           case 'tool-call':
             challengeUtils.solveIf(challenges.aiDebuggingChallenge, () => {
               const token = utils.jwtFrom(req)
-              const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
+              const decoded = token && security.verify(token)
+                ? security.decode(token) as { data?: { role?: string } } : undefined
               const role = decoded?.data?.role
               return req.cookies.show_tool_calls === 'true' && role !== roles.admin
             })
