@@ -20,10 +20,20 @@ contract HoneyPotNFT is ERC721, Ownable {
     constructor() ERC721("The Enchanted Honey Pot", "EHP") {}
 
     function mintNFT() external {
-        token.transferFrom(msg.sender, address(this), mintPrice);
-        _safeMint(msg.sender, totalSupply);
+        /* The event is what anything off-chain has to go on, so it must not be able to announce
+           a mint that was not paid for or that does not exist. transferFrom reports failure by
+           returning false as well as by reverting, and the result was discarded, so an unpaid
+           call still reached the emit. The payment is required, and the token is confirmed to be
+           held by the caller, before the mint is announced. */
+        require(
+            token.transferFrom(msg.sender, address(this), mintPrice),
+            "Mint payment was not transferred"
+        );
+        uint256 tokenId = totalSupply;
+        _safeMint(msg.sender, tokenId);
         totalSupply = totalSupply.add(1); // vuln-code-snippet neutral-line nftMintChallenge
-        emit NFTMinted(msg.sender, totalSupply - 1); // vuln-code-snippet vuln-line nftMintChallenge
+        require(ownerOf(tokenId) == msg.sender, "Mint did not assign the token");
+        emit NFTMinted(msg.sender, tokenId); // vuln-code-snippet vuln-line nftMintChallenge
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
