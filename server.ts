@@ -269,8 +269,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
-  /* /encryptionkeys directory browsing */
-  app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
+  /* Key files are served individually by an allowlist; browsing the directory
+     advertised every key in it, including the premium content key. */
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
@@ -393,6 +393,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
+  /* Feedback authorship comes from the session, never from the request body,
+     which otherwise let anyone file feedback under another user's name. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    req.body.UserId = security.authenticatedUsers.from(req)?.data?.id
+    next()
+  })
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
     delete req.body.role
