@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
+import { login, register } from './helpers/auth'
 import * as security from '../../lib/insecurity'
 
 let app: Express
@@ -27,15 +28,55 @@ void describe('/api/SecurityAnswers', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('POST new security answer for existing user fails from unique constraint', async () => {
+  void it('POST new security answer is forbidden without authentication', async () => {
     const res = await request(app)
       .post('/api/SecurityAnswers')
-      .set(authHeader)
+      .set({ 'content-type': 'application/json' })
       .send({
         UserId: 1,
         SecurityQuestionId: 1,
         answer: 'Horst'
       })
+
+    assert.equal(res.status, 401)
+  })
+
+  void it('POST new security answer ignores the UserId in the body and binds to the caller', async () => {
+    const credentials = { email: 'answer.binding@te.st', password: 'v3ry-s3cret' }
+    const userRes = await register(app, credentials)
+    const { token } = await login(app, credentials)
+
+    const res = await request(app)
+      .post('/api/SecurityAnswers')
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
+      .send({
+        UserId: 1, // attempts to plant an answer on the admin account
+        SecurityQuestionId: 1,
+        answer: 'Horst'
+      })
+
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.UserId, userRes.body.data.id)
+    assert.notEqual(res.body.data.UserId, 1)
+  })
+
+  void it('POST new security answer for a user who already has one fails from unique constraint', async () => {
+    const credentials = { email: 'answer.duplicate@te.st', password: 'v3ry-s3cret' }
+    await register(app, credentials)
+    const { token } = await login(app, credentials)
+    const authenticatedHeader = { Authorization: `Bearer ${token}`, 'content-type': 'application/json' }
+
+    const firstRes = await request(app)
+      .post('/api/SecurityAnswers')
+      .set(authenticatedHeader)
+      .send({ SecurityQuestionId: 1, answer: 'Horst' })
+
+    assert.equal(firstRes.status, 201)
+
+    const res = await request(app)
+      .post('/api/SecurityAnswers')
+      .set(authenticatedHeader)
+      .send({ SecurityQuestionId: 1, answer: 'Horst' })
 
     assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -53,21 +94,14 @@ void describe('/api/SecurityAnswers/:id', () => {
   })
 
   void it('POST security answer for a newly registered user', async () => {
-    const userRes = await request(app)
-      .post('/api/Users')
-      .set({ 'content-type': 'application/json' })
-      .send({
-        email: 'new.user@te.st',
-        password: '12345'
-      })
-
-    assert.equal(userRes.status, 201)
+    const credentials = { email: 'new.user@te.st', password: 'v3ry-s3cret' }
+    await register(app, credentials)
+    const { token } = await login(app, credentials)
 
     const res = await request(app)
       .post('/api/SecurityAnswers')
-      .set(authHeader)
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
       .send({
-        UserId: userRes.body.id,
         SecurityQuestionId: 1,
         answer: 'Horst'
       })
