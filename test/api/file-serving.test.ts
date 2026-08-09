@@ -109,6 +109,25 @@ void describe('/public/images/padding', () => {
     assert.equal(res.headers['content-type'], 'image/png')
   })
 
+  /* The spacer image of the withdrawn smart-contract sandbox has to be refused wherever it is
+     asked for, not only in the directory it used to be stored in: the asset directories below
+     share one piece of middleware that sees the path with its mount point stripped off, so every
+     one of these spellings would otherwise read as a visit to the withdrawn screen. */
+  void it('GET tracking image of the withdrawn "Web3 Sandbox" page is refused under every asset directory', async () => {
+    const equivalentSpellings = [
+      '/assets/public/images/padding/11px.png',
+      '/assets/public/images/products/11px.png',
+      '/assets/public/images/uploads/11px.png',
+      '/assets/i18n/11px.png',
+      '/assets/public/images/products/../padding/11px.png'
+    ]
+
+    for (const spelling of equivalentSpellings) {
+      const res = await request(app).get(spelling)
+      assert.equal(res.status, 404, `${spelling} was not refused`)
+    }
+  })
+
   void it('GET tracking image for "Administration" page access challenge', async () => {
     const res = await request(app)
       .get('/assets/public/images/padding/19px.png')
