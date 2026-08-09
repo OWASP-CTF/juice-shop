@@ -33,8 +33,12 @@ export function profileImageUrlUpload () {
         } catch (error) {
           try {
             const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            if (typeof url === 'string' && !url.includes(';')) {
+              await user?.update({ profileImage: url })
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            } else {
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; rejecting invalid image link`)
+            }
           } catch (error) {
             next(error)
             return
