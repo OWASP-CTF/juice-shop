@@ -143,11 +143,14 @@ export function placeOrder () {
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
-          challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
+          /* An order can never be worth less than nothing. The check has to come before the
+             challenge evaluation below, otherwise a rejected order still counts as a successful
+             refund-by-checkout. */
           if (totalPrice < 0) {
             next(new Error('Invalid order total'))
             return
           }
+          challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
@@ -203,12 +206,21 @@ function calculateApplicableDiscount (basket: BasketModel, req: Request) {
     const campaign = campaigns[couponCode as keyof typeof campaigns]
 
     if (campaign && couponDate == campaign.validOn) { // eslint-disable-line eqeqeq
+      /* Whether a campaign is running is decided by the server clock alone. Previously the only
+         thing checked was that the customer's own submission agreed with the campaign date, so
+         setting the workstation clock back to a campaign day revived an expired discount. */
+      const now = Date.now()
+      if (now < campaign.validOn || now >= campaign.validOn + ONE_DAY_IN_MILLISECONDS) {
+        return 0
+      }
       challengeUtils.solveIf(challenges.manipulateClockChallenge, () => { return campaign.validOn < new Date().getTime() })
       return campaign.discount
     }
   }
   return 0
 }
+
+const ONE_DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000
 
 const campaigns = {
   WMNSDY2019: { validOn: new Date('Mar 08, 2019 00:00:00 GMT+0100').getTime(), discount: 75 },

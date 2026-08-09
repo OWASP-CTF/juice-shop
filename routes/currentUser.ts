@@ -54,11 +54,13 @@ export function retrieveLoggedInUser () {
     // Solve passwordHashLeakChallenge when password field is included in response
     challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
 
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    /* The profile of the signed-in user is answered as JSON only. Honouring a "callback"
+       parameter here turned the endpoint into a JSONP source: any third-party page could load
+       it with a <script> tag, the browser would attach the session cookie, and the response
+       would execute in that page's context - handing the visitor's e-mail address and profile
+       to a site that has no business reading it. JSONP predates CORS and cannot be constrained
+       by an origin check, so the padded variant is simply not served. */
+    res.type('application/json')
+    res.json(response)
   }
 }

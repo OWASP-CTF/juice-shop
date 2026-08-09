@@ -17,6 +17,12 @@ export function likeProductReviews () {
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    /* The review id is an identifier, never a query fragment. Without this check a body such as
+       {"id": {"$ne": "x"}} is spliced into the selector as an operator and the single "like" is
+       applied to every review at once. */
+    if (typeof id !== 'string' || id.length === 0) {
+      return res.status(400).json({ error: 'Wrong Params' })
+    }
 
     try {
       const result = await db.reviewsCollection.update(
@@ -24,10 +30,11 @@ export function likeProductReviews () {
         { $inc: { likesCount: 1 }, $addToSet: { likedBy: user.data.email } }
       )
       const modified = (result as any)?.nModified ?? (result as any)?.modified ?? 0
-      challengeUtils.solveIf(challenges.timingAttackChallenge, () => modified > 1)
       if (!modified) {
         return res.status(403).json({ error: 'Not allowed' })
       }
+      /* A single like can only ever touch the one review it names. */
+      challengeUtils.solveIf(challenges.timingAttackChallenge, () => modified > 1)
       res.json(result)
     } catch (err) {
       res.status(400).json({ error: 'Wrong Params' })
