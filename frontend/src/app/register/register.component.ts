@@ -79,14 +79,24 @@ export class RegisterComponent implements OnInit {
     }
 
     this.userService.save(user).subscribe({
-      next: (response: any) => {
-        this.securityAnswerService.save({
-          UserId: response.id,
-          answer: this.securityAnswerControl.value,
-          SecurityQuestionId: this.securityQuestionControl.value
-        }).subscribe(() => {
-          this.ngZone.run(async () => await this.router.navigate(['/login']))
-          this.snackBarHelperService.open('CONFIRM_REGISTER')
+      next: () => {
+        /* The security answer is bound server-side to whoever is authenticated, so the
+           brand new account has to identify itself first. The token is deliberately not
+           persisted - registration still finishes on the login page. */
+        this.userService.authenticate({ email: user.email, password: user.password }).subscribe({
+          next: ({ token }: any) => {
+            this.securityAnswerService.save({
+              answer: this.securityAnswerControl.value,
+              SecurityQuestionId: this.securityQuestionControl.value
+            }, token).subscribe({
+              next: () => {
+                this.ngZone.run(async () => await this.router.navigate(['/login']))
+                this.snackBarHelperService.open('CONFIRM_REGISTER')
+              },
+              error: (err) => { this.error = err.error?.message ?? err.message }
+            })
+          },
+          error: (err) => { this.error = err.error?.message ?? err.message }
         })
       },
       error: (err) => {

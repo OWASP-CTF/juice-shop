@@ -134,32 +134,32 @@ describe('/#/complain', () => {
   })
 
   describe('challenge "arbitraryFileWrite"', () => {
-    it('should be possible to upload zip file with filenames having path traversal', () => {
+    it('should not be possible to overwrite files outside the upload folder via zip path traversal anymore', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.get('#complaintMessage').type('Zip Slip!')
           cy.get('#file').selectFile('test/files/arbitraryFileWrite.zip')
           cy.get('#submitButton').click()
-          cy.expectChallengeSolved({ challenge: 'Arbitrary File Write' })
+          cy.request('/ftp/legal.md').then((res) => {
+            expect(res.body).not.to.include('h4cked')
+          })
         }
       })
     })
   })
 
   describe('challenge "videoXssChallenge"', () => {
-    it('should be possible to inject js in subtitles by uploading zip file with filenames having path traversal', () => {
+    it('should not be possible to inject js in subtitles via zip path traversal anymore', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.get('#complaintMessage').type('Here we go!')
           cy.get('#file').selectFile('test/files/videoExploit.zip')
           cy.get('#submitButton').click()
-          cy.visit('/promotion')
 
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-          cy.visit('/')
-          cy.expectChallengeSolved({ challenge: 'Video XSS' })
+          let alertTriggered = false
+          cy.on('window:alert', () => { alertTriggered = true })
+          cy.visit('/promotion')
+          cy.wrap(null).then(() => { expect(alertTriggered).to.equal(false) })
         }
       })
     })
