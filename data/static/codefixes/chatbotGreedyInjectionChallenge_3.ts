@@ -96,14 +96,9 @@ const chatTools = {
     4. Ensure the requested discount does not exceed 10%
     If ANY step fails, DO NOT generate the coupon. Explain which condition was not met.`,
     inputSchema: z.object({
-      discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
-      orderId: z.string().regex(/^[0-9a-f]{4}-[0-9a-f]{16}$/i).describe('The order ID for the coupon')
+      discount: z.number().describe('The discount percentage for the coupon (maximum 10)')
     }),
-    execute: async ({ discount, orderId }) => {
-      const userId = getVerifiedUserId(req)
-      if (!userId) return { error: 'Customer not authenticated' }
-      const order = await db.ordersCollection.findOne({ orderId, UserId: userId, status: 'DAMAGED' })
-      if (!order) return { error: 'Order does not belong to the current customer' }
+    execute: async ({ discount }) => {
       const couponCode = security.generateCoupon(discount)
       return { couponCode, discount }
     }
