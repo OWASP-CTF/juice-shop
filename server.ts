@@ -229,6 +229,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The contract sandbox is a developer tool, not part of the shop, and its own spacer is the
+     only thing that still points at it. */
+  app.use('/assets/public/images/padding/11px.png', security.isAdmin())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
