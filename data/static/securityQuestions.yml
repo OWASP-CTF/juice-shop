@@ -1,24 +1,24 @@
 # vuln-code-snippet start resetPasswordBjoernOwaspChallenge resetPasswordBjoernChallenge resetPasswordJimChallenge resetPasswordBenderChallenge resetPasswordUvoginChallenge
 - # vuln-code-snippet neutral-line resetPasswordJimChallenge
-  question: 'Your eldest siblings middle name?' # vuln-code-snippet vuln-line resetPasswordJimChallenge
+  question: 'A word only you would associate with your first account here?' # vuln-code-snippet vuln-line resetPasswordJimChallenge
 -
-  question: "Mother's maiden name?"
+  question: "A phrase you have never written down anywhere else?"
 -
-  question: "Mother's birth date? (MM/DD/YY)"
+  question: "A number sequence meaningful only to you?"
 -
-  question: "Father's birth date? (MM/DD/YY)"
+  question: "A second phrase you have never written down anywhere else?"
 -
-  question: "Maternal grandmother's first name?"
+  question: "A word you chose at random when you registered?"
 -
-  question: "Paternal grandmother's first name?"
+  question: "A second word you chose at random when you registered?"
 - # vuln-code-snippet neutral-line resetPasswordBjoernOwaspChallenge
-  question: 'Name of your favorite pet?' # vuln-code-snippet vuln-line resetPasswordBjoernOwaspChallenge
+  question: 'A passphrase you set aside for account recovery?' # vuln-code-snippet vuln-line resetPasswordBjoernOwaspChallenge
 -
   question: "Last name of dentist when you were a teenager? (Do not include 'Dr.')"
 - # vuln-code-snippet neutral-line resetPasswordBjoernChallenge
-  question: 'Your ZIP/postal code when you were a teenager?' # vuln-code-snippet vuln-line resetPasswordBjoernChallenge
+  question: 'A recovery phrase known only to you?' # vuln-code-snippet vuln-line resetPasswordBjoernChallenge
 - # vuln-code-snippet neutral-line resetPasswordBenderChallenge
-  question: 'Company you first work for as an adult?' # vuln-code-snippet vuln-line resetPasswordBenderChallenge
+  question: 'A recovery code you stored somewhere safe?' # vuln-code-snippet vuln-line resetPasswordBenderChallenge
 -
   question: 'Your favorite book?'
 - # vuln-code-snippet neutral-line resetPasswordUvoginChallenge
