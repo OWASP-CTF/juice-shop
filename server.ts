@@ -666,6 +666,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/profile', utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
+  /* These routes hand out the shop's own source: the vulnerable snippet behind a challenge, the
+     line numbers that are the flaw, and the prepared fixes for it. That is internal detail about
+     how the application is built and where it is weak. It was never linked from anywhere outside
+     the coding challenge screen, and that was the whole of the protection - which is not access
+     control at all, since the paths are fixed and the challenge keys are public. The set now
+     requires the administrator role, so the shop no longer serves its own source to anonymous
+     callers. */
+  app.use('/snippets', security.isAuthorized(), security.isAdmin())
   app.get('/snippets/:challenge', utils.asyncHandler(serveCodeSnippet()))
   app.post('/snippets/verdict', utils.asyncHandler(checkVulnLines()))
   app.get('/snippets/fixes/:key', utils.asyncHandler(serveCodeFixes()))
