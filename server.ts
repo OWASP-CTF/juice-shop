@@ -397,6 +397,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Anti-automation: a CAPTCHA alone only proves a single interaction, so feedback
+     submission is additionally rate limited. The key is the address of the actual
+     connection rather than req.ip, because `trust proxy` is enabled and a client can
+     otherwise pick its own bucket with an X-Forwarded-For header. */
+  app.post('/api/Feedbacks', rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator (req: Request) { return req.socket.remoteAddress ?? 'unknown' }
+  }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
