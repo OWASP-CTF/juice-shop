@@ -201,10 +201,13 @@ void describe('Hidden URL', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('GET folder containing access log files for "Access Log" challenge', async () => {
+  void it('GET no longer serves access log files, falling through to the SPA instead of leaking logs for "Access Log" challenge', async () => {
     const res = await request(app)
       .get('/support/logs/access.log.' + utils.toISO8601(new Date()))
     assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/octet-stream'))
+    assert.ok(res.headers['content-type']?.includes('text/html'))
+    assert.ok(res.text.includes('scripts.js'))
+    assert.ok(res.text.includes('main.js'))
+    assert.ok(res.text.includes('polyfills.js'))
   })
 })
