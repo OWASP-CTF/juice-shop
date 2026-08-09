@@ -8,7 +8,7 @@ import fs from 'fs'
 import { load } from 'js-yaml'
 import { expect } from 'chai'
 
-const challenges = load(fs.readFileSync(path.resolve(__dirname, '../../data/static/challenges.yml'), 'utf8'))
+const challenges = load(fs.readFileSync(path.resolve(__dirname, '../../data/static/challenges.yml'), 'utf8')) as any[]
 const en = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../frontend/src/assets/i18n/en.json'), 'utf8'))
 
 describe('Challenge Tags', () => {
