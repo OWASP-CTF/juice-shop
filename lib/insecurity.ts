@@ -40,6 +40,8 @@ interface IAuthenticatedUsers {
   updateFrom: (req: Request, user: ResponseWithUser) => any
 }
 
+const progressKey = crypto.randomBytes(32)
+
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
@@ -114,6 +116,34 @@ export const discountFromCoupon = (coupon?: string) => {
       return parseInt(discount)
     }
   }
+}
+
+/* hashids obfuscates, it does not authenticate. The three salts were written into the
+   source, so anyone who read it could mint a continue code restoring any challenge ids they
+   liked - including ones never solved. A progress code now carries an HMAC over its payload,
+   keyed on a secret that only this process holds, and stays alphanumeric so the existing
+   format check still accepts it. */
+const progressSignature = (namespace: string, payloadHex: string) =>
+  crypto.createHmac('sha256', progressKey).update(namespace + ':' + payloadHex).digest('hex').substring(0, 32)
+
+export const encodeProgress = (namespace: string, ids: number[]) => {
+  const payloadHex = Buffer.from(ids.join('.')).toString('hex')
+  return payloadHex + progressSignature(namespace, payloadHex)
+}
+
+export const decodeProgress = (namespace: string, code?: string): number[] => {
+  if (!code || code.length <= 32) {
+    return []
+  }
+  const signature = code.substring(code.length - 32)
+  const payloadHex = code.substring(0, code.length - 32)
+  if (!/^[0-9a-fA-F]+$/.test(payloadHex) || signature !== progressSignature(namespace, payloadHex)) {
+    return []
+  }
+  return Buffer.from(payloadHex, 'hex').toString('utf8')
+    .split('.')
+    .map(Number)
+    .filter((id) => Number.isInteger(id))
 }
 
 function hasValidFormat (coupon: string) {
