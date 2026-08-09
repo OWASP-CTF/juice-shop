@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 import express, { type NextFunction, type Request, type Response } from 'express'
-import path from 'node:path'
 import config from 'config'
 import { themes } from '../views/themes/themes'
 import * as utils from '../lib/utils'
@@ -100,31 +99,19 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
         _logo_: utils.extractFilename(config.get('application.logo'))
       }
 
+      // A caller-controlled layout is a path handed to the view engine. The erasure form
+      // does not need one, so reject it and keep the rendered template server-selected.
       if (req.body.layout) {
-        const filePath: string = path.resolve(req.body.layout).toLowerCase()
-        const isForbiddenFile: boolean = (filePath.includes('ftp') || filePath.includes('ctf.key') || filePath.includes('encryptionkeys'))
-        if (!isForbiddenFile) {
-          res.render('dataErasureResult', {
-            ...req.body,
-            ...themeVars
-          }, (error, html) => {
-            if (!html || error) {
-              next(new Error(error.message))
-            } else {
-              const sendlfrResponse: string = html.slice(0, 100) + '......'
-              res.send(sendlfrResponse)
-              challengeUtils.solveIf(challenges.lfrChallenge, () => { return true })
-            }
-          })
-        } else {
-          next(new Error('File access not allowed'))
-        }
-      } else {
-        res.render('dataErasureResult', {
-          ...req.body,
-          ...themeVars
-        })
+        challengeUtils.solveIf(challenges.lfrChallenge, () => { return false })
+        res.status(400).json({ error: 'File access not allowed' })
+        return
       }
+
+      res.render('dataErasureResult', {
+        email: req.body.email,
+        securityAnswer: req.body.securityAnswer,
+        ...themeVars
+      })
     } catch (error) {
       next(error)
     }
