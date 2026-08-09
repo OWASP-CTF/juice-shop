@@ -277,10 +277,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
-  app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* /logs directory browsing (restricted to admins) */
+  const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+    const decoded = security.verify(utils.jwtFrom(req)) && security.decode(utils.jwtFrom(req))
+    if (decoded?.data?.role === security.roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Blocked illegal activity' })
+    }
+  }
+  app.use('/support/logs', requireAdmin, serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
+  app.use('/support/logs', verify.accessControlChallenges())
+  app.use('/support/logs/:file', requireAdmin, serveLogFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -417,6 +425,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
   app.post('/api/Users', verify.registerAdminChallenge())
+  /* Self-registration must never be able to grant elevated roles */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    req.body.role = security.roles.customer
+    next()
+  })
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
   /* Unauthorized users are not allowed to access B2B API */

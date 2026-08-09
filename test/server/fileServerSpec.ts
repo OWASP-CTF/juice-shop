@@ -79,43 +79,47 @@ describe('fileServer', () => {
     expect(challenges.directoryListingChallenge.solved).to.equal(true)
   })
 
-  it('should solve "easterEggLevelOneChallenge" when requesting eastere.gg with Poison Null Byte attack', () => {
+  it('should block Poison Null Byte attack requesting eastere.gg via a spoofed .md extension', () => {
     challenges.easterEggLevelOneChallenge = { solved: false, save } as unknown as Challenge
     req.params.file = 'eastere.gg%00.md'
 
     servePublicFiles()(req, res, next)
 
-    expect(res.sendFile).to.have.been.calledWith(sinon.match(/ftp[/\\]eastere\.gg/))
-    expect(challenges.easterEggLevelOneChallenge.solved).to.equal(true)
+    expect(res.sendFile).to.have.not.been.calledWith(sinon.match.any)
+    expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
+    expect(challenges.easterEggLevelOneChallenge.solved).to.equal(false)
   })
 
-  it('should solve "forgottenDevBackupChallenge" when requesting package.json.bak with Poison Null Byte attack', () => {
+  it('should block Poison Null Byte attack requesting package.json.bak via a spoofed .md extension', () => {
     challenges.forgottenDevBackupChallenge = { solved: false, save } as unknown as Challenge
     req.params.file = 'package.json.bak%00.md'
 
     servePublicFiles()(req, res, next)
 
-    expect(res.sendFile).to.have.been.calledWith(sinon.match(/ftp[/\\]package\.json\.bak/))
-    expect(challenges.forgottenDevBackupChallenge.solved).to.equal(true)
+    expect(res.sendFile).to.have.not.been.calledWith(sinon.match.any)
+    expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
+    expect(challenges.forgottenDevBackupChallenge.solved).to.equal(false)
   })
 
-  it('should solve "forgottenBackupChallenge" when requesting coupons_2013.md.bak with Poison Null Byte attack', () => {
+  it('should block Poison Null Byte attack requesting coupons_2013.md.bak via a spoofed .md extension', () => {
     challenges.forgottenBackupChallenge = { solved: false, save } as unknown as Challenge
     req.params.file = 'coupons_2013.md.bak%00.md'
 
     servePublicFiles()(req, res, next)
 
-    expect(res.sendFile).to.have.been.calledWith(sinon.match(/ftp[/\\]coupons_2013\.md\.bak/))
-    expect(challenges.forgottenBackupChallenge.solved).to.equal(true)
+    expect(res.sendFile).to.have.not.been.calledWith(sinon.match.any)
+    expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
+    expect(challenges.forgottenBackupChallenge.solved).to.equal(false)
   })
 
-  it('should solve "misplacedSignatureFileChallenge" when requesting suspicious_errors.yml with Poison Null Byte attack', () => {
+  it('should block Poison Null Byte attack requesting suspicious_errors.yml via a spoofed .md extension', () => {
     challenges.misplacedSignatureFileChallenge = { solved: false, save } as unknown as Challenge
     req.params.file = 'suspicious_errors.yml%00.md'
 
     servePublicFiles()(req, res, next)
 
-    expect(res.sendFile).to.have.been.calledWith(sinon.match(/ftp[/\\]suspicious_errors\.yml/))
-    expect(challenges.misplacedSignatureFileChallenge.solved).to.equal(true)
+    expect(res.sendFile).to.have.not.been.calledWith(sinon.match.any)
+    expect(next).to.have.been.calledWith(sinon.match.instanceOf(Error))
+    expect(challenges.misplacedSignatureFileChallenge.solved).to.equal(false)
   })
 })
