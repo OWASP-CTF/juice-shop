@@ -14,10 +14,14 @@ import * as db from '../data/mongodb'
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = security.authenticatedUsers.from(req) // vuln-code-snippet vuln-line forgedReviewChallenge
+    const id = req.body.id
+    if (typeof id !== 'string') { // prevent NoSQL operator injection (e.g. { "$ne": -1 }) via the id field
+      res.status(400).json({ error: 'Invalid review id' })
+      return
+    }
     db.reviewsCollection.update( // vuln-code-snippet neutral-line forgedReviewChallenge
-      { _id: req.body.id }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
-      { $set: { message: req.body.message } },
-      { multi: true } // vuln-code-snippet vuln-line noSqlReviewsChallenge
+      { _id: id }, // vuln-code-snippet vuln-line forgedReviewChallenge
+      { $set: { message: req.body.message } }
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         challengeUtils.solveIf(challenges.noSqlReviewsChallenge, () => { return result.modified > 1 }) // vuln-code-snippet hide-line
