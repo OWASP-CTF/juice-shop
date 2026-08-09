@@ -228,6 +228,26 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The token sale screen and the web3 code sandbox are no longer part of the released
+     application, and neither are the two spacer images that only those two screens ever laid
+     out. Nothing else in the shop requests them, so a request for one is a probe for a screen
+     that is not served, and it is answered as such - here, once, for every path.
+
+     It has to be done globally rather than under a single asset directory. The mounts below
+     match on the file name left after the mount prefix is stripped, so the same name resolves
+     under /assets/public/images/products, /assets/public/images/uploads, /assets/i18n and
+     /support/logs as well - and /assets/i18n cannot simply be closed, the shop fetches its
+     translations from there. Refusing the name under one prefix only moves the probe to the
+     next one. */
+  const withdrawnScreenAsset = /\/(?:11|56)px\.png$/
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (withdrawnScreenAsset.test(req.path)) {
+      res.sendStatus(404)
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
