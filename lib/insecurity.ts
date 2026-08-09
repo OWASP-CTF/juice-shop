@@ -60,13 +60,21 @@ export const decode = (token: string) => { return jws.decode(token)?.payload }
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
+const SANITIZE_PASS_LIMIT = 25
+
 export const sanitizeSecure = (html: string): string => {
-  const sanitized = sanitizeHtml(html)
-  if (sanitized === html) {
-    return html
-  } else {
-    return sanitizeSecure(sanitized)
+  // Sanitising once can leave a payload behind when a stripped tag reveals another one,
+  // so keep sanitising until the result stops changing. The pass limit turns a pathological
+  // input into an empty string instead of unbounded work.
+  let current = html
+  for (let pass = 0; pass < SANITIZE_PASS_LIMIT; pass++) {
+    const sanitized = sanitizeHtml(current)
+    if (sanitized === current) {
+      return sanitized
+    }
+    current = sanitized
   }
+  return ''
 }
 
 export const authenticatedUsers: IAuthenticatedUsers = {
