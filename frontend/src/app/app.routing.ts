@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -12,6 +13,7 @@ import { RegisterComponent } from './register/register.component'
 import { ForgotPasswordComponent } from './forgot-password/forgot-password.component'
 import { SearchResultComponent } from './search-result/search-result.component'
 import { LoginComponent } from './login/login.component'
+import { AdministrationComponent } from './administration/administration.component'
 import { ChangePasswordComponent } from './change-password/change-password.component'
 import { ComplaintComponent } from './complaint/complaint.component'
 import { RouterModule, type Routes, type UrlMatchResult, type UrlSegment } from '@angular/router'
@@ -51,6 +53,11 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
+const loadWeb3SandboxModule = async () => {
+  const module = await import('./web3-sandbox/web3-sandbox.module')
+  return module.Web3SandboxModule
+}
+
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -66,14 +73,13 @@ const loadAboutComponent = async () => {
   return module.AboutComponent
 }
 
-// vuln-code-snippet start scoreBoardChallenge
+// vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  /* The administration screen is not part of the customer facing application. A client-side
-     route guard is advice, not enforcement: the bundle still ships the screen and anyone can
-     reach it by editing the token in local storage or by calling the APIs behind it directly.
-     Administrative functions belong in a separate application that is not exposed to the
-     Internet, so the route mapping is gone from the shop entirely. The APIs it used are
-     authorised server-side. */
+  { // vuln-code-snippet neutral-line adminSectionChallenge
+    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
+    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+  }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -229,6 +235,10 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
+  { // vuln-code-snippet neutral-line web3SandboxChallenge
+    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+  }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -241,16 +251,16 @@ const routes: Routes = [
     path: 'bee-haven',
     loadChildren: async () => await loadFaucetModule()
   },
+  // vuln-code-snippet start tokenSaleChallenge
   {
     matcher: oauthMatcher,
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  /* The token sale has not been announced yet, so it is not in the client-side code at all.
-     Shipping the page and hiding it behind an obfuscated URL matcher was security through
-     obscurity: the route declaration, the component and the de-obfuscation logic all travelled
-     to every visitor in the bundle, where reading them back is a matter of minutes. A page that
-     is still a secret gets no premature route mapping. */
+  { // vuln-code-snippet neutral-line tokenSaleChallenge
+    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
+    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+  }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
@@ -264,7 +274,7 @@ const routes: Routes = [
     component: SearchResultComponent
   }
 ]
-// vuln-code-snippet end scoreBoardChallenge
+// vuln-code-snippet end adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 
 export const Routing = RouterModule.forRoot(routes, { useHash: true })
 
@@ -280,7 +290,33 @@ export function oauthMatcher (url: UrlSegment[]): UrlMatchResult {
   return null as unknown as UrlMatchResult
 }
 
-/* tokenMatcher() and its token1()/token2() de-obfuscation helpers were removed together with
-   the unannounced token sale route they served. Obfuscating a path is not access control -
-   the code that undoes it has to ship to the client, so the "secret" URL is only ever one
-   console call away. */
+export function tokenMatcher (url: UrlSegment[]): UrlMatchResult { // vuln-code-snippet neutral-line tokenSaleChallenge
+  if (url.length === 0) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
+  } // vuln-code-snippet neutral-line tokenSaleChallenge
+ // vuln-code-snippet neutral-line tokenSaleChallenge
+  const path = url[0].toString() // vuln-code-snippet neutral-line tokenSaleChallenge
+
+  if (path.match((token1(25, 184, 174, 179, 182, 186) + (36669).toString(36).toLowerCase() + token2(13, 144, 87, 152, 139, 144, 83, 138) + (10).toString(36).toLowerCase()))) { // vuln-code-snippet vuln-line tokenSaleChallenge
+    return ({ consumed: url }) // vuln-code-snippet neutral-line tokenSaleChallenge
+  } // vuln-code-snippet neutral-line tokenSaleChallenge
+ // vuln-code-snippet neutral-line tokenSaleChallenge
+  return null as unknown as UrlMatchResult // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
+
+export function token1 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
+  const L = Array.prototype.slice.call(args) // vuln-code-snippet neutral-line tokenSaleChallenge
+  const D = L.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
+  return L.reverse().map(function (C, A) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return String.fromCharCode(C - D - 45 - A) // vuln-code-snippet neutral-line tokenSaleChallenge
+  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
+
+export function token2 (...args: number[]) { // vuln-code-snippet neutral-line tokenSaleChallenge
+  const T = Array.prototype.slice.call(arguments) // vuln-code-snippet neutral-line tokenSaleChallenge
+  const M = T.shift() // vuln-code-snippet neutral-line tokenSaleChallenge
+  return T.reverse().map(function (m, H) { // vuln-code-snippet neutral-line tokenSaleChallenge
+    return String.fromCharCode(m - M - 24 - H) // vuln-code-snippet neutral-line tokenSaleChallenge
+  }).join('') // vuln-code-snippet neutral-line tokenSaleChallenge
+} // vuln-code-snippet neutral-line tokenSaleChallenge
+// vuln-code-snippet end tokenSaleChallenge
