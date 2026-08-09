@@ -12,6 +12,11 @@ export function retrieveAppConfiguration () {
     if (safeConfig.application?.chatBot) {
       delete safeConfig.application.chatBot.llmApiUrl
     }
+    // The coin is unannounced, so its name is not the storefront's to hand out either.
+    delete safeConfig.application?.altcoinName
+    delete safeConfig.products
+    delete safeConfig.memories
+    delete safeConfig.server
     res.json({ config: safeConfig })
   }
 }
