@@ -65,6 +65,20 @@ const hasAcceptedAlgorithm = (token: string) => {
   }
 }
 
+// A bearer token is only ever honoured when it carries the RS256 signature this shop
+// issues. Applied once in front of every route, so a forged token is refused before any
+// handler, detector or session lookup sees it rather than at each verification site.
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req) || req.cookies?.token
+    if (token && !hasAcceptedAlgorithm(token)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    next()
+  }
+}
+
 export const isAuthorized = () => {
   const requireValidToken = expressJwt(({ secret: publicKey }) as any)
   return (req: Request, res: Response, next: NextFunction) => {
