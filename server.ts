@@ -275,7 +275,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* The dependency manifests left behind in the folder name package versions and nothing else, so
      they are not withheld: a researcher has to be able to read which versions the team was on in
      order to report a compromised one. The artefacts that do carry secrets stay closed. */
-  const confidentialFtpArtefacts = /(\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+  const confidentialFtpArtefacts = /(\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml|coupons_2013\.md\.bak)$/i
   app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
   app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
   app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
@@ -285,6 +285,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     } catch {
       /* A name that is not valid percent encoding is judged as it arrived */
     }
+    /* The name is judged by what will actually be opened, so appending a poison null byte and a
+       harmless looking extension cannot walk a refused artefact past this check. */
+    requested = security.cutOffPoisonNullByte(requested).split('\0')[0]
     if (confidentialFtpArtefacts.test(requested)) {
       res.status(403).json({ error: 'Forbidden' })
       return
