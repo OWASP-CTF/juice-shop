@@ -51,27 +51,19 @@ export function getUserProfile () {
 
     let username = user.username
 
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
-      username = '\\' + username
-    }
+    // The username is data. It is escaped for the template and never evaluated.
+    // NOTE: this prefixed copy is only used for the challenge check below; it is not
+    // rendered and it is not put into the template source.
+    username = '\\' + username
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
+    // The username is NEVER spliced into the template source. It is handed to Pug as a
+    // local (see views/userProfile.pug) so the compiler treats it as data, not syntax.
+    // Substituting it here would make `#{...}`, `!{...}` or a leading `- ` inside the
+    // username part of the template that gets compiled and evaluated.
+    // Only values that come from static config/themes below are safe as source substitutions.
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -85,7 +77,9 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      // The policy is fixed. Splicing a user-controlled value into it let an attacker
+      // append their own directives, and 'unsafe-eval' is not needed by this page.
+      const CSP = `img-src 'self'; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
