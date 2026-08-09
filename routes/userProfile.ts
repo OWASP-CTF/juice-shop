@@ -57,8 +57,9 @@ export function getUserProfile () {
     if (username) {
       // Spliced into the Pug source, so escape HTML and neutralize Pug's #{...} interpolation.
       username = entities.encode(username).replace(/#/g, '&num;')
-      template = template.replace(/_username_/g, username)
     }
+    // An account without a username still has to get a page, not the raw placeholder.
+    template = template.replace(/_username_/g, username ?? '')
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
