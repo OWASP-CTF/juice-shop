@@ -228,6 +228,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* A spacer image that only one restricted screen ever loads is part of that screen.
+     Grep the frontend and 19px.png, 11px.png and 56px.png each appear in exactly one
+     template - the administration page, the web3 sandbox and the token sale page. Serving
+     one to an anonymous caller confirms the area exists and is reachable, which is what
+     those areas are meant not to disclose, so they follow the same access control as the
+     pages that load them. 1px.png (score board) and 81px.png (privacy policy) belong to
+     screens any visitor may open and stay public. */
+  app.use([
+    '/assets/public/images/padding/19px.png',
+    '/assets/public/images/padding/11px.png',
+    '/assets/public/images/padding/56px.png'
+  ], security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
