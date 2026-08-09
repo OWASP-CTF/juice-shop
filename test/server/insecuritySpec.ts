@@ -9,9 +9,21 @@ import chai from 'chai'
 import * as security from '../../lib/insecurity'
 import type { UserModel } from 'models/user'
 import type { Request } from 'express'
+import jwt from 'jsonwebtoken'
 const expect = chai.expect
 
 describe('insecurity', () => {
+  describe('verify', () => {
+    it('accepts application-issued RS256 tokens', () => {
+      expect(security.verify(security.authorize({ data: { id: 1 } }))).to.equal(true)
+    })
+
+    it('rejects tokens HMAC-signed with the public RSA key', () => {
+      const token = jwt.sign({ data: { id: 1 } }, security.publicKey, { algorithm: 'HS256' })
+      expect(security.verify(token)).to.equal(false)
+    })
+  })
+
   describe('cutOffPoisonNullByte', () => {
     it('returns string unchanged if it contains no null byte', () => {
       expect(security.cutOffPoisonNullByte('file.exe.pdf')).to.equal('file.exe.pdf')
