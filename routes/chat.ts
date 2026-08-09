@@ -46,14 +46,6 @@ async function getUserId (req: Request): Promise<number | undefined> {
   return decoded?.data?.id
 }
 
-function getVerifiedUserId (req: Request): number | undefined {
-  const token = utils.jwtFrom(req)
-  if (!token || !security.verify(token)) return undefined
-  const decoded = security.decode(token) as { data?: { id?: number }, exp?: number } | undefined
-  if (!decoded?.data?.id || !decoded.exp || !(decoded.exp > Date.now() / 1000)) return undefined
-  return decoded.data.id
-}
-
 async function getUserNameFromToken (req: Request): Promise<string | undefined> {
   const userId = await getUserId(req)
   if (!userId) return undefined
@@ -182,16 +174,11 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'), // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
-          orderId: z.string().regex(/^[0-9a-f]{4}-[0-9a-f]{16}$/i).describe('The order ID for the coupon')
+          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
-        execute: async ({ discount, orderId }) => {
+        execute: async ({ discount }) => {
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
           challengeUtils.solveIf(challenges.chatbotGreedyInjectionChallenge, () => discount >= 50) // vuln-code-snippet hide-line
-          const userId = getVerifiedUserId(req)
-          if (!userId) return { error: 'Customer not authenticated' }
-          const order = await db.ordersCollection.findOne({ orderId, UserId: userId, status: 'DAMAGED' })
-          if (!order) return { error: 'Order does not belong to the current customer' }
           const couponCode = security.generateCoupon(discount) // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge
           return { couponCode, discount } // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge
         }

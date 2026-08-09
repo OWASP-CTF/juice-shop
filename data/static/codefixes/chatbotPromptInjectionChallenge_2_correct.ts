@@ -1,14 +1,12 @@
       generateCoupon: tool({
-        description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.',
+        description: 'Generate a discount coupon for a customer with a verified damaged order. Requires a valid order ID.',
         inputSchema: z.object({
-          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'),
-          orderId: z.string().regex(/^[0-9a-f]{4}-[0-9a-f]{16}$/i).describe('The order ID for the coupon')
+          discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
+          orderId: z.string().describe('The order ID of the damaged order (format: xxxx-xxxxxxxxxxxxxxxx)')
         }),
-        execute: async ({ discount, orderId }) => {
-          const userId = getVerifiedUserId(req)
-          if (!userId) return { error: 'Customer not authenticated' }
-          const order = await db.ordersCollection.findOne({ orderId, UserId: userId, status: 'DAMAGED' })
-          if (!order) return { error: 'Order does not belong to the current customer' }
+        execute: async ({ discount, orderId, authenticatedUser }) => {
+          const order = await db.ordersCollection.findOne({ orderId, email: authenticatedUser?.email, status: OrderStatus.DAMAGED })
+          if (!order) return { error: 'No verified damaged order found for this order ID.' }
           const couponCode = security.generateCoupon(discount)
           return { couponCode, discount }
         }

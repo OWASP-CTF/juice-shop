@@ -746,51 +746,43 @@ async function createOrders () {
   const adminEmail = 'admin@' + config.get<string>('application.domain')
   const orders = [
     {
-      UserId: datacache.users.admin.id,
       orderId: security.hash(adminEmail).slice(0, 4) + '-' + utils.randomHexString(16),
       email: (adminEmail.replace(/[aeiou]/gi, '*')),
       totalPrice: basket1Products[0].total + basket1Products[1].total,
       bonus: basket1Products[0].bonus + basket1Products[1].bonus,
       products: basket1Products,
       eta: Math.floor((Math.random() * 5) + 1).toString(),
-      status: 'DAMAGED',
       delivered: false
     },
     {
-      UserId: datacache.users.admin.id,
       orderId: security.hash(adminEmail).slice(0, 4) + '-' + utils.randomHexString(16),
       email: (adminEmail.replace(/[aeiou]/gi, '*')),
       totalPrice: basket2Products[0].total,
       bonus: basket2Products[0].bonus,
       products: basket2Products,
       eta: '0',
-      status: 'DELIVERED',
       delivered: true
     },
     {
-      UserId: datacache.users.test.id,
       orderId: security.hash('demo').slice(0, 4) + '-' + utils.randomHexString(16),
       email: 'd*m*',
       totalPrice: basket3Products[0].total + basket3Products[1].total,
       bonus: basket3Products[0].bonus + basket3Products[1].bonus,
       products: basket3Products,
       eta: '0',
-      status: 'DELIVERED',
       delivered: true
     }
   ]
 
   return await Promise.all(
-    orders.map(({ UserId, orderId, email, totalPrice, bonus, products, eta, status, delivered }) =>
+    orders.map(({ orderId, email, totalPrice, bonus, products, eta, delivered }) =>
       ordersCollection.insert({
-        UserId,
         orderId,
         email,
         totalPrice,
         bonus,
         products,
         eta,
-        status,
         delivered
       }).catch((err: unknown) => {
         logger.error(`Could not insert Order ${orderId}: ${utils.getErrorMessage(err)}`)
