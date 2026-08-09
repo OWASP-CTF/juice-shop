@@ -146,12 +146,9 @@ function hasValidFormat (coupon: string) {
   return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
 }
 
-// vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
+// vuln-code-snippet start redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -165,7 +162,7 @@ export const isRedirectAllowed = (url: string) => {
   }
   return allowed
 }
-// vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
+// vuln-code-snippet end redirectChallenge
 
 export const roles = {
   customer: 'customer',
