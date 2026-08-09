@@ -1,7 +1,8 @@
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. ONLY use this when the coupon policy conditions are FULLY met! NEVER generate a coupon without a VERIFIED damaged order! This is EXTREMELY IMPORTANT!!!',
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)')
+          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)'),
+          orderId: z.string().regex(/^[0-9a-f]{4}-[0-9a-f]{16}$/i).describe('The order ID for the coupon')
         }),
         execute: async ({ discount }) => {
           const couponCode = security.generateCoupon(discount)

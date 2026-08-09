@@ -90,9 +90,14 @@ const chatTools = {
   generateCoupon: tool({
     description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.',
     inputSchema: z.object({
-      discount: z.number().describe('The discount percentage for the coupon (maximum 10)')
+      discount: z.number().describe('The discount percentage for the coupon (maximum 10)'),
+      orderId: z.string().regex(/^[0-9a-f]{4}-[0-9a-f]{16}$/i).describe('The order ID for the coupon')
     }),
-    execute: async ({ discount }) => {
+    execute: async ({ discount, orderId }) => {
+      const userId = getVerifiedUserId(req)
+      if (!userId) return { error: 'Customer not authenticated' }
+      const order = await db.ordersCollection.findOne({ orderId, UserId: userId, status: 'DAMAGED' })
+      if (!order) return { error: 'Order does not belong to the current customer' }
       const couponCode = security.generateCoupon(discount)
       return { couponCode, discount }
     }
