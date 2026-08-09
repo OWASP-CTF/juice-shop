@@ -57,7 +57,7 @@ void describe('/snippets/:challenge', () => {
 
   void it('GET code snippet retrieval for challenge with code snippet', async () => {
     const res = await request(app)
-      .get('/snippets/loginAdminChallenge')
+      .get('/snippets/resetPasswordJimChallenge')
 
     assert.equal(res.status, 200)
     assert.equal(typeof res.body.snippet, 'string')
