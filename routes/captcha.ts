@@ -28,7 +28,9 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // The answer stays server-side. Returning it alongside the expression let a client
+    // read the solution straight out of the response instead of solving it.
+    res.json({ captchaId, captcha: expression })
   }
 }
 
@@ -36,6 +38,9 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // A solved CAPTCHA is redeemed once. Leaving the row in place let one solution
+      // authorise an unlimited number of submissions.
+      await CaptchaModel.destroy({ where: { captchaId: req.body.captchaId } })
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

@@ -3,15 +3,32 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
+interface ShopWallet {
+  privateKey: string
+  publicKey: string
+  address: string
+}
+
+/* The wallet was derived from a fixed seed phrase written into the shop's own seeded
+   feedback, so its private key was readable by anyone who looked. It is generated once at
+   runtime instead: the key exists only in this process and is not committed anywhere. */
+let shopWallet: Promise<ShopWallet> | undefined
+
+const walletOfTheShop = async (): Promise<ShopWallet> => {
+  if (shopWallet === undefined) {
+    shopWallet = (async () => {
+      const { Wallet } = await import('ethers')
+      const wallet = Wallet.createRandom()
+      return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
+    })()
+  }
+  return await shopWallet
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
+      const { privateKey, publicKey, address } = await walletOfTheShop()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })

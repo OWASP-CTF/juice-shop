@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -43,6 +44,17 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      // The stock check ran against req.body.ProductId, while the row that actually gets
+      // inserted is built from the last ProductId in the raw body. A body carrying the field
+      // twice therefore had one product vetted and a different one added. The product going
+      // into the basket is the one checked here, and a discontinued one is refused: it is
+      // only soft-deleted, so it still has a stock row to satisfy the check upstream.
+      const onSale = basketItem.ProductId !== undefined ? await ProductModel.findOne({ where: { id: basketItem.ProductId } }) : null
+      if (onSale == null) {
+        res.status(400).json({ error: 'This product is no longer available.' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
@@ -85,6 +97,21 @@ export function quantityCheckBeforeBasketItemUpdate () {
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
+    throw new Error('No such product found!')
+  }
+
+  // A quantity below one is not an order. Left unchecked it multiplies through to a
+  // negative line total, and enough of it turns the whole order total negative.
+  const orderedQuantity = Number(quantity)
+  if (!Number.isInteger(orderedQuantity) || orderedQuantity < 1) {
+    res.status(400).json({ error: res.__('Invalid quantity.') })
+    return
+  }
+
+  // QuantityModel is not paranoid but ProductModel is, so a discontinued product keeps
+  // its quantity row and would otherwise still pass the stock check below.
+  const orderedProduct = await ProductModel.findByPk(id)
+  if (orderedProduct == null) {
     throw new Error('No such product found!')
   }
 

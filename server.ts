@@ -84,6 +84,7 @@ import { searchProducts } from './routes/search'
 import { trackOrder } from './routes/trackOrder'
 import { saveLoginIp } from './routes/saveLoginIp'
 import { serveKeyFiles } from './routes/keyServer'
+import { serveLogFiles } from './routes/logfileServer'
 import * as basketItems from './routes/basketItems'
 import { performRedirect } from './routes/redirect'
 import { serveEasterEgg } from './routes/easterEgg'
@@ -91,7 +92,6 @@ import { getLanguageList } from './routes/languages'
 import { getUserProfile } from './routes/userProfile'
 import { serveAngularClient } from './routes/angular'
 import { resetPassword } from './routes/resetPassword'
-import { serveLogFiles } from './routes/logfileServer'
 import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
@@ -228,6 +228,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* Spacer images that only a privileged area loads are treated as part of that area. */
+  // The administration page, the token sale page and the web3 sandbox each announce
+  // themselves by requesting a spacer of a size nothing else in the shop uses: 19px, 56px
+  // and 11px respectively. Grep the frontend and each of those three appears in exactly one
+  // template, the one for the restricted area. Serving them to an anonymous caller therefore
+  // tells that caller the area exists and is reachable, which is the disclosure the areas
+  // were meant to be protected against in the first place. They follow the same access
+  // control as the pages that load them. 1px.png (score board) and 81px.png (privacy policy)
+  // belong to pages any visitor may open and stay public.
+  app.use([
+    '/assets/public/images/padding/19px.png',
+    '/assets/public/images/padding/11px.png',
+    '/assets/public/images/padding/56px.png'
+  ], security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
@@ -266,6 +281,27 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
+  // Browsing the folder is what exposes the forgotten developer artefacts, so the listing
+  // itself is an administrative function, as is the quarantine folder. Individual downloads
+  // have to stay open: placeOrder() writes every invoice to ftp/order_<id>.pdf and links the
+  // customer straight at it, so a blanket gate here answers 403 on somebody's own order
+  // confirmation. The leftovers that must never be handed out are named instead.
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml|acquisitions\.md)$/i
+  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged as it arrived */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
+  })
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
@@ -277,10 +313,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* /logs directory browsing, restricted to administrators rather than world readable */
+  // Access logs record request paths, query strings and bearer tokens for every caller, so
+  // they are operator data. The guard is mounted ahead of everything else on this path, so an
+  // unauthorised caller is refused before any handler on it runs. Removing the route outright
+  // is worse than guarding it: the request then falls through to the Angular catch-all and is
+  // answered 200 with the single-page app, which reads as reachable rather than refused.
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -307,8 +349,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(bodyParser.urlencoded({ extended: true }))
   /* File Upload */
   app.post('/file-upload', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), checkUploadSize, checkFileType, handleZipFileUpload, handleXmlUpload, handleYamlUpload)
-  app.post('/profile/image/file', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
-  app.post('/profile/image/url', uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
+  app.post('/profile/image/file', security.sameOriginOnly(), uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
+  app.post('/profile/image/url', security.sameOriginOnly(), uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
   app.post('/rest/memories', uploadToDisk.single('image'), ensureFileIsPassed, security.appendUserId(), metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(addMemory()))
 
   app.use(bodyParser.text({ type: '*/*' }))
@@ -338,17 +380,22 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(morgan('combined', { stream: accessLogStream }))
 
   // vuln-code-snippet start resetPasswordMortyChallenge
-  /* Rate limiting */
-  app.enable('trust proxy')
+  /* Rate limiting. "trust proxy" stays off deliberately: with it enabled req.ip is taken
+     from X-Forwarded-For, which the caller sets, so dropping the custom keyGenerator alone
+     was not enough - the default one would still have keyed on a header and handed every
+     request a fresh bucket. The socket address is the one value the caller cannot choose. */
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 100, // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket, ip }: { socket: any, ip: any }) { return socket?.remoteAddress ?? ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
+  /* A bearer token is only honoured with the RS256 signature this shop issues, checked
+     once here so a forged one never reaches a handler. */
+  app.use(security.denyForgedTokenAlgorithm())
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
   app.use(verify.jwtChallenges()) // vuln-code-snippet hide-line
   /* Baskets: Unauthorized users are not allowed to access baskets */
@@ -359,14 +406,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
   app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  app.put('/api/Products/:id', security.denyAll()) // vuln-code-snippet vuln-line changeProductChallenge
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
@@ -377,14 +424,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  app.get('/api/Complaints', security.isAuthorized())
+  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', recycles.blockRecycleItems())
-  app.post('/api/Recycles', security.isAuthorized())
+  app.get('/api/Recycles', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItems()))
+  app.post('/api/Recycles', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(recycles.prepareRecycleItem()))
   /* Challenge evaluation before finale takes over */
-  app.get('/api/Recycles/:id', recycles.getRecycleItem())
+  app.get('/api/Recycles/:id', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItem()))
   app.put('/api/Recycles/:id', security.denyAll())
   app.delete('/api/Recycles/:id', security.denyAll())
   /* SecurityQuestions: Only GET list of questions allowed. */
@@ -394,17 +441,60 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Who a feedback belongs to and how many stars it carries are server decisions. finale
+     mass-assigns the body, so a caller could file feedback under another customer's id, or
+     store a rating outside the scale the shop actually renders. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const user = security.authenticatedUsers.from(req)
+      req.body.UserId = user?.data?.id ?? null
+      const rating = Number(req.body.rating)
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
+        return
+      }
+      req.body.rating = rating
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti-automation on top of the CAPTCHA. Solving one puzzle proves a puzzle was solved,
+     not that submissions are human-paced - the expression is arithmetic a script can just
+     evaluate. Accepted submissions are therefore throttled over a sliding window, so a
+     loop that answers CAPTCHAs correctly still cannot bulk-load the shop. */
+  const recentFeedbackSubmissions: number[] = []
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+      recentFeedbackSubmissions.shift()
+    }
+    if (recentFeedbackSubmissions.length >= 9) {
+      res.status(429).json({ error: res.__('Too many feedback submissions. Please try again shortly.') })
+      return
+    }
+    recentFeedbackSubmissions.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    // finale mass-assigns whatever the body carries, so self-registration is confined to
+    // the attributes an ordinary customer may set. The role is pinned rather than merely
+    // deleted, and every other privileged column is dropped, at the head of the chain so
+    // nothing downstream sees an escalated payload.
+    if (req.body === Object(req.body)) {
+      for (const privileged of ['id', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privileged]
+      }
+    }
+    req.body.role = security.roles.customer
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
@@ -430,6 +520,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
   /* Feedbacks: Do not allow changes of existing feedback */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', security.isAuthorized(), security.isAdmin())
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())
@@ -446,7 +537,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   app.post('/api/Addresss', security.appendUserId())
   app.get('/api/Addresss', security.appendUserId(), utils.asyncHandler(address.getAddress()))
-  app.put('/api/Addresss/:id', security.appendUserId())
+  app.put('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.enforceAddressOwnership()))
   app.delete('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.delAddressById()))
   app.get('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.getAddressById()))
   app.get('/api/Deliverys', utils.asyncHandler(delivery.getDeliveryMethods()))
@@ -507,10 +598,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
     // create a wallet when a new user is registered using API
     if (name === 'User') { // vuln-code-snippet neutral-line registerAdminChallenge
-      resource.create.send.before((req: Request, res: Response, context: { instance: { id: any }, continue: any }) => { // vuln-code-snippet vuln-line registerAdminChallenge
+      resource.create.send.before((req: Request, res: Response, context: { instance: { id: any, role: any }, continue: any }) => { // vuln-code-snippet vuln-line registerAdminChallenge
         WalletModel.create({ UserId: context.instance.id }).catch((err: unknown) => {
           console.log(err)
         })
+        context.instance.role = 'customer' // vuln-code-snippet vuln-line registerAdminChallenge
         return context.continue // vuln-code-snippet neutral-line registerAdminChallenge
       }) // vuln-code-snippet neutral-line registerAdminChallenge
     } // vuln-code-snippet neutral-line registerAdminChallenge
@@ -594,6 +686,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Custom Restful API */
   app.post('/rest/user/login', login())
   app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
+  app.post('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
   app.get('/rest/user/whoami', security.updateAuthenticatedUsers(), utils.asyncHandler(retrieveLoggedInUser()))
@@ -648,7 +741,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
-  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
+  app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', security.isAuthorized(), servePremiumContent())
   app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
 
   /* Route for dataerasure page */
@@ -663,7 +756,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Routes for profile page */
   app.get('/profile', security.updateAuthenticatedUsers(), utils.asyncHandler(getUserProfile()))
-  app.post('/profile', utils.asyncHandler(updateUserProfile()))
+  app.post('/profile', security.sameOriginOnly(), utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
   app.get('/snippets/:challenge', utils.asyncHandler(serveCodeSnippet()))
@@ -722,7 +815,7 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

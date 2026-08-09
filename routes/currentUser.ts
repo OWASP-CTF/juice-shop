@@ -8,6 +8,10 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+// The only user attributes this endpoint is allowed to disclose. The fields
+// parameter may narrow this set, never extend it.
+const DISCLOSABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -21,12 +25,13 @@ export function retrieveLoggedInUser () {
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
         const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        const permittedFields = requestedFields.filter(field => DISCLOSABLE_FIELDS.includes(field))
 
         let baseUser: any = {}
 
-        if (requestedFields.length > 0) {
+        if (permittedFields.length > 0) {
           // When fields are specified, return only those fields
-          for (const field of requestedFields) {
+          for (const field of permittedFields) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }

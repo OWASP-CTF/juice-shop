@@ -19,18 +19,26 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
-        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      }
-      if (lastLoginIp === undefined) {
+      // Always sanitize: this header is caller-controlled and the value is rendered
+      // back to the user later. The check below then observes the value that is actually
+      // persisted rather than the raw header, so a payload that never survives
+      // sanitisation is not recorded as though it had been stored.
+      lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      if (!lastLoginIp) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json(updatedUser)
+        // The model row carries the password hash and the TOTP secret. Only the fields the
+        // caller asked about go back.
+        res.json({
+          id: updatedUser?.id,
+          email: updatedUser?.email,
+          lastLoginIp: updatedUser?.lastLoginIp,
+          profileImage: updatedUser?.profileImage
+        })
       } catch (error) {
         next(error)
       }

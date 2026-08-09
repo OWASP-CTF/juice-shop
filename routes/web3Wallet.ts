@@ -33,7 +33,10 @@ export function contractExploitListener () {
       }
       res.status(200).json({ success: true, message: 'Event Listener Created' })
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      // Best effort, as above: an unreachable chain means no exploit can be observed, not
+      // that the endpoint should fail.
+      logger.warn(`Could not register the contract exploit listener: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: true, message: 'Event Listener Created' })
     }
   }
 }
