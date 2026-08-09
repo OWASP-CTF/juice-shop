@@ -22,14 +22,14 @@ describe('/redirect', () => {
   })
 
   describe('challenge "redirectCryptoCurrency"', () => {
-    it('should still redirect to forgotten entry https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 on allowlist', () => {
+    it('should reject forgotten crypto currency destinations', () => {
       cy.visit(
         '/redirect?to=https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6',
         {
           failOnStatusCode: false
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Outdated Allowlist' })
+      cy.contains('Unrecognized target URL for redirect: https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6')
     })
   })
 })
