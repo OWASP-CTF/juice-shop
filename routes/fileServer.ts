@@ -24,9 +24,11 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
+    // The name is truncated at a null byte before it is checked, not after. Checking first meant
+    // `coupons_2013.md.bak%00.md` passed the file type test and then had the suffix cut away, so
+    // anything in the folder could be fetched by appending an allowed extension to it.
+    file = security.cutOffPoisonNullByte(file)
     if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
-
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 
