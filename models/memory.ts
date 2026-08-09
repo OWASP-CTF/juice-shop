@@ -5,6 +5,7 @@
 
 /* jslint node: true */
 
+import * as security from '../lib/insecurity'
 import {
   Model,
   type InferAttributes,
@@ -35,7 +36,15 @@ const MemoryModelInit = (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true
       },
-      caption: DataTypes.STRING,
+      caption: {
+        type: DataTypes.STRING,
+        set (caption: string) {
+          // Captions are echoed into the GDPR data export, which the frontend
+          // writes into a new window, so they have to be sanitized on the way in
+          // like the user and feedback models already are.
+          this.setDataValue('caption', security.sanitizeSecure(caption))
+        }
+      },
       imagePath: DataTypes.STRING
     },
     {

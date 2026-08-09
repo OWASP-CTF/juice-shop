@@ -41,7 +41,17 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+// Protects the stored security answers. With the key committed in the source,
+// the answers - which come from a small, guessable candidate space - could be
+// recovered offline by anyone with the repository.
+const securityAnswerKey = process.env.SECURITY_ANSWER_KEY ?? crypto.randomBytes(32).toString('hex')
+export const hmac = (data: string) => crypto.createHmac('sha256', securityAnswerKey).update(data).digest('hex')
+export const hmacEquals = (data: string, expected?: string) => {
+  if (!expected) return false
+  const candidate = Buffer.from(hmac(data))
+  const stored = Buffer.from(expected)
+  return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored)
+}
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
