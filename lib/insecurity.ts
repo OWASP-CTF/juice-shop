@@ -82,17 +82,18 @@ export const isAuthorized = () => {
 // A state change authorised by the ambient token cookie must not be triggerable from another site.
 export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
   const source = req.headers.origin ?? req.headers.referer
+  // An absent Origin/Referer proves nothing about the caller, so it cannot be treated as same-origin.
+  let sourceHost
   if (source !== undefined) {
-    let sourceHost
     try {
       sourceHost = new URL(source).host
     } catch {
       sourceHost = undefined
     }
-    if (sourceHost !== req.headers.host) {
-      res.status(403).json({ error: 'Cross-origin request blocked' })
-      return
-    }
+  }
+  if (sourceHost === undefined || sourceHost !== req.headers.host) {
+    res.status(403).json({ error: 'Cross-origin request blocked' })
+    return
   }
   next()
 }
