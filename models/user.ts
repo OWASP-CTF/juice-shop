@@ -53,17 +53,14 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
-          this.setDataValue('email', email)
+          const sanitizedEmail = security.sanitizeSecure(email)
+          challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
+            return utils.contains(
+              sanitizedEmail,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('email', sanitizedEmail)
         }
       }, // vuln-code-snippet hide-end
       password: {
