@@ -41,6 +41,23 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
+// Passwords are stored with a memory-hard derivation and a per-account salt, so a stolen table
+// cannot be turned back into credentials by looking digests up.
+export const hashPassword = (password: string) => {
+  const salt = crypto.randomBytes(16)
+  return `scrypt$${salt.toString('hex')}$${crypto.scryptSync(password, salt, 64).toString('hex')}`
+}
+
+export const passwordMatches = (password: string, stored: string) => {
+  const [scheme, salt, expected] = stored.split('$')
+  if (scheme !== 'scrypt' || !salt || !expected) {
+    return false
+  }
+  const derived = crypto.scryptSync(password, Buffer.from(salt, 'hex'), 64)
+  const known = Buffer.from(expected, 'hex')
+  return derived.length === known.length && crypto.timingSafeEqual(derived, known)
+}
+
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
 export const cutOffPoisonNullByte = (str: string) => {
