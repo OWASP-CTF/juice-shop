@@ -63,15 +63,20 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
+  // The administration screen, the web3 sandbox and the token sale page are no longer
+  // part of the application, so their visit markers are gone with them. Each keyed off
+  // the URL of a spacer image, and this middleware is mounted on /assets/i18n and the
+  // image folders too, so any caller could claim the visit by asking for the image -
+  // no page needed, and none of those pages exist anymore to be visited.
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
   challengeUtils.solveIf(challenges.securityPolicyChallenge, () => { return utils.endsWith(url, '/security.txt') })
   challengeUtils.solveIf(challenges.missingEncodingChallenge, () => { return utils.endsWith(url.toLowerCase(), '%e1%93%9a%e1%98%8f%e1%97%a2-%23zatschi-%23whoneedsfourlegs-1572600969477.jpg') })
-  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return url.match(/access\.log(0-9-)*/) })
+  // No log file is served anywhere anymore, so a request whose path merely mentions one
+  // discloses nothing. This middleware is mounted on /assets/i18n and the image folders
+  // as well, and Express strips the mount path before this reads req.url, so the old
+  // marker fired for /assets/i18n/access.log just as readily as for a real log download.
   next()
 }
 
@@ -107,27 +112,73 @@ export const serverSideChallenges = () => (req: Request, res: Response, next: Ne
   next()
 }
 
+// A token is only ever minted by this application with RS256 (see the single call to
+// jwt.sign in lib/insecurity), so any other algorithm in the header belongs to a token
+// this application never issued. jws reads the algorithm out of the token's own header
+// when it is not told which one to use, which is what let a header of none, or an HS256
+// signature made with the RSA public key published at /encryptionkeys/jwt.pub, pass a
+// signature check. The algorithm is therefore pinned to the literal RS256 here before the
+// signature is looked at, in this file, so the answer does not depend on any other module
+// continuing to pin it.
+function isGenuinelySignedToken (token: string) {
+  try {
+    if (jws.decode(token)?.header?.alg !== 'RS256') {
+      return false
+    }
+    // The algorithm handed to jws is the literal RS256 and never the one the token asks
+    // for, so the signature is checked as an RSA signature over the published key or not
+    // at all.
+    return jws.verify(token, 'RS256', security.publicKey)
+  } catch {
+    return false
+  }
+}
+
+// jws.decode parses the payload as JSON whenever the header says typ JWT, and does not
+// guard that parse, so a token carrying a payload that is not JSON threw out of the
+// middleware below and into the error handler instead of being ignored as the junk it is.
+function decodedPayloadOf (token: string): unknown {
+  try {
+    return jws.decode(token) ? jwt.decode(token) : null
+  } catch {
+    return null
+  }
+}
+
 function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, email: string | RegExp) {
   const token = utils.jwtFrom(req)
   if (token) {
-    const decoded = jws.decode(token) ? jwt.decode(token) : null
+    const decoded = decodedPayloadOf(token)
 
-    if (decoded === null || typeof decoded === 'string') {
+    if (decoded === null || decoded === undefined || typeof decoded === 'string') {
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
-      if (err === null) {
-        challengeUtils.solveIf(challenge, () => {
-          return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
-        })
-      }
-    })
+    // Ask the application's own verification routine rather than calling jsonwebtoken
+    // directly. 0.4.0 reads the algorithm out of the header, so a token declaring none, or
+    // one signed HS256 with the published public key, verified here even though every
+    // other path had been pinned to RS256. The detector is unchanged; it now simply asks
+    // the same question the rest of the application asks.
+    if (isGenuinelySignedToken(token) && security.verify(token)) {
+      challengeUtils.solveIf(challenge, () => {
+        return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
+      })
+    }
+  }
+}
+
+// A header that does not parse is not a header claiming any algorithm at all, so this
+// answers with nothing rather than throwing out of the middleware it is called from.
+function headerOf (token: string): { alg?: string } | null {
+  try {
+    return JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+  } catch {
+    return null
   }
 }
 
 function hasAlgorithm (token: string, algorithm: string) {
-  const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+  const header = headerOf(token)
   return token && header && header.alg === algorithm
 }
 

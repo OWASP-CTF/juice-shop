@@ -12,23 +12,27 @@ import { type Review } from 'data/types'
 import * as db from '../data/mongodb'
 import * as utils from '../lib/utils'
 
-// Blocking sleep function as in native MongoDB
+// Sleep helper as in native MongoDB, kept defined so that any code which still refers to
+// it resolves instead of throwing - but it no longer blocks.
 // @ts-expect-error FIXME Type safety broken for global object
 global.sleep = (time: number) => {
   // Ensure that users don't accidentally dos their servers for too long
   if (time > 2000) {
     time = 2000
   }
-  const stop = new Date().getTime()
-  while (new Date().getTime() < stop + time) {
-    ;
-  }
+  // Node runs the whole application on a single thread, so busy-waiting here stalls every
+  // other in-flight request for the requested duration. That is a denial of service
+  // primitive reachable from anything that can get a string into a query expression, and
+  // nothing in the application ever calls this helper legitimately, so the wait is not
+  // performed. The clamp above is deliberately left in place.
+  void time
 }
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.noSqlCommandChallenge) ? Number(req.params.id) : utils.trunc(req.params.id, 40)
+    // Only a number ever reaches the $where clause, so there is no syntax to inject.
+    const parsedId = Number(req.params.id)
+    const id = Number.isFinite(parsedId) ? parsedId : -1
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()

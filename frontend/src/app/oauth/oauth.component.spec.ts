@@ -24,6 +24,12 @@ import { UserService } from '../Services/user.service'
 import { CookieModule } from 'ngy-cookie'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 
+/* Password the component derives for the OAuth provider account id '1234567890'. */
+const DERIVED_PASSWORD = 'anVpY2Utc2hvcC1vYXV0aC12MiUzQTEyMzQ1Njc4OTAlM0F0ZXN0JTQwdGVzdC5jb20='
+/* base64 of the reversed address - what the component used to use, and what any attacker
+   knowing the address could compute. No code path may produce this value again. */
+const EMAIL_DERIVED_PASSWORD = 'bW9jLnRzZXRAdHNldA=='
+
 describe('OAuthComponent', () => {
     let component: OAuthComponent
     let fixture: ComponentFixture<OAuthComponent>
@@ -85,17 +91,38 @@ describe('OAuthComponent', () => {
         expect(sessionStorage.getItem('bid')).toBeNull()
     })
 
-    it('will create regular user account with base64 encoded reversed email as password', () => {
-        userService.oauthLogin.mockReturnValue(of({ email: 'test@test.com' }))
+    it('will create regular user account with a password bound to the OAuth provider account id', () => {
+        userService.oauthLogin.mockReturnValue(of({ id: '1234567890', email: 'test@test.com' }))
         component.ngOnInit()
-        expect(userService.save).toHaveBeenCalledWith({ email: 'test@test.com', password: 'bW9jLnRzZXRAdHNldA==', passwordRepeat: 'bW9jLnRzZXRAdHNldA==' })
+        expect(userService.save).toHaveBeenCalledWith({ email: 'test@test.com', password: DERIVED_PASSWORD, passwordRepeat: DERIVED_PASSWORD })
+    })
+
+    it('never derives the account password from the email address alone', () => {
+        userService.oauthLogin.mockReturnValue(of({ id: '1234567890', email: 'test@test.com' }))
+        userService.save.mockClear()
+        component.ngOnInit()
+        const savedPassword = userService.save.mock.calls[0][0].password
+        expect(savedPassword).not.toBe(EMAIL_DERIVED_PASSWORD)
+        expect(userService.login).toHaveBeenCalledWith({ email: 'test@test.com', password: savedPassword, oauth: true })
+    })
+
+    it('falls back to an unpredictable password when the provider returns no account id', () => {
+        userService.oauthLogin.mockReturnValue(of({ email: 'test@test.com' }))
+        userService.save.mockClear()
+        component.ngOnInit()
+        component.ngOnInit()
+        const firstPassword = userService.save.mock.calls[0][0].password
+        const secondPassword = userService.save.mock.calls[1][0].password
+        expect(firstPassword).not.toBe(EMAIL_DERIVED_PASSWORD)
+        expect(firstPassword).not.toBe(secondPassword)
+        expect(userService.login).toHaveBeenCalledWith({ email: 'test@test.com', password: firstPassword, oauth: true })
     })
 
     it('logs in user even after failed account creation as account might already have existed from previous OAuth login', () => {
-        userService.oauthLogin.mockReturnValue(of({ email: 'test@test.com' }))
+        userService.oauthLogin.mockReturnValue(of({ id: '1234567890', email: 'test@test.com' }))
         userService.save.mockReturnValue(throwError({ error: 'Account already exists' }))
         component.ngOnInit()
-        expect(userService.login).toHaveBeenCalledWith({ email: 'test@test.com', password: 'bW9jLnRzZXRAdHNldA==', oauth: true })
+        expect(userService.login).toHaveBeenCalledWith({ email: 'test@test.com', password: DERIVED_PASSWORD, oauth: true })
     })
 
     it('removes authentication token and basket id on failed subsequent regular login attempt', () => {
