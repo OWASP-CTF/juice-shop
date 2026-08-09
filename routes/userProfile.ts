@@ -49,17 +49,17 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    // The username is data. It is escaped for the template and never evaluated.
-    username = '\\' + username
+    // The username is text and nothing else. Substituting it into the template source put
+    // it in front of the template engine, which reads #{...} as an expression to evaluate -
+    // that is the injection this page is known for, and prefixing a backslash does not stop
+    // it - and left any markup in it to be parsed as HTML afterwards. It is encoded once
+    // here and placed into the finished markup further down, after the template has already
+    // been compiled and rendered, so it never reaches the engine at all.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -73,9 +73,20 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      // The policy is fixed. Splicing a user-controlled value into it let an attacker
-      // append their own directives, and 'unsafe-eval' is not needed by this page.
-      const CSP = `img-src 'self'; script-src 'self'`
+      // The stored profile image URL was pasted into the policy verbatim, so a value
+      // carrying a semicolon appended directives of the caller's choosing. Only the origin
+      // of a well-formed http(s) URL is allowed through, which keeps externally hosted
+      // avatars working without letting any punctuation reach the header. 'unsafe-eval' is
+      // not needed by this page and is gone.
+      let imgSrc = "'self'"
+      try {
+        if (user?.profileImage && /^https?:\/\//i.test(user.profileImage)) {
+          imgSrc += ' ' + new URL(user.profileImage).origin
+        }
+      } catch {
+        imgSrc = "'self'"
+      }
+      const CSP = `img-src ${imgSrc}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
@@ -85,7 +96,9 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      // Replacer function rather than a string, so no $-sequence in a username is treated
+      // as a substitution pattern on the way in.
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
