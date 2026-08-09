@@ -343,7 +343,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    // Do NOT key on the client-controlled X-Forwarded-For header, and do NOT fall back to
+    // express-rate-limit's default keyGenerator either: that default also resolves to
+    // Express's req.ip, which - because 'trust proxy' is enabled app-wide above - still honors
+    // an attacker-supplied X-Forwarded-For value. Either way lets an attacker send a
+    // different value on every request to reset their own bucket and brute-force the security
+    // question answer (e.g. Bjoern's OWASP account 'favorite pet' answer) without limit.
+    // Key on the raw TCP peer address instead, which the client cannot influence via headers.
+    keyGenerator ({ socket }: { socket: { remoteAddress?: string } }) { return socket.remoteAddress ?? 'unknown' }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
