@@ -242,6 +242,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      /assets/public/images/padding/11px.png does. One check in front of all of them closes
      every one of those paths at once, including paths that do not exist on disk.
 
+     The match is made against the full request target rather than against the resolved file
+     path, because accessControlChallenges() inspects `req.url`, which still carries the query
+     string: /assets/i18n/en.json?x=/11px.png ends in the spacer's name just as much as a
+     request for the file itself does. Comparing only the path would leave that door open.
+
      The session is read from the Authorization header or from the token cookie, because an
      <img> that the browser loads for a legitimate administrator carries the cookie and no
      header, and cookieParser is not mounted this early in the chain. */
@@ -254,7 +259,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     return cookie ? decodeURIComponent(cookie[1]) : undefined
   }
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (!utils.endsWith(req.path, '/11px.png')) {
+    if (!utils.endsWith(req.originalUrl, '/11px.png')) {
       next()
       return
     }
