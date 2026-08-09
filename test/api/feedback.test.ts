@@ -9,9 +9,7 @@ import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 
 let app: Express
 const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
@@ -27,6 +25,32 @@ void describe('/api/Feedbacks', () => {
     const res = await request(app)
       .get('/api/Feedbacks')
     assert.equal(res.status, 200)
+  })
+
+  void it('POST cannot replay a solved CAPTCHA for a second feedback', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+
+    const payload = {
+      comment: 'First submission using this captcha.',
+      rating: 1,
+      captchaId: captchaRes.body.captchaId,
+      captcha: captchaRes.body.answer
+    }
+
+    const first = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send(payload)
+    assert.equal(first.status, 201)
+
+    // The same solved captcha must not work again
+    const second = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({ ...payload, comment: 'Replayed submission.' })
+    assert.equal(second.status, 401)
   })
 
   void it('POST sanitizes unsafe HTML from comment', async () => {
@@ -48,26 +72,27 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.body.data.comment, 'I am a harmless comment.')
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-    void it('POST fails to sanitize masked XSS-attack by not applying sanitization recursively', async () => {
-      const captchaRes = await request(app)
-        .get('/rest/captcha')
-      assert.equal(captchaRes.status, 200)
-      assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
+  void it('POST sanitizes masked XSS-attack recursively', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+    assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
-      const res = await request(app)
-        .post('/api/Feedbacks')
-        .set(jsonHeader)
-        .send({
-          comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
-          rating: 1,
-          captchaId: captchaRes.body.captchaId,
-          captcha: captchaRes.body.answer
-        })
-      assert.equal(res.status, 201)
-      assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: <iframe src="javascript:alert(`xss`)">')
-    })
-  }
+    const res = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({
+        comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(res.status, 201)
+    // One sanitization pass would collapse this into a working iframe tag; repeating
+    // until the output stabilises removes it entirely.
+    assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: ')
+    assert.ok(!res.body.data.comment.includes('<iframe'))
+  })
 
   void it('POST feedback in another users name as anonymous user', async () => {
     const captchaRes = await request(app)

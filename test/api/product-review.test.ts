@@ -10,12 +10,8 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { type Product } from '../../data/types'
-import * as security from '../../lib/insecurity'
 
 let app: Express
-
-const authHeader = { Authorization: `Bearer ${security.authorize()}`, 'content-type': 'application/json' }
 
 before(async () => {
   const result = await createTestApp()
@@ -34,15 +30,13 @@ void describe('/rest/products/:id/reviews', () => {
     assert.equal(typeof review.author, 'string')
   })
 
-  void it('GET product reviews attack by injecting a mongoDB sleep command', async () => {
+  void it('GET product reviews rejects an injected mongoDB sleep command', async () => {
     const res = await request(app)
       .get('/rest/products/sleep(1)/reviews')
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.status, 400)
   })
 
-  // FIXME Turn on when #1960 is resolved
-  void it.skip('GET product reviews by alphanumeric non-mongoDB-command product id', async () => {
+  void it('GET product reviews by alphanumeric non-mongoDB-command product id', async () => {
     const res = await request(app)
       .get('/rest/products/kaboom/reviews')
     assert.equal(res.status, 400)
@@ -70,19 +64,37 @@ void describe('/rest/products/reviews', () => {
     reviewId = response.data[0]._id
   })
 
-  void it('PATCH single product review can be edited', async () => {
+  void it('PATCH single product review can be edited by its author', async () => {
+    const { token } = await login(app, {
+      email: `admin@${config.get<string>('application.domain')}`,
+      password: 'admin123'
+    })
     const res = await request(app)
       .patch('/rest/products/reviews')
-      .set(authHeader)
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
       .send({
         id: reviewId,
         message: 'Lorem Ipsum'
       })
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.modified, 'number')
-    assert.ok(Array.isArray(res.body.original))
-    assert.ok(Array.isArray(res.body.updated))
+    assert.equal(res.body.modified, 1)
+  })
+
+  void it('PATCH single product review cannot be edited by a different user', async () => {
+    const { token } = await login(app, {
+      email: 'bjoern.kimminich@gmail.com',
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    const res = await request(app)
+      .patch('/rest/products/reviews')
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
+      .send({
+        id: reviewId,
+        message: 'Forged by someone else'
+      })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.modified, 0)
   })
 
   void it('PATCH single product review editing need an authenticated user', async () => {
@@ -123,21 +135,18 @@ void describe('/rest/products/reviews', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('PATCH multiple product review via injection', async () => {
-    const totalReviews = config.get<Product[]>('products').reduce((sum: number, { reviews = [] }: any) => sum + reviews.length, 1)
-
+  void it('PATCH multiple product reviews via injection is rejected', async () => {
+    const { token } = await login(app, {
+      email: `admin@${config.get<string>('application.domain')}`,
+      password: 'admin123'
+    })
     const res = await request(app)
       .patch('/rest/products/reviews')
-      .set(authHeader)
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
       .send({
         id: { $ne: -1 },
         message: 'trololololololololololololololololololololololololololol'
       })
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.modified, 'number')
-    assert.ok(Array.isArray(res.body.original))
-    assert.ok(Array.isArray(res.body.updated))
-    assert.equal(res.body.modified, totalReviews)
+    assert.equal(res.status, 400)
   })
 })

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { challenges } from '../../data/datacache'
 import * as utils from '../../lib/utils'
 import { createTestApp } from './helpers/setup'
@@ -61,20 +62,24 @@ void describe('/file-upload', () => {
   })
 
   if (utils.isChallengeEnabled(challenges.xxeFileDisclosureChallenge) || utils.isChallengeEnabled(challenges.xxeDosChallenge)) {
-    void it('POST file type XML with XXE attack against Windows', async () => {
+    void it('POST file type XML with XXE attack against Windows discloses nothing', async () => {
       const file = path.resolve(__dirname, '../files/xxeForWindows.xml')
       const res = await request(app)
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
+      // Entity was not substituted, so no system.ini content reaches the response
+      assert.ok(!utils.matchesSystemIniFile(res.text), 'system.ini content must not be disclosed')
     })
 
-    void it('POST file type XML with XXE attack against Linux', async () => {
+    void it('POST file type XML with XXE attack against Linux discloses nothing', async () => {
       const file = path.resolve(__dirname, '../files/xxeForLinux.xml')
       const res = await request(app)
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
+      // Entity was not substituted, so no /etc/passwd content reaches the response
+      assert.ok(!/root:.*:0:0:/.test(res.text), '/etc/passwd content must not be disclosed')
     })
 
     void it('POST file type XML with Billion Laughs attack is caught by parser', async () => {
@@ -121,12 +126,21 @@ void describe('/file-upload', () => {
     assert.equal(res.status, 500)
   })
 
-  void it('POST zip file with directory traversal payload', async () => {
+  void it('POST zip file with directory traversal payload writes nothing outside the upload folder', async () => {
+    // The archive contains a single "../../ftp/legal.md" entry
+    const target = path.resolve('ftp/legal.md')
+    const before = await fs.readFile(target, 'utf8')
+
     const file = path.resolve(__dirname, '../files/arbitraryFileWrite.zip')
     const res = await request(app)
       .post('/file-upload')
       .attach('file', file)
     assert.equal(res.status, 204)
+
+    // Extraction is streamed, so give it a moment before checking the target survived
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const after = await fs.readFile(target, 'utf8')
+    assert.equal(after, before, 'ftp/legal.md must not be overwritten by the archive')
   })
 
   void it('POST zip file with password protection', async () => {
