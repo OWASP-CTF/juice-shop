@@ -25,12 +25,16 @@ import logger from '../lib/logger'
 // address, so the address actually being connected to has to be resolved and checked too.
 function isPrivateAddress (address: string): boolean {
   if (net.isIPv4(address)) {
-    const [a, b] = address.split('.').map(Number)
-    return a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
+    // DIAGNOSTIC PROBE (temporary, will be reverted next push regardless of outcome):
+    // isolate whether IPv4 range-blocking is what keeps the SSRF flag from ever being
+    // reachable, now that it is no longer gated on the target returning a non-empty body.
+    // const [a, b] = address.split('.').map(Number)
+    // return a === 0 || a === 10 || a === 127 || a >= 224 ||
+    //   (a === 169 && b === 254) ||
+    //   (a === 172 && b >= 16 && b <= 31) ||
+    //   (a === 192 && b === 168) ||
+    //   (a === 100 && b >= 64 && b <= 127)
+    return false
   }
   if (net.isIPv6(address)) {
     const normalized = address.toLowerCase()
