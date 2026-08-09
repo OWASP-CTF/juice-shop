@@ -30,11 +30,12 @@ void describe('/promotion', () => {
     assert.ok(res.text.includes('<source src="./video" type="video/mp4">'))
   })
 
-  void it('GET promotion video page contains subtitles as <script>', async () => {
+  void it('GET promotion video page loads subtitles through a native text track', async () => {
     const res = await request(app)
       .get('/promotion')
     assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">'))
+    assert.ok(res.text.includes('<track src="./assets/public/videos/owasp_promo.vtt" kind="subtitles" srclang="en" label="English" default>'))
+    assert.ok(!res.text.includes('<script id="subtitle"'))
   })
 })
 

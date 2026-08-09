@@ -8,9 +8,7 @@ import config from 'config'
 import { type Request, type Response } from 'express'
 import { AllHtmlEntities as Entities } from 'html-entities'
 
-import * as challengeUtils from '../lib/challengeUtils'
 import { themes } from '../views/themes/themes'
-import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
 
 const entities = new Entities()
@@ -52,9 +50,6 @@ export const promotionVideo = () => {
     fs.readFile('views/promotionVideo.pug', async function (err, buf) {
       if (err != null) throw err
       let template = buf.toString()
-      const subs = getSubsFromFile()
-
-      challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
 
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
@@ -65,14 +60,10 @@ export const promotionVideo = () => {
       template = template.replace(/_navColor_/g, theme.navColor)
       template = template.replace(/_primLight_/g, theme.primLight)
       template = template.replace(/_primDark_/g, theme.primDark)
+      template = template.replace(/_subtitles_/g, subtitleFilename())
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      let compiledTemplate = fn()
-      /* Neutralise any closing script tag in the subtitle file so its contents
-         cannot break out of the block and execute as markup. */
-      const safeSubs = subs.replace(/<\/script/gi, '<\\/script')
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + safeSubs + '</script>')
-      res.send(compiledTemplate)
+      res.send(fn())
     })
   }
   function favicon () {
@@ -80,10 +71,8 @@ export const promotionVideo = () => {
   }
 }
 
-function getSubsFromFile () {
-  const subtitles = config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt'
-  const data = fs.readFileSync('frontend/dist/frontend/assets/public/videos/' + subtitles, 'utf8')
-  return data.toString()
+function subtitleFilename () {
+  return utils.extractFilename(config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt')
 }
 
 function videoPath () {
