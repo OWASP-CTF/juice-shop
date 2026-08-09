@@ -11,14 +11,10 @@ import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
-/* The dependency manifests the team left behind in /ftp list package names and versions and
-   nothing else, so they are not confidential. Somebody auditing the shop has to be able to read
-   which releases it was pinned to before they can tell us one of them was compromised, and a
-   403 there only hides the problem. They are therefore served under their own name and under
-   the `<name>%00.md` form the old tooling still asks for them by. Every other name in the
-   folder keeps the strict extension allowlist, and the artefacts that really do carry secrets
-   are refused by name in server.ts before this handler is ever reached. */
-const publicDependencyManifests = ['package.json.bak', 'package-lock.json.bak']
+/* The dependency manifests the team left behind in /ftp are gone from the repository, and the
+   folder no longer hands out anything the extension allowlist does not cover. A request that
+   smuggles a null byte past that allowlist is refused rather than served under a truncated
+   name. */
 
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
@@ -34,9 +30,8 @@ export function servePublicFiles () {
 
   function verify (file: string, res: Response, next: NextFunction) {
     const requested = security.cutOffPoisonNullByte(file).split('\0')[0]
-    const isPublicManifest = publicDependencyManifests.includes(requested.toLowerCase())
 
-    if (file && (isPublicManifest || (!/%00|\0/i.test(file) && endsWithAllowlistedFileType(file)))) {
+    if (file && !/%00|\0/i.test(file) && endsWithAllowlistedFileType(file)) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return requested.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(requested)
 
