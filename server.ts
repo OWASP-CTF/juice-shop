@@ -347,6 +347,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
+  /* Reject any token declaring a signing algorithm we do not issue, before it reaches any middleware that would verify or decode it */
+  app.use(security.enforceJwtAlgorithm())
+
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
