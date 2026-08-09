@@ -489,12 +489,12 @@ memories:
     image: 'favorite-hiking-place.png'
     caption: 'I love going hiking here...'
     geoStalkingMetaSecurityQuestion: 14
-    geoStalkingMetaSecurityAnswer: 'Daniel Boone National Forest'
+    geoStalkingMetaSecurityAnswer: 'Xk4-Tqm9-Rb27-Lvd6'
   -
     image: 'IMG_4253.jpg'
     caption: 'My old workplace...'
     geoStalkingVisualSecurityQuestion: 10
-    geoStalkingVisualSecurityAnswer: 'ITsec'
+    geoStalkingVisualSecurityAnswer: 'Pw9-Hnr3-Ekt5-Zmb8'
   -
     image: 'BeeHaven.png'
     caption: 'Welcome to the Bee Haven (/#/bee-haven)🐝'
