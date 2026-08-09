@@ -20,11 +20,6 @@ export function resetPassword () {
     const answer = body.answer
     const newPassword = body.new
     const repeatPassword = body.repeat
-    const authenticatedUser = security.authenticatedUsers.from(req)
-    if (!authenticatedUser?.data?.email || authenticatedUser.data.email !== email) {
-      res.sendStatus(403)
-      return
-    }
     if (!email || !answer) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
       return
