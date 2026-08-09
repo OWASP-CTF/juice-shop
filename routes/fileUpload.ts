@@ -186,8 +186,13 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        // noent: false leaves external entities unresolved; nonet: true refuses network fetches.
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
+        // noent: false leaves entities unsubstituted and nonet: true refuses network fetches,
+        // but neither stops the external DTD subset from being loaded, and a DTD is reachable
+        // over file:// without touching the network. dtdload: false refuses to fetch it at all,
+        // which is what closes off both entity-based file disclosure and an expansion bomb
+        // declared in an external subset; dtdvalid: false keeps validation from pulling one in
+        // by the back door.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true, dtdload: false, dtdvalid: false })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
