@@ -8,7 +8,7 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
-const exposableFields = ['id', 'email', 'lastLoginIp', 'profileImage', 'username', 'role']
+const exposableFields = ['id', 'email', 'lastLoginIp', 'profileImage', 'username', 'role', 'isActive']
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
