@@ -83,36 +83,32 @@ export function profileImageUrlUpload () {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
-      if (loggedInUser) {
-        try {
-          const response = await fetchImageSafely(url)
-          // Only a request the server genuinely dispatched counts as having reached the
-          // target - recording it purely because of what the submitted URL looked like, before
-          // ever attempting the request, marked the server as abused even when nothing was
-          // ever sent. But once fetchImageSafely has returned, the request DID reach that
-          // target: what it answered with (a non-OK status, or no body at all) says something
-          // about the target, not about whether the request got there. Gating the bookkeeping
-          // on the response being "a valid-looking image" conflates two different questions.
-          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
-          if (!response.ok || !response.body) {
-            throw new Error('url returned a non-OK status code or an empty body')
-          }
-          const ext =['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
-          const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
-          await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
-          const user = await UserModel.findByPk(loggedInUser.data.id)
-          await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
-        } catch (error) {
-          // Do not fall back to persisting the submitted value as the profile image on
-          // failure. That used to store the raw, unvalidated URL (or worse, a string that
-          // was never really a URL at all) - the resulting <img src> would either re-issue
-          // the very request this guard just refused, or inject content into contexts that
-          // interpolate the stored value, such as the CSP header built from it. Leaving the
-          // previous image in place has no such risk.
-          logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; keeping the previous profile image`)
-        }
-      } else {
+      if (!loggedInUser) {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+        return
+      }
+      let response
+      try {
+        response = await fetchImageSafely(url)
+        if (!response.ok || !response.body) {
+          throw new Error('url returned a non-OK status code or an empty body')
+        }
+      } catch (error) {
+        // A destination the server refuses to fetch must not be treated as if the upload had
+        // gone through: no fallback to the previous image and a silent redirect, which would
+        // read identically to success. Reject the request outright so the failure is visible.
+        logger.warn(`Rejected profile image URL: ${utils.getErrorMessage(error)}`)
+        res.status(400).json({ error: 'The profile image URL could not be retrieved' })
+        return
+      }
+      try {
+        const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
+        const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
+        await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
+        const user = await UserModel.findByPk(loggedInUser.data.id)
+        await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
+      } catch (error) {
+        next(error)
         return
       }
     }
