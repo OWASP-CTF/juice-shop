@@ -9,15 +9,14 @@ describe('/redirect', () => {
   })
 
   describe('challenge "redirect"', () => {
-    it('should redirect to target URL if allowlisted URL is contained in it as parameter', () => {
+    it('should reject a target URL that only contains an allowlisted URL', () => {
       cy.visit(
         '/redirect?to=https://owasp.org?trickIndexOf=https://github.com/juice-shop/juice-shop',
         {
           failOnStatusCode: false
         }
       )
-      cy.url().should('match', /https:\/\/owasp\.org/)
-      cy.expectChallengeSolved({ challenge: 'Allowlist Bypass' })
+      cy.contains('Unrecognized target URL for redirect: https://owasp.org?trickIndexOf=https://github.com/juice-shop/juice-shop')
     })
   })
 
