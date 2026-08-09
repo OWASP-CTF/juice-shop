@@ -10,7 +10,7 @@ import * as security from '../lib/insecurity'
 
 // The only attributes this endpoint is ever allowed to disclose. `fields` selects a
 // subset of these; it can never be used to project other columns of the user record.
-const SELECTABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage'] as const
+const SELECTABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage', 'role'] as const
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
