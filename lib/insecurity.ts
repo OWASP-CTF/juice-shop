@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -55,8 +55,8 @@ export const cutOffPoisonNullByte = (str: string) => {
 // takes the algorithm from the token's own header, so a token declaring alg:none, or one
 // signed HS256 using the RSA public key that is published at /encryptionkeys/jwt.pub,
 // would verify against this same key. The header is therefore pinned before the
-// signature is trusted, and express-jwt 0.1.3 forwards no algorithm restriction of its
-// own, so the same check runs in front of it.
+// signature is trusted. The library now refuses those tokens on its own as well, but the
+// check stays: it is the one place that states which algorithm this shop issues.
 const hasAcceptedAlgorithm = (token: string) => {
   try {
     return jws.decode(token)?.header?.alg === 'RS256'
@@ -80,7 +80,7 @@ export const denyForgedTokenAlgorithm = () => {
 }
 
 export const isAuthorized = () => {
-  const requireValidToken = expressJwt(({ secret: publicKey }) as any)
+  const requireValidToken = expressjwt({ secret: publicKey, algorithms: ['RS256'] })
   return (req: Request, res: Response, next: NextFunction) => {
     const token = utils.jwtFrom(req)
     if (token && !hasAcceptedAlgorithm(token)) {
@@ -272,10 +272,10 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
-  // would be admitted to the session map here even though the guards reject it elsewhere.
+  // Naming the accepted algorithm here too, so a forged token cannot be admitted to the
+  // session map even if it somehow got past the guards in front of the route table.
   if (token && hasAcceptedAlgorithm(token)) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
