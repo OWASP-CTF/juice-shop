@@ -267,7 +267,27 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   }
 
-  app.use('/ftp', security.isAuthorized(), security.isAdmin())
+  /* Browsing the folder is what exposes the forgotten developer artefacts, so the listing itself
+     stays an administrative function, as does the quarantine folder. Individual downloads have to
+     stay open to customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop
+     links customers straight at it, so a blanket gate here would 403 people on their own order
+     confirmation. The leftovers that must never be handed out are named explicitly instead. */
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
+  app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
+  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged as it arrived */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
+  })
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
