@@ -45,8 +45,13 @@ const assertUrlIsSafeToFetch = async (rawUrl: string) => {
     throw new Error('Only http and https image URLs are supported')
   }
   const hostname = url.hostname.replace(/^\[|]$/g, '')
-  const { address } = net.isIP(hostname) ? { address: hostname } : await dns.lookup(hostname)
-  if (isPrivateAddress(address)) {
+  /* Resolve every A/AAAA record and reject if ANY of them is internal. A host that returns a mix
+     of public and private addresses (a DNS-rebinding tactic) must never be able to slip a
+     loopback / link-local / cloud-metadata IP past this guard. */
+  const addresses = net.isIP(hostname)
+    ? [hostname]
+    : (await dns.lookup(hostname, { all: true })).map((entry) => entry.address)
+  if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
     throw new Error('Image URLs must point to a publicly reachable host')
   }
 }
@@ -87,14 +92,12 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
-          try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
-          }
+          /* Do NOT fall back to persisting the raw imageUrl as the profile image. Storing an
+             unvalidated (possibly internal) URL means the rendered <img src> re-issues a request
+             to that URL on every profile/avatar view — that browser-side re-request to
+             /solve/challenges/server-side is exactly the SSRF vector this endpoint is abused for.
+             On failure we keep the user's existing image and only log the problem. */
+          logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; keeping the previous profile image`)
         }
       } else {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
