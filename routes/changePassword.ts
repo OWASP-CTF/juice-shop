@@ -4,6 +4,8 @@
  */
 
 import { type Request, type Response, type NextFunction } from 'express'
+import * as challengeUtils from '../lib/challengeUtils'
+import { challenges } from '../data/datacache'
 import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
 
@@ -49,6 +51,12 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
+      /* The detector stays in place: the fix above is what makes it unreachable, since a change
+         without the current password is now rejected before ever getting here. */
+      challengeUtils.solveIf(
+        challenges.changePasswordBenderChallenge,
+        () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
+      )
       res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)

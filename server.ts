@@ -343,11 +343,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(morgan('combined', { stream: accessLogStream }))
 
   // vuln-code-snippet start resetPasswordMortyChallenge
-  /* Rate limiting */
-  app.enable('trust proxy')
+  /* Rate limiting. "trust proxy" is deliberately left off: with it enabled the limiter keys on
+     X-Forwarded-For, which the client sets, so rotating that header gives an attacker a fresh
+     bucket per request and the limit stops limiting anything. Keying on the real socket address
+     is the only value the client cannot choose. */
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100
+    max: 100,
+    keyGenerator ({ socket, ip }: { socket: any, ip: any }) { return socket?.remoteAddress ?? ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
