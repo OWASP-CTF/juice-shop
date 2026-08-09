@@ -59,7 +59,9 @@ export function changePassword () {
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      // The response used to carry the whole user record, so a password change answered with
+      // the freshly stored hash and the TOTP secret.
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

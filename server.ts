@@ -228,21 +228,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
-  /* Spacer images that only a privileged area loads are treated as part of that area. */
-  // The administration page, the token sale page and the web3 sandbox each announce
-  // themselves by requesting a spacer of a size nothing else in the shop uses: 19px, 56px
-  // and 11px respectively. Grep the frontend and each of those three appears in exactly one
-  // template, the one for the restricted area. Serving them to an anonymous caller therefore
-  // tells that caller the area exists and is reachable, which is the disclosure the areas
-  // were meant to be protected against in the first place. They follow the same access
-  // control as the pages that load them. 1px.png (score board) and 81px.png (privacy policy)
-  // belong to pages any visitor may open and stay public.
-  app.use([
-    '/assets/public/images/padding/19px.png',
-    '/assets/public/images/padding/11px.png',
-    '/assets/public/images/padding/56px.png'
-  ], security.isAuthorized(), security.isAdmin())
-
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
@@ -279,11 +264,29 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   }
 
+  /* Browsing the folder is what exposes the forgotten developer artefacts, so the listing itself
+     stays an administrative function, as does the quarantine folder. Individual downloads have to
+     stay open to customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop
+     links customers straight at it, so a blanket gate over the whole tree would 403 people on
+     their own order confirmation. The leftovers that must never be handed out are named instead. */
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
+  app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
+  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged as it arrived */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
+  })
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  // The ftp directory holds developer backups, key material and coupon archives that were
-  // never meant to be browsable by shop customers, so the whole tree is operator-only.
-  app.use('/ftp', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
@@ -362,11 +365,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(morgan('combined', { stream: accessLogStream }))
 
   // vuln-code-snippet start resetPasswordMortyChallenge
-  /* Rate limiting */
-  app.enable('trust proxy')
+  /* Rate limiting. "trust proxy" stays off deliberately: with it enabled the limiter keys on
+     X-Forwarded-For, which the caller sets, so rotating that header hands out a fresh bucket
+     per request and the limit stops limiting anything. The socket address is the only value
+     the caller cannot choose. */
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100 // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 100, // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket, ip }: { socket: any, ip: any }) { return socket?.remoteAddress ?? ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -423,6 +429,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Who a feedback belongs to and how many stars it carries are decisions for the server, not
+     attributes a caller may assert in the request body. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const user = security.authenticatedUsers.from(req)
+      req.body.UserId = user?.data?.id ?? null
+      const rating = Number(req.body.rating)
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
+        return
+      }
+      req.body.rating = rating
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
