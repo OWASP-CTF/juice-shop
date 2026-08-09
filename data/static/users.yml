@@ -104,7 +104,7 @@
       expYear: 2092
 -
   email: ciso
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'lBB6S2^RF%u%ZfefE.E^0-NCFau*NpI6CVFc3O04'
   key: ciso
   role: 'deluxe'
   securityQuestion:
@@ -120,7 +120,7 @@
     answer: 'SC OLEA SRL' # http://www.olea.com.ro/
 -
   email: morty
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: '55eYu19ZF?^Qm#GkPod^F~DRx?SwdOuulmGX~h5C'
   key: morty
   role: 'customer'
   walletBalance: 100
@@ -185,7 +185,7 @@
     answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
 -
   email: chris.pike
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: '7f_~^Eq4!ax0%gOt5cArwu1t?%LcR5zytpTKaRQB'
   key: chris
   role: 'customer'
   deletedFlag: true
@@ -194,7 +194,7 @@
     answer: 'greenwood'
 -
   email: accountant
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'vbiLcFrS3QhS.!X2zD7%1H7.-#%nMmzeZ4ntL3Oe'
   key: accountant
   role: 'accounting'
   lastLoginIp: '123.456.789'
@@ -203,7 +203,7 @@
     answer: 'sdAffsdfrefrbgreq3423'
 -
   email: uvogin
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'ItxkwuBO#5O7!Lho-5lwsAaW#Ghscl!%YBH#i_8g'
   key: uvogin
   role: 'customer'
   walletBalance: 100
@@ -236,13 +236,13 @@
 -
   email: john
   username: j0hNny
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: '!qVjnEFcr0vMFcXDZMLf7ODgQtzv4M%#mpq3SQ_b'
   key: john
   role: 'customer'
 -
   email: emma
   username: E=ma²
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: '_Nf84j7RakZ3zvyD5AM6X%UG_ohm~iHJnsPiPL1A'
   key: emma
   role: 'customer'
 -
@@ -270,12 +270,12 @@
     answer: "Used Emporium"
 -
   email: testing
-  password: 'IamUsedForTesting'
+  password: 'u56ncT61~~8vabKif%#SLMILIjKpMTFwKnoO6tPA'
   key: LetUsTest
   role: 'admin'
 -
   email: basil
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'ck_qGgCCL..5^IdUPAyBUHu3oaZP6L0^2IdKvese'
   key: basil
   role: 'customer'
   walletBalance: 2

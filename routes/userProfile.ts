@@ -49,7 +49,10 @@ export function getUserProfile () {
       return
     }
 
-    const username = entities.encode(user.username ?? '')
+    // The result is substituted into the pug SOURCE and then compiled, so HTML
+    // entity encoding is not enough on its own: it leaves '#', '{' and '['
+    // intact, and pug evaluates #{...} and #[...] as expressions.
+    const username = entities.encode(user.username ?? '').replace(/#([{[])/g, '\\#$1')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']

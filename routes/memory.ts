@@ -21,7 +21,12 @@ export function addMemory () {
 
 export function getMemories () {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const memories = await MemoryModel.findAll({ include: [UserModel] })
+    // This endpoint is unauthenticated. An unrestricted include ships every
+    // user column with each memory, including the password hash, totpSecret
+    // and deluxeToken.
+    const memories = await MemoryModel.findAll({
+      include: [{ model: UserModel, attributes: ['id', 'username', 'profileImage'] }]
+    })
     res.status(200).json({ status: 'success', data: memories })
   }
 }

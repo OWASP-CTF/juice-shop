@@ -52,11 +52,9 @@ export function retrieveLoggedInUser () {
     // Solve passwordHashLeakChallenge when password field is included in response
     challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
 
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    // Answering with JSONP makes this endpoint, which authenticates from the
+    // ambient token cookie, readable cross-origin via a <script> tag.
+    challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return req.query.callback !== undefined })
+    res.json(response)
   }
 }

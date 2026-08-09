@@ -396,13 +396,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
     delete req.body.role
-    if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
+    if (req.body.email !== undefined && req.body.password !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
+        // Omitting passwordRepeat entirely used to skip the comparison, so the
+        // repeat could always be sidestepped by simply leaving the field out.
+        if (req.body.passwordRepeat === undefined || req.body.password !== req.body.passwordRepeat.trim()) {
+          res.status(400).send(res.__('Password and repeated password do not match.'))
+          return
+        }
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+        return
       }
     }
     next()
@@ -668,7 +675,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+    // errorhandler() renders the stack trace and the surrounding source into the
+    // response, which hands out the application's internals to anyone able to
+    // provoke an exception. Keep the detail in the server log only.
+    logger.error(`${req.method} ${req.originalUrl} failed: ${error.stack ?? error.message}`)
+    if (res.headersSent) {
+      next(error)
+      return
+    }
+    res.status(500).json({ error: { message: 'Internal Server Error' } })
+  })
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.

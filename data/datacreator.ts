@@ -4,6 +4,7 @@
  */
 
 /* jslint node: true */
+import { randomBytes } from 'node:crypto'
 import { AddressModel } from '../models/address'
 import { BasketModel } from '../models/basket'
 import { BasketItemModel } from '../models/basketitem'
@@ -310,7 +311,10 @@ async function createRandomFakeUsers () {
   return await Promise.all(new Array(config.get('application.numberOfRandomFakeUsers')).fill(0).map(
     async () => await UserModel.create({
       email: getGeneratedRandomFakeUserEmail(),
-      password: makeRandomString(5)
+      // makeRandomString was written for throwaway email local-parts: 5 chars
+      // from Math.random(), which is neither long enough nor a CSPRNG for a
+      // password on a real, loginable account.
+      password: randomBytes(24).toString('base64url')
     })
   ))
 }

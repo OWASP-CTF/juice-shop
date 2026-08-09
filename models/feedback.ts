@@ -45,6 +45,12 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       rating: {
         type: DataTypes.INTEGER,
         allowNull: false,
+        // The only bound was the UI slider's min="1", which an API client never
+        // goes through, so any integer was persistable.
+        validate: {
+          min: 1,
+          max: 5
+        },
         set (rating: number) {
           this.setDataValue('rating', rating)
           challengeUtils.solveIf(challenges.zeroStarsChallenge, () => {

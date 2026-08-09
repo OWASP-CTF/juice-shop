@@ -51,10 +51,44 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+// jws@0.2.6 takes the algorithm from the token's own header, and jwa@0.0.1
+// implements "none" as `signature === ''`. Every verification path below would
+// therefore accept an unsigned token, or one signed with HMAC using the public
+// key as the secret. The pinned jsonwebtoken@0.4.0 has no `algorithms` option,
+// so the header has to be pinned before the library is ever reached.
+const hasRsaSignature = (token?: string) => {
+  if (!token) return false
+  try {
+    const [header, , signature] = token.split('.')
+    if (!signature) return false
+    return JSON.parse(Buffer.from(header, 'base64').toString())?.alg === 'RS256'
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const requireJwt = expressJwt(({ secret: publicKey }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!hasRsaSignature(req.cookies?.token || utils.jwtFrom(req))) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    requireJwt(req, res, next)
+  }
+}
+export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
+  res.status(401).json({ error: 'Unauthorized' })
+}
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!hasRsaSignature(token)) return false
+  try {
+    return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -96,9 +130,17 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+// z85 only encodes inputs whose length is a multiple of 4, so the payload is
+// kept at a fixed 8 characters (MMMYY-DD) and the tag at 8.
+const couponSigningKey = process.env.COUPON_SIGNING_KEY ?? crypto.randomBytes(32).toString('hex')
+
+function couponTag (payload: string) {
+  return crypto.createHmac('sha256', couponSigningKey).update(payload).digest('hex').substring(0, 8)
+}
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const payload = utils.toMMMYY(date) + '-' + Math.max(0, Math.min(99, Math.trunc(discount))).toString().padStart(2, '0')
+  return z85.encode(payload + couponTag(payload))
 }
 
 export const discountFromCoupon = (coupon?: string) => {
@@ -106,13 +148,25 @@ export const discountFromCoupon = (coupon?: string) => {
     return undefined
   }
   const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  if (!decoded) {
+    return undefined
+  }
+  const text = decoded.toString()
+  if (text.length !== 16) {
+    return undefined
+  }
+  const payload = text.substring(0, 8)
+  const tag = Buffer.from(text.substring(8))
+  const expected = Buffer.from(couponTag(payload))
+  if (tag.length !== expected.length || !crypto.timingSafeEqual(tag, expected)) {
+    return undefined
+  }
+  if (hasValidFormat(payload) == null) {
+    return undefined
+  }
+  const parts = payload.split('-')
+  if (utils.toMMMYY(new Date()) === parts[0]) {
+    return parseInt(parts[1])
   }
 }
 
@@ -195,7 +249,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasRsaSignature(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {

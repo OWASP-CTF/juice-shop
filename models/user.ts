@@ -49,6 +49,12 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       email: {
         type: DataTypes.STRING,
         unique: true,
+        // Not isEmail: application.domain is 'defcon.33' and validator.js
+        // rejects a numeric TLD, which would break user seeding entirely.
+        allowNull: false,
+        validate: {
+          notEmpty: true
+        },
         set (email: string) {
           this.setDataValue('email', security.sanitizeSecure(email))
         }
