@@ -23,12 +23,12 @@ const invalidContinueCode = 'Invalid continue code.'
 // rather than merely noted. Because the salts are drawn per process, every code this instance ever
 // handed out encodes ids of challenges solved in this process, and the solved set only grows within
 // a process - so a genuine code always satisfies the check and the restore feature is unaffected.
-const decodedIdsOf = (ids: Array<number | bigint>) => ids.map(Number)
+const decodedIdsOf = (ids: readonly unknown[]): number[] => ids.map((id) => Number(id))
 
 const knownChallengeIds = () => {
   const knownIds = new Set<number>()
   for (const challenge of Object.values(challenges)) {
-    if (challenge && typeof challenge.id === 'number') {
+    if (Number.isInteger(challenge?.id)) {
       knownIds.add(challenge.id)
     }
   }
@@ -38,7 +38,7 @@ const knownChallengeIds = () => {
 const solvedChallengeIds = () => {
   const solvedIds = new Set<number>()
   for (const challenge of Object.values(challenges)) {
-    if (challenge?.solved && typeof challenge.id === 'number') {
+    if (Number.isInteger(challenge?.id) && challenge.solved) {
       solvedIds.add(challenge.id)
     }
   }
