@@ -17,6 +17,11 @@ export function retrieveBasket () {
     try {
       const id = req.params.id
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+      const customer = security.authenticatedUsers.from(req)
+      if (basket != null && basket.UserId !== customer?.data.id) {
+        res.status(403).json({ error: 'Malicious activity detected.' })
+        return
+      }
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
         const user = security.authenticatedUsers.from(req)
