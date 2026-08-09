@@ -51,10 +51,36 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+// Session tokens (JWTs) must be pinned to the single algorithm they were actually
+// issued with. Deciding which algorithm to use for verification based on the
+// `alg` field inside the (attacker-controlled) token itself allows forged
+// tokens - e.g. signed with `alg: none` or resigned with the RSA public key
+// used as an HMAC secret - to be accepted as valid sessions.
+const hasExpectedJwtAlgorithm = (token?: string): boolean => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString('utf8'))
+    return header?.alg === 'RS256'
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const jwtMiddleware = expressJwt(({ secret: publicKey }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!hasExpectedJwtAlgorithm(utils.jwtFrom(req))) {
+      res.status(401).send()
+      return
+    }
+    jwtMiddleware(req, res, next)
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => token && hasExpectedJwtAlgorithm(token) ? (jws.verify as ((token: string, algorithm: string, secret: string) => boolean))(token, 'RS256', publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -187,7 +213,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
