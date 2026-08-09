@@ -4,6 +4,7 @@
  */
 
 import Hashids from 'hashids/cjs'
+import { continueCodeSalt, findItSalt, fixItSalt } from '../lib/continueCodeSecrets'
 import { type Request, type Response } from 'express'
 
 import * as challengeUtils from '../lib/challengeUtils'
@@ -15,7 +16,7 @@ const invalidContinueCode = 'Invalid continue code.'
 
 export function restoreProgress () {
   return ({ params }: Request, res: Response) => {
-    const hashids = new Hashids('this is my salt', 60, hashidsAlphabet)
+    const hashids = new Hashids(continueCodeSalt, 60, hashidsAlphabet)
     const continueCode = params.continueCode
     if (!hashidRegexp.test(continueCode)) {
       return res.status(404).send(invalidContinueCode)
@@ -39,7 +40,7 @@ export function restoreProgress () {
 
 export function restoreProgressFindIt () {
   return async ({ params }: Request, res: Response) => {
-    const hashids = new Hashids('this is the salt for findIt challenges', 60, hashidsAlphabet)
+    const hashids = new Hashids(findItSalt, 60, hashidsAlphabet)
     const continueCodeFindIt = params.continueCode
     if (!hashidRegexp.test(continueCodeFindIt)) {
       return res.status(404).send(invalidContinueCode)
@@ -59,7 +60,7 @@ export function restoreProgressFindIt () {
 }
 
 export function restoreProgressFixIt () {
-  const hashids = new Hashids('yet another salt for the fixIt challenges', 60, hashidsAlphabet)
+  const hashids = new Hashids(fixItSalt, 60, hashidsAlphabet)
   return async ({ params }: Request, res: Response) => {
     const continueCodeFixIt = params.continueCode
     if (!hashidRegexp.test(continueCodeFixIt)) {
