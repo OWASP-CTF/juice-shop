@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -43,6 +44,14 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      // A basket may only hold products the shop still offers. Nothing checked this, so a product
+      // withdrawn from sale could be put in a basket and carried through to checkout by id alone.
+      const product = await ProductModel.findOne({ where: { id: basketItem.ProductId } })
+      if (product == null) {
+        res.status(400).json({ error: 'That product is not available.' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
