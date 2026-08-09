@@ -251,16 +251,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
-  /* The administration screen is the only template in the whole client bundle that loads this
-     spacer image, so fetching it is not an incidental asset request: it is a request for a piece
-     of the administration area, and answering it confirms that area to a caller who was never
-     shown it. The only control standing in front of that area today is an Angular route guard,
-     which is code the browser runs and therefore code the person it is meant to stop is free to
-     edit or skip entirely; requesting the asset directly bypasses it without any effort at all.
-     The same authorisation decision is applied here, on the server, where it cannot be tampered
-     with. The check is on the file name rather than on a mount path because the asset can be
-     addressed by more than one spelling of the same URL, and every spelling has to be covered. */
-  const administrationAreaAsset = '19px.png'
+  /* Each of these spacer images is loaded by exactly one screen in the whole client bundle, so
+     fetching one is not an incidental asset request: it is a request for a piece of that screen,
+     and answering it confirms the screen to a caller who was never shown it. The only control
+     standing in front of those screens on the client is an Angular route guard, which is code the
+     browser runs and therefore code the person it is meant to stop is free to edit or skip
+     entirely; requesting the asset directly bypasses it without any effort at all. The same
+     authorisation decision is applied here, on the server, where it cannot be tampered with. The
+     check is on the file name rather than on a mount path because the asset can be addressed by
+     more than one spelling of the same URL, and every spelling has to be covered.
+     One image belongs to the administration screen; the other belongs to the token sale page,
+     which describes an offering that has not been announced and whose route is now behind the
+     same role check - so its image is withheld on the same terms rather than being left as the
+     one piece of that page a stranger can still pull down. */
+  const staffOnlyAssets = new Set(['19px.png', '56px.png'])
   app.use((req: Request, res: Response, next: NextFunction) => {
     let requestedPath = req.path
     try {
@@ -268,7 +272,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     } catch {
       /* Percent-encoding that does not decode is judged exactly as it arrived. */
     }
-    if (path.posix.basename(path.posix.normalize(requestedPath)) === administrationAreaAsset) {
+    if (staffOnlyAssets.has(path.posix.basename(path.posix.normalize(requestedPath)))) {
       security.isAdmin()(req, res, next)
       return
     }

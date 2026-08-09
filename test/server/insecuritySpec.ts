@@ -35,9 +35,16 @@ describe('insecurity', () => {
 
   describe('generateCoupon', () => {
     it('returns base85-encoded month, year and discount as coupon code', () => {
+      /* A coupon now carries a keyed tag after the encoded payload, so that a code cannot simply
+         be composed by anyone who knows the encoding. The payload is still the base85 of the
+         month, year and discount and is asserted as such; the tag is keyed per deployment and
+         therefore has no fixed value to compare against - it is checked for its presence and by
+         the round trip through discountFromCoupon below. */
+      const encodedPayload = 'n<MiifFb4l'
       const coupon = security.generateCoupon(20, new Date('1980-01-02'))
-      expect(coupon).to.equal('n<MiifFb4l')
-      expect(z85.decode(coupon).toString()).to.equal('JAN80-20')
+      expect(coupon.startsWith(encodedPayload)).to.equal(true)
+      expect(coupon.length).to.be.greaterThan(encodedPayload.length)
+      expect(z85.decode(coupon.slice(0, encodedPayload.length)).toString()).to.equal('JAN80-20')
     })
 
     it('uses current month and year if not specified', () => {

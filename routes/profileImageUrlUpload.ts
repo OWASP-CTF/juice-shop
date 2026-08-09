@@ -160,7 +160,14 @@ export function profileImageUrlUpload () {
         return
       }
 
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+      /* A marker recording that the server was steered into requesting one of its own internal
+         endpoints used to be raised from the submitted string alone - before any request went
+         out, and regardless of where the string pointed. That records a wish, not an event: any
+         caller could spell an ordinary public address that merely contains the internal path and
+         have the shop attest to a retrieval it never performed. Nothing is inferred from the text
+         of the URL any more. The one thing that would justify the marker - this handler reaching
+         a destination inside the deployment - is refused outright by the gate above, so there is
+         no longer an occasion on which it could honestly be raised. */
 
       try {
         // The gate above judged the URL the caller supplied. A remote host the caller does

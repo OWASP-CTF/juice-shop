@@ -71,7 +71,16 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
   challengeUtils.solveIf(challenges.securityPolicyChallenge, () => { return utils.endsWith(url, '/security.txt') })
   challengeUtils.solveIf(challenges.missingEncodingChallenge, () => { return utils.endsWith(url.toLowerCase(), '%e1%93%9a%e1%98%8f%e1%97%a2-%23zatschi-%23whoneedsfourlegs-1572600969477.jpg') })
-  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return url.match(/access\.log(0-9-)*/) })
+  /* This middleware is mounted on several asset directories as well as on the log endpoint, and
+     Express hands a mounted handler a URL with the mount point already removed. Matching the log
+     file name against that shortened URL therefore reports a log retrieval for any request whose
+     name happens to end that way under any of those directories - /assets/i18n/access.log arrives
+     here as /access.log and reads exactly like the real thing, without a token and without any log
+     file ever being served. The full path as the client asked for it is what says which endpoint
+     was addressed, so that is what is examined, and only the administrator-only log endpoint
+     counts. */
+  const requestedPath = (req.originalUrl ?? url).split('?')[0].replace(/^[a-z]+:\/\/[^/]*/i, '')
+  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return requestedPath.match(/^\/support\/logs\/access\.log[\w.-]*$/) })
   next()
 }
 

@@ -138,13 +138,29 @@ describe('verify', () => {
       expect(challenges.missingEncodingChallenge.solved).to.equal(true)
     })
 
-    it('"accessLogDisclosureChallenge" is solved when any server access log file is requested', () => {
+    it('"accessLogDisclosureChallenge" is solved when a server access log file is requested from the log endpoint', () => {
       challenges.accessLogDisclosureChallenge = { solved: false, save } as unknown as Challenge
       req.url = 'http://juice-sh.op/support/logs/access.log.2019-01-15'
 
       verify.accessControlChallenges()(req, res, next)
 
       expect(challenges.accessLogDisclosureChallenge.solved).to.equal(true)
+    })
+
+    it('"accessLogDisclosureChallenge" is not solved by a file of that name under one of the asset directories', () => {
+      /* This middleware is mounted on the asset directories as well, and a mounted handler is
+         handed a URL with its mount point already stripped off, so a request for an asset named
+         like a log file arrives here looking exactly like a request to the log endpoint. */
+      for (const assetDirectory of ['/assets/i18n', '/assets/public/images/uploads', '/assets/public/images/products', '/assets/public/images/padding']) {
+        challenges.accessLogDisclosureChallenge = { solved: false, save } as unknown as Challenge
+        req.url = '/access.log.2019-01-15'
+        req.originalUrl = `${assetDirectory}/access.log.2019-01-15`
+
+        verify.accessControlChallenges()(req, res, next)
+
+        expect(challenges.accessLogDisclosureChallenge.solved).to.equal(false)
+      }
+      delete req.originalUrl
     })
   })
 
