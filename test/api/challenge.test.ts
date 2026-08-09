@@ -90,25 +90,35 @@ void describe('/rest/continue-code', () => {
   void it('PUT invalid continue code is rejected (alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code/apply/ThisIsDefinitelyNotAValidContinueCode')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT invalid continue code is rejected (non-alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code/apply/%3Cimg%20src=nonexist1%20onerror=alert()%3E')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
     const res = await request(app)
       .put('/rest/continue-code/apply/yXjv6Z5jWJnzD6a3YvmwPRXK7roAyzHDde2Og19yEN84plqxkMBbLVQrDeoY')
+      .set(authHeader)
     assert.equal(res.status, 200)
   })
 
   void it('PUT continue code for non-existent challenge #999 is accepted', async () => {
     const res = await request(app)
       .put('/rest/continue-code/apply/69OxrZ8aJEgxONZyWoz1Dw4BvXmRGkM6Ae9M7k2rK63YpqQLPjnlb5V5LvDj')
+      .set(authHeader)
     assert.equal(res.status, 200)
+  })
+
+  void it('PUT restore is rejected when unauthenticated', async () => {
+    const res = await request(app)
+      .put('/rest/continue-code/apply/yXjv6Z5jWJnzD6a3YvmwPRXK7roAyzHDde2Og19yEN84plqxkMBbLVQrDeoY')
+    assert.equal(res.status, 401)
   })
 })
 
@@ -122,19 +132,28 @@ void describe('/rest/continue-code-findIt', () => {
   void it('PUT invalid continue code is rejected (alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code-findIt/apply/ThisIsDefinitelyNotAValidContinueCode')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT completely invalid continue code is rejected (non-alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code-findIt/apply/%3Cimg%20src=nonexist1%20onerror=alert()%3E')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
     const res = await request(app)
       .put('/rest/continue-code-findIt/apply/Xg9oK0VdbW5g1KX9G7JYnqLpz3rAPBh6p4eRlkDM6EaBON2QoPmxjyvwMrP6')
+      .set(authHeader)
     assert.equal(res.status, 200)
+  })
+
+  void it('PUT restore is rejected when unauthenticated', async () => {
+    const res = await request(app)
+      .put('/rest/continue-code-findIt/apply/Xg9oK0VdbW5g1KX9G7JYnqLpz3rAPBh6p4eRlkDM6EaBON2QoPmxjyvwMrP6')
+    assert.equal(res.status, 401)
   })
 })
 
@@ -148,18 +167,27 @@ void describe('/rest/continue-code-fixIt', () => {
   void it('PUT invalid continue code is rejected (alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code-fixIt/apply/ThisIsDefinitelyNotAValidContinueCode')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT completely invalid continue code is rejected (non-alphanumeric)', async () => {
     const res = await request(app)
       .put('/rest/continue-code-fixIt/apply/%3Cimg%20src=nonexist1%20onerror=alert()%3E')
+      .set(authHeader)
     assert.equal(res.status, 404)
   })
 
   void it('PUT continue code for more than one challenge is accepted', async () => {
     const res = await request(app)
       .put('/rest/continue-code-fixIt/apply/y28BEPE2k3yRrdz5p6DGqJONnj41n5UEWawYWgBMoVmL79bKZ8Qve0Xl5QLW')
+      .set(authHeader)
     assert.equal(res.status, 200)
+  })
+
+  void it('PUT restore is rejected when unauthenticated', async () => {
+    const res = await request(app)
+      .put('/rest/continue-code-fixIt/apply/y28BEPE2k3yRrdz5p6DGqJONnj41n5UEWawYWgBMoVmL79bKZ8Qve0Xl5QLW')
+    assert.equal(res.status, 401)
   })
 })
