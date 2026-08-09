@@ -23,14 +23,18 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          // Orders are stored under a vowel-masked email, which collides across users, so
+          // ownership is decided by the email hash that order.ts embeds in every orderId.
+          const ownOrderPrefix = security.hash(email).slice(0, 4)
+          orders = (await db.ordersCollection.find({ email: updatedEmail }))
+            .filter((order: { orderId: string }) => order.orderId?.split('-')[0] === ownOrderPrefix)
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return
