@@ -103,7 +103,7 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
       // does not need one, so reject it and keep the rendered template server-selected.
       if (req.body.layout) {
         challengeUtils.solveIf(challenges.lfrChallenge, () => { return false })
-        next(new Error('File access not allowed'))
+        res.status(400).json({ error: 'File access not allowed' })
         return
       }
 

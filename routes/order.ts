@@ -145,7 +145,7 @@ export function placeOrder () {
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
           if (totalPrice < 0) {
-            next(new Error('Invalid order total'))
+            res.status(400).json({ error: 'Invalid order total' })
             return
           }
 
@@ -155,7 +155,7 @@ export function placeOrder () {
               if ((wallet != null) && wallet.balance >= totalPrice) {
                 await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } })
               } else {
-                next(new Error('Insufficient wallet balance.'))
+                res.status(400).json({ error: 'Insufficient wallet balance.' })
                 return
               }
             }
