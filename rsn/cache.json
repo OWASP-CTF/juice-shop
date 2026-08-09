@@ -1,21 +1,56 @@
 {
 	"accessLogDisclosureChallenge_1_correct.ts": {
 		"added": [
-			16
+			1,
+			11
 		],
-		"removed": []
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5,
+			6
+		]
 	},
 	"accessLogDisclosureChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5,
+			6
+		]
 	},
 	"accessLogDisclosureChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5,
+			6
+		]
 	},
 	"accessLogDisclosureChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5,
+			6
+		]
 	},
 	"adminSectionChallenge_1_correct.ts": {
 		"added": [
@@ -694,21 +729,47 @@
 	},
 	"directoryListingChallenge_1_correct.ts": {
 		"added": [
-			5
+			1
 		],
-		"removed": []
+		"removed": [
+			1
+		]
 	},
 	"directoryListingChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5
+		]
 	},
 	"directoryListingChallenge_3.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4
+		]
 	},
 	"directoryListingChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			1
+		],
+		"removed": [
+			1,
+			2,
+			3,
+			4,
+			5,
+			6
+		]
 	},
 	"exposedMetricsChallenge_1.ts": {
 		"added": [],
