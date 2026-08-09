@@ -33,7 +33,15 @@ export function showProductReviews () {
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ $where: 'this.product == ' + id }).then((reviews: Review[]) => {
+    /* A plain equality match instead of $where, which evaluated the id as JavaScript
+       and so let a crafted product id run arbitrary code - sleep() among it (CWE-943). */
+    const productId = Number(id)
+    if (!Number.isFinite(productId)) {
+      res.status(400).json({ error: 'Wrong Params' })
+      return
+    }
+
+    db.reviewsCollection.find({ product: productId }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)

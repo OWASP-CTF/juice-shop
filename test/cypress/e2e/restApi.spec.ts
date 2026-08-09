@@ -4,9 +4,9 @@ describe('/api', () => {
       cy.login({ email: 'admin', password: 'admin123' })
     })
 
-    // Cypress alert bug
-    // The challenge also passes but its just that cypress freezes and is unable to perform any action
-    xit('should be possible to create a new product when logged in', () => {
+    // Regression test: product description is now always sanitized server-side
+    // (see models/product.ts), so the "API-only XSS" challenge can never be solved.
+    it('should sanitize XSS payloads in product description and never solve the challenge', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.window().then(async () => {
@@ -26,20 +26,19 @@ describe('/api', () => {
                 })
               }
             )
-            if (response.status === 200) {
-              console.log('Success')
-            }
+            const product = await response.json()
+            expect(product.data.description).to.not.contain('<iframe')
           })
 
-          cy.visit('/#/search?q=RestXSS')
-          cy.reload()
-          cy.get('img[alt="RestXSS"]').click()
-
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
+          cy.request({
+            method: 'GET',
+            url: '/api/Challenges/?name=API-only XSS',
+            timeout: 60000
+          }).then((res) => {
+            const challenge = res.body.data[0]
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(challenge.solved).to.be.false
           })
-
-          cy.expectChallengeSolved({ challenge: 'API-only XSS' })
         }
       })
     })
@@ -83,7 +82,9 @@ describe('/rest/saveLoginIp', () => {
       })
     })
 
-    it('should be possible to save log-in IP when logged in', () => {
+    // Regression test: lastLoginIp is now always sanitized server-side
+    // (see routes/saveLoginIp.ts), so the "HTTP-Header XSS" challenge can never be solved.
+    it('should sanitize the True-Client-IP header and never solve the challenge', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.window().then(async () => {
@@ -98,11 +99,19 @@ describe('/rest/saveLoginIp', () => {
                 }
               }
             )
-            if (response.status === 200) {
-              console.log('Success')
-            }
+            const body = await response.json()
+            expect(body.data.lastLoginIp).to.not.contain('<iframe')
           })
-          cy.expectChallengeSolved({ challenge: 'HTTP-Header XSS' }) // TODO Add missing check for alert presence
+
+          cy.request({
+            method: 'GET',
+            url: '/api/Challenges/?name=HTTP-Header XSS',
+            timeout: 60000
+          }).then((res) => {
+            const challenge = res.body.data[0]
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(challenge.solved).to.be.false
+          })
         }
       })
     })

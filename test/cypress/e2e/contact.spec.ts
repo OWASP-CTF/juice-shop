@@ -49,9 +49,10 @@ describe('/#/contact', () => {
       solveNextCaptcha()
     })
 
-    // Cypress alert bug
-    // The challenge also passes but its just that cypress freezes and is unable to perform any action
-    xit('should be possible to trick the sanitization with a masked XSS attack', () => {
+    // Regression test: feedback comments are now always recursively sanitized
+    // server-side (see models/feedback.ts), so the masked/double-encoded XSS
+    // bypass no longer works and this challenge can never be solved.
+    it('should recursively sanitize a masked XSS attack and never solve the challenge', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.get('#rating').type('{rightarrow}{rightarrow}{rightarrow}')
@@ -61,15 +62,17 @@ describe('/#/contact', () => {
           cy.get('#submitButton').should('not.be.disabled').click()
 
           cy.visit('/#/about')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-
           cy.visit('/#/administration')
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
+
+          cy.request({
+            method: 'GET',
+            url: '/api/Challenges/?name=Server-side XSS Protection',
+            timeout: 60000
+          }).then((res) => {
+            const challenge = res.body.data[0]
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(challenge.solved).to.be.false
           })
-          cy.expectChallengeSolved({ challenge: 'Server-side XSS Protection' })
         }
       })
     })
