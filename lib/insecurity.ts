@@ -196,7 +196,17 @@ export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunc
   next()
 }
 export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: [jwtAlgorithm] })
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
+/* The whole user record was signed into the token, so the stored password hash and the TOTP
+   secret travelled to the client on every login and sat in browser storage. Only the claims the
+   shop actually reads are signed. */
+const claimsFor = (user: any) => {
+  if (!user || typeof user !== 'object' || !('data' in user)) {
+    return user
+  }
+  const { password, totpSecret, ...safeData } = (user as any).data ?? {}
+  return { ...(user as any), data: safeData }
+}
+export const authorize = (user = {}) => jwt.sign(claimsFor(user), privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
 export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
@@ -248,18 +258,42 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+/* A coupon was nothing but z85 of "MMMYY-DD". z85 is an encoding, not a signature, so anybody who
+   noticed the shape could hand-mint themselves a 99% discount without the shop ever issuing one.
+   Coupons now carry a short tag over their own contents, keyed on the configured secret, and a
+   coupon whose tag does not match is not a coupon this shop issued. The tag is fixed length so the
+   encoded part is still recovered unambiguously, and the shop's own coupons - including the ones
+   the chatbot hands out - keep working exactly as before. */
+const COUPON_TAG_LENGTH = 10
+
+const couponTag = (plainCoupon: string) => hmac('coupon:' + plainCoupon).slice(0, COUPON_TAG_LENGTH)
+
 export const generateCoupon = (discount: number, date = new Date()) => {
   const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  return z85.encode(coupon) + couponTag(coupon)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
-  if (!coupon) {
+  if (!coupon || coupon.length <= COUPON_TAG_LENGTH) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
+  const tag = coupon.slice(-COUPON_TAG_LENGTH)
+  const encoded = coupon.slice(0, -COUPON_TAG_LENGTH)
+  let decoded
+  try {
+    decoded = z85.decode(encoded)
+  } catch {
+    return undefined
+  }
+  if (!decoded) {
+    return undefined
+  }
+  const plain = decoded.toString()
+  if (couponTag(plain) !== tag) {
+    return undefined
+  }
+  if (hasValidFormat(plain) != null) {
+    const parts = plain.split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
       const discount = parts[1]
