@@ -62,10 +62,25 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
+  /* The spacer images of the restricted screens are part of those screens. Reaching one of them
+     is only evidence of having reached the screen if the caller was allowed onto the screen in
+     the first place, so the beacons of the administration area, the web3 sandbox and the
+     unannounced token sale are read only for a caller the server has already authorised for
+     them. An anonymous fetch of the URL proves nothing and is no longer treated as a visit. */
+  const authorizedFor = (allowed: (role: string) => boolean) => {
+    const token = utils.jwtFrom(req)
+    if (!token || !security.verify(token)) {
+      return false
+    }
+    const role = security.decode(token)?.data?.role
+    return typeof role === 'string' && allowed(role)
+  }
+  const isAdminCaller = () => authorizedFor((role) => role === security.roles.admin)
+  const isCustomerCaller = () => authorizedFor((role) => role === security.roles.admin || role === security.roles.customer || role === security.roles.deluxe)
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') && isCustomerCaller() }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') && isAdminCaller() }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') && isCustomerCaller() }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })

@@ -48,7 +48,7 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
   public pageSizeOptions: number[] = []
   public dataSource!: MatTableDataSource<ProductTableEntry>
   public gridDataSource!: BehaviorSubject<ProductTableEntry[]>
-  public searchValue?: SafeHtml
+  public searchValue?: string
   public resultsLength = 0
   public currentPageSize = 15
   @ViewChild(MatPaginator, { static: true }) paginator!: MatPaginator
@@ -65,7 +65,6 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
-        this.trustProductDescription(products) // vuln-code-snippet neutral-line restfulXssChallenge
         for (const product of products) {
           dataTable.push({
             name: product.name,
@@ -105,12 +104,6 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
     })
   }
 
-  trustProductDescription (tableData: any[]) { // vuln-code-snippet neutral-line restfulXssChallenge
-    for (let i = 0; i < tableData.length; i++) { // vuln-code-snippet neutral-line restfulXssChallenge
-      tableData[i].description = this.sanitizer.bypassSecurityTrustHtml(tableData[i].description) // vuln-code-snippet vuln-line restfulXssChallenge
-    } // vuln-code-snippet neutral-line restfulXssChallenge
-  } // vuln-code-snippet neutral-line restfulXssChallenge
-
   // vuln-code-snippet end restfulXssChallenge
 
   ngOnDestroy () {
@@ -136,11 +129,8 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
     let queryParam: string = this.route.snapshot.queryParams.q
     if (queryParam) {
       queryParam = queryParam.trim()
-      this.ngZone.runOutsideAngular(() => { // vuln-code-snippet hide-start
-        this.io.socket().emit('verifyLocalXssChallenge', queryParam)
-      }) // vuln-code-snippet hide-end
       this.dataSource.filter = queryParam.toLowerCase()
-      this.searchValue = this.sanitizer.bypassSecurityTrustHtml(queryParam) // vuln-code-snippet vuln-line localXssChallenge xssBonusChallenge
+      this.searchValue = queryParam // vuln-code-snippet vuln-line localXssChallenge xssBonusChallenge
       if (this.gridDataSourceSubscription) {
         this.gridDataSourceSubscription.unsubscribe()
       }
