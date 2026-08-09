@@ -294,7 +294,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
-  /* /encryptionkeys directory browsing */
+  /* /encryptionkeys directory browsing, restricted to operators */
+  // This folder is key material. jwt.pub is the RSA public key every session token is signed
+  // against, and publishing it is what turns a library that reads the algorithm out of the
+  // token header into a full authentication bypass: sign HS256 using the published key as the
+  // HMAC secret and the signature checks out. premium.key is the entitlement secret. Nothing
+  // in the shop fetches either over HTTP - the server reads jwt.pub off disk at startup - so
+  // an unadvertised path was the only thing standing in front of them. Now a role check is.
+  app.use('/encryptionkeys', security.isAuthorized(), security.isAdmin())
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
