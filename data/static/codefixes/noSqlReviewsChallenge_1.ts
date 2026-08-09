@@ -8,8 +8,9 @@ export function updateProductReviews () {
     }
 
     db.reviewsCollection.update(
-      { _id: req.body.id },
-      { $set: { message: req.body.message } }
+      { _id: req.body.id, author: user?.data?.email },
+      { $set: { message: req.body.message } },
+      { multi: false }
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         res.json(result)
