@@ -16,6 +16,13 @@ export function retrieveBasket () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params.id
+      /* A basket id in the URL is a reference, not a permission. The session says which basket
+         belongs to the caller, so a request for any other basket is refused instead of served. */
+      const user = security.authenticatedUsers.from(req)
+      if (!user?.bid || String(user.bid) !== String(id)) {
+        res.status(401).json({ error: 'You are not allowed to access this basket' })
+        return
+      }
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
