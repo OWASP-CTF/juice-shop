@@ -93,7 +93,16 @@ export const isAuthorized = () => {
 }
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token && hasExpectedJwtAlgorithm(token) ? (jws.verify as ((token: string, algorithm: string, secret: string) => boolean))(token, 'RS256', publicKey) : false
+/* The pinned jws@0.2.6 exposes `verify(signature, secretOrKey)`, while the bundled @types/jws
+   describes the later three-argument `verify(signature, algorithm, secretOrKey)` form. Calling the
+   newer shape against this library passes the algorithm name where the key is expected, so every
+   token is checked against the literal string instead of the public half and verification throws
+   for genuine sessions as well as forged ones. The call below therefore matches the signature the
+   installed library actually implements. Pinning the algorithm is still handled - and must keep
+   being handled - by hasExpectedJwtAlgorithm above, which rejects anything whose header is not
+   RS256 before it ever reaches this point, because jws reads the algorithm from the token. */
+const jwsVerify = jws.verify as unknown as (signature: string, secretOrKey: string) => boolean
+export const verify = (token: string) => token && hasExpectedJwtAlgorithm(token) ? jwsVerify(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
