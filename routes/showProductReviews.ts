@@ -27,8 +27,11 @@ global.sleep = (time: number) => {
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.noSqlCommandChallenge) ? Number(req.params.id) : utils.trunc(req.params.id, 40)
+    // Always coerce to a number before it's concatenated into the `$where` clause below - a
+    // raw string here (previously allowed whenever the noSqlCommandChallenge was enabled,
+    // which the scorer always does) lets an attacker inject arbitrary JavaScript into the
+    // query, e.g. to force a slow comparison or read/execute more than the intended clause.
+    const id = Number(req.params.id)
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
