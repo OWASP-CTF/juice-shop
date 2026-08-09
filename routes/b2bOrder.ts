@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import vm from 'node:vm'
 import { type Request, type Response, type NextFunction } from 'express'
-// @ts-expect-error FIXME due to non-existing type definitions for notevil
-import { eval as safeEval } from 'notevil'
 
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
@@ -15,26 +12,25 @@ import * as utils from '../lib/utils'
 
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
-    if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-      const orderLinesData = body.orderLinesData || ''
+    const orderLinesData = body.orderLinesData || ''
+    // Order line data must only ever be parsed as inert data, never evaluated as code.
+    // A "safe eval" sandbox (vm + notevil) is not an effective security boundary - both
+    // are documented to be escapable - so the only real fix is to not execute
+    // attacker-controlled input at all.
+    if (orderLinesData) {
       try {
-        const sandbox = { safeEval, orderLinesData }
-        vm.createContext(sandbox)
-        vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
-        res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
+        JSON.parse(orderLinesData)
       } catch (err) {
-        if (utils.getErrorMessage(err).match(/Script execution timed out.*/) != null) {
-          challengeUtils.solveIf(challenges.rceOccupyChallenge, () => { return true })
-          res.status(503)
-          next(new Error('Sorry, we are temporarily not available! Please try again later.'))
-        } else {
-          challengeUtils.solveIf(challenges.rceChallenge, () => { return utils.getErrorMessage(err) === 'Infinite loop detected - reached max iterations' })
-          next(err)
-        }
+        // Detection stays wired up on the same conditions as upstream. Parsing inert JSON
+        // can neither spin forever nor exhaust the event loop, so neither can now fire.
+        challengeUtils.solveIf(challenges.rceOccupyChallenge, () => { return utils.getErrorMessage(err).match(/Script execution timed out.*/) != null })
+        challengeUtils.solveIf(challenges.rceChallenge, () => { return utils.getErrorMessage(err) === 'Infinite loop detected - reached max iterations' })
+        res.status(400)
+        next(new Error('Invalid order line data'))
+        return
       }
-    } else {
-      res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
     }
+    res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 
   function uniqueOrderNumber () {

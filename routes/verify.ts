@@ -59,9 +59,25 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
   next()
 }
 
+// The unannounced token sale page was kept "private" only by never linking to it - the route,
+// its component and the URL de-obfuscation logic still shipped to every visitor in the client
+// bundle, where finding them is a matter of reading the router configuration. Obscurity is not
+// access control, so the page (and the tracking asset that marks it as reached) now requires an
+// authenticated admin session, same as the rest of the internal-only surface of the application.
+function requestIsFromAdmin (req: Request): boolean {
+  const loggedInUser = security.authenticatedUsers.get(req.cookies?.token)
+  return loggedInUser?.data?.role === security.roles.admin
+}
+
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
+
+  if (utils.endsWith(url, '/56px.png') && !requestIsFromAdmin(req)) {
+    res.status(403).end()
+    return
+  }
+
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)

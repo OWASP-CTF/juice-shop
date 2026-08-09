@@ -237,7 +237,11 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox is internal tooling for writing smart contracts, not customer-facing
+    // functionality - it was reachable by anyone who found the route in the bundle. An
+    // unlinked URL is not access control, so a real guard now stands in front of it.
+    canActivate: [AdminGuard]
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
@@ -259,7 +263,12 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line tokenSaleChallenge
     matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    // The token sale has not been announced yet. Relying on an obfuscated URL matcher to
+    // keep it "hidden" was security through obscurity - the matcher and its deobfuscation
+    // logic travel to every visitor in the bundle, so the real fix is to require the same
+    // authenticated access any other unreleased internal feature would need.
+    canActivate: [AdminGuard]
   }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',

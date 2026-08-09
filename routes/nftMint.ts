@@ -4,11 +4,22 @@ import logger from '../lib/logger'
 import * as challengeUtils from '../lib/challengeUtils'
 import { nftABI } from '../data/static/contractABIs'
 import { challenges } from '../data/datacache'
+import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
-const addressesMinted = new Set()
+const addressesMinted = new Set<string>()
 let isEventListenerCreated = false
+
+// A wallet address is external input the moment it crosses the wire, whether it comes from a
+// contract event or a request body. Only a well-formed Ethereum address is ever stored or
+// compared, and addresses are compared case-insensitively so a checksum-cased and a lowercase
+// submission of the same address are not treated as two different wallets.
+const ETH_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/
+
+function normalizeAddress (value: unknown): string | undefined {
+  return typeof value === 'string' && ETH_ADDRESS_PATTERN.test(value) ? value.toLowerCase() : undefined
+}
 
 export function nftMintListener () {
   return async (req: Request, res: Response) => {
@@ -22,8 +33,9 @@ export function nftMintListener () {
         }
         const contract = new Contract(nftAddress, nftABI, provider as any)
         void contract.on('NFTMinted', (minter: string) => {
-          if (!addressesMinted.has(minter)) {
-            addressesMinted.add(minter)
+          const minted = normalizeAddress(minter)
+          if (minted !== undefined && !addressesMinted.has(minted)) {
+            addressesMinted.add(minted)
           }
         })
         isEventListenerCreated = true
@@ -38,7 +50,20 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      const metamaskAddress = req.body.walletAddress
+      // Crediting a mint to an address nobody is logged in as would let anyone who merely
+      // knows (or guesses) a minter's address claim their reward.
+      const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
+      if (!loggedInUser) {
+        res.status(401).json({ success: false, message: 'You have to be logged in to verify a mint.' })
+        return
+      }
+
+      const metamaskAddress = normalizeAddress(req.body?.walletAddress)
+      if (metamaskAddress === undefined) {
+        res.status(400).json({ success: false, message: 'A valid Ethereum wallet address is required.' })
+        return
+      }
+
       if (addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
