@@ -63,6 +63,11 @@ export function getUserProfile () {
       return
     }
 
+    // SSTi (Challenge-74) is closed here structurally: the username is never spliced into
+    // the Pug template *source*, so no interpolation form (#{...} / !{...} / #[...]) can
+    // ever reach the compiler and be evaluated as server-side JavaScript. See the comment
+    // on the template replacements below - it is injected into the already-compiled HTML
+    // instead, entity-encoded, where only the browser can interpret it.
     const username = user.username ?? ''
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
