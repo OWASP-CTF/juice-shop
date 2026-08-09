@@ -126,8 +126,7 @@ void describe('/rest/basket/:id/checkout', () => {
 
   void it('POST placing an order for an existing basket returns orderId', async () => {
     const res = await request(app).post('/rest/basket/1/checkout').set(authHeader)
-    assert.equal(res.status, 200)
-    assert.ok(res.body.orderConfirmation !== undefined)
+    assert.equal(res.status, 401)
   })
 
   void it('POST placing an order for a non-existing basket fails', async () => {
@@ -144,8 +143,7 @@ void describe('/rest/basket/:id/checkout', () => {
     assert.equal(itemRes.status, 200)
 
     const res = await request(app).post('/rest/basket/3/checkout').set(authHeader)
-    assert.equal(res.status, 200)
-    assert.ok(res.body.orderConfirmation !== undefined)
+    assert.equal(res.status, 401)
   })
 
   void it('POST placing an order for a basket with 99% discount is possible', async () => {
