@@ -9,12 +9,11 @@ import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { challenges } from '../../data/datacache'
 import * as security from '../../lib/insecurity'
-import * as utils from '../../lib/utils'
 
 let app: Express
 const authHeader = { Authorization: 'Bearer ' + security.authorize(), 'content-type': 'application/json' }
+const adminHeader = { Authorization: 'Bearer ' + security.authorize({ data: { email: 'admin@juice-sh.op', role: security.roles.admin } }), 'content-type': 'application/json' }
 const jsonHeader = { 'content-type': 'application/json' }
 
 before(async () => {
@@ -48,26 +47,24 @@ void describe('/api/Feedbacks', () => {
     assert.equal(res.body.data.comment, 'I am a harmless comment.')
   })
 
-  if (utils.isChallengeEnabled(challenges.persistedXssFeedbackChallenge)) {
-    void it('POST fails to sanitize masked XSS-attack by not applying sanitization recursively', async () => {
-      const captchaRes = await request(app)
-        .get('/rest/captcha')
-      assert.equal(captchaRes.status, 200)
-      assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
+  void it('POST recursively sanitizes masked XSS-attack (regression for CVE-era sanitize-html bypass)', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+    assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
 
-      const res = await request(app)
-        .post('/api/Feedbacks')
-        .set(jsonHeader)
-        .send({
-          comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
-          rating: 1,
-          captchaId: captchaRes.body.captchaId,
-          captcha: captchaRes.body.answer
-        })
-      assert.equal(res.status, 201)
-      assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: <iframe src="javascript:alert(`xss`)">')
-    })
-  }
+    const res = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({
+        comment: 'The sanitize-html module up to at least version 1.4.2 has this issue: <<script>Foo</script>iframe src="javascript:alert(`xss`)">',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(res.status, 201)
+    assert.equal(res.body.data.comment, 'The sanitize-html module up to at least version 1.4.2 has this issue: ')
+  })
 
   void it('POST feedback in another users name as anonymous user', async () => {
     const captchaRes = await request(app)
@@ -278,6 +275,37 @@ void describe('/api/Feedbacks/:id', () => {
     assert.equal(res.status, 401)
   })
 
+  void it('DELETE existing feedback is forbidden for non-admin users', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+    assert.ok(captchaRes.headers['content-type']?.includes('application/json'))
+
+    const createRes = await request(app)
+      .post('/api/Feedbacks')
+      .set(jsonHeader)
+      .send({
+        comment: 'I am here to stay!',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(createRes.status, 201)
+    assert.equal(typeof createRes.body.data.id, 'number')
+
+    const res = await request(app)
+      .delete('/api/Feedbacks/' + createRes.body.data.id)
+      .set(authHeader)
+    assert.equal(res.status, 403)
+    assert.equal(res.body.error, 'Malicious activity detected')
+
+    const stillThereRes = await request(app)
+      .get('/api/Feedbacks/' + createRes.body.data.id)
+      .set(authHeader)
+    assert.equal(stillThereRes.status, 200)
+    assert.equal(stillThereRes.body.data.id, createRes.body.data.id)
+  })
+
   void it('DELETE existing feedback', async () => {
     const captchaRes = await request(app)
       .get('/rest/captcha')
@@ -298,7 +326,7 @@ void describe('/api/Feedbacks/:id', () => {
 
     const res = await request(app)
       .delete('/api/Feedbacks/' + createRes.body.data.id)
-      .set(authHeader)
+      .set(adminHeader)
     assert.equal(res.status, 200)
   })
 })

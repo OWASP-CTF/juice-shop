@@ -25,6 +25,7 @@ async function retrieveUserList (req: Request, res: Response, next: NextFunction
           ...user.dataValues,
           password: user.password?.replace(/./g, '*'),
           totpSecret: user.totpSecret?.replace(/./g, '*'),
+          deluxeToken: user.deluxeToken?.replace(/./g, '*'),
           lastLoginTime
         }
       })
