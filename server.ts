@@ -266,7 +266,30 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* Browsing the folder is what surfaces the forgotten artefacts, so the listing is an
+     administrative view. Individual downloads stay open, because placeOrder writes every
+     invoice to ftp/order_<id>.pdf and the shop links customers straight at it - a blanket
+     gate here would refuse people their own order confirmation. */
+  app.use('/ftp', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* The artefacts that were never meant to be handed out are named explicitly and require
+     the same administrative role, rather than relying on nobody guessing the filename. */
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|acquisitions\.md|eastere\.gg|suspicious_errors\.yml)$/i
+  app.use('/ftp(?!/quarantine)/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged exactly as it arrived. */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      security.isAuthorized()(req, res, (err?: any) => {
+        if (err) { next(err); return }
+        security.isAdmin()(req, res, next)
+      })
+      return
+    }
+    next()
+  })
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -342,10 +365,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start resetPasswordMortyChallenge
   /* Rate limiting */
-  app.enable('trust proxy')
+  /* 'trust proxy' is deliberately left off. With it enabled req.ip is taken from
+     X-Forwarded-For, a header the caller sets, so rotating it hands an attacker a fresh
+     rate-limit bucket on every request and the limit stops limiting anything. The socket
+     address is the only value the client cannot choose. */
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100 // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 100, // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket, ip }: { socket: any, ip: any }) { return socket?.remoteAddress ?? ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -385,10 +412,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', recycles.blockRecycleItems())
+  app.get('/api/Recycles', security.isAuthorized(), utils.asyncHandler(recycles.getRecycleItems()))
   app.post('/api/Recycles', security.isAuthorized())
   /* Challenge evaluation before finale takes over */
-  app.get('/api/Recycles/:id', recycles.getRecycleItem())
+  app.get('/api/Recycles/:id', security.isAuthorized(), utils.asyncHandler(recycles.getRecycleItem()))
   app.put('/api/Recycles/:id', security.denyAll())
   app.delete('/api/Recycles/:id', security.denyAll())
   /* SecurityQuestions: Only GET list of questions allowed. */
@@ -402,6 +429,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
+  /* The author of a feedback is whoever is signed in, and the rating is validated rather
+     than taken on trust. Both used to be attributes the request body could simply assert. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const user = security.authenticatedUsers.from(req)
+      req.body.UserId = user?.data?.id ?? null
+      const rating = Number(req.body.rating)
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
+        return
+      }
+      req.body.rating = rating
+    }
+    next()
+  })
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
@@ -764,7 +806,9 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', security.isAuthorized(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+/* Process and business metrics are operational data, not something every signed-in
+   customer may read. */
+app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

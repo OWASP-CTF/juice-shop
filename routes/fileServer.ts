@@ -25,7 +25,10 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && !containsPoisonNullByte(file) && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
+    // The explicit carve-out for incident-support.kdbx is gone: a KeePass database is not
+    // customer-facing material, and naming it here served it to anonymous callers straight
+    // past the allowlist that exists to keep exactly that sort of file in.
+    if (file && !containsPoisonNullByte(file) && endsWithAllowlistedFileType(file)) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
 
       res.sendFile(path.resolve('ftp/', file))
