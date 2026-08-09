@@ -13,11 +13,23 @@ import * as db from '../data/mongodb'
 // vuln-code-snippet start noSqlReviewsChallenge forgedReviewChallenge
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    const user = security.authenticatedUsers.from(req) // vuln-code-snippet vuln-line forgedReviewChallenge
-    db.reviewsCollection.update( // vuln-code-snippet neutral-line forgedReviewChallenge
-      { _id: req.body.id }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
-      { $set: { message: req.body.message } },
-      { multi: true } // vuln-code-snippet vuln-line noSqlReviewsChallenge
+    const user = security.authenticatedUsers.from(req)
+    // Reject anything but a plain id so no query operator can be smuggled into the selector
+    if (typeof req.body.id !== 'string') {
+      res.status(400).json({ error: 'Invalid review id' })
+      return
+    }
+    /* A review may only be edited by the customer who wrote it, so the author predicate is not
+       optional. Making it conditional meant a session whose token carried no email dropped the
+       predicate entirely and matched purely on the identifier, which let any review be edited. */
+    if (!user?.data?.email) {
+      res.status(401).json({ error: 'You have to be logged in to edit a review' })
+      return
+    }
+    const selector = { _id: req.body.id, author: user.data.email }
+    db.reviewsCollection.update(
+      selector,
+      { $set: { message: req.body.message } }
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         challengeUtils.solveIf(challenges.noSqlReviewsChallenge, () => { return result.modified > 1 }) // vuln-code-snippet hide-line

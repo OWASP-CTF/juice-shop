@@ -439,6 +439,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* Self-registration may only ever create an ordinary customer. The role - and every other
+     attribute the shop decides for itself - is dropped from the request body, so sending
+     "role": "admin" alongside the fields the form shows no longer grants anything. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privilegedAttribute]
+      }
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
