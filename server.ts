@@ -137,7 +137,7 @@ const errorhandler = require('errorhandler')
 const startTime = Date.now()
 
 /* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
-const recentFeedbackSubmissions = new Map<string | number, number[]>()
+const recentFeedbackSubmissions: number[] = []
 
 const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 
@@ -448,10 +448,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
-  /* Feedback may be left without a session, as the contact form has always allowed: a shop that
-     refuses anonymous reports does not hear about the things only an outsider can see. What an
-     anonymous row must not do is claim an author, so the author is stamped from the session and
-     is null when there is none, and the comment is sanitised on the way in either way. */
+  /* Feedback is written to a table that the landing page carousel and the support console both
+     replay to other people, so the shop has to be able to say who wrote a row. An anonymous
+     write endpoint into that table cannot be attributed, cannot be revoked per author and gives
+     an abuse report nothing to act on, so a session is required. */
+  app.post('/api/Feedbacks', security.isAuthorized())
   /* Feedback ownership and rating are server decisions, not client-controlled attributes. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
     if (req.body === Object(req.body)) {
@@ -470,24 +471,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
      additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
-     more than nine entries into the shop within twenty seconds.
-     The window is counted per submitter rather than shop-wide, so one machine running a loop is
-     the only thing it slows down. A shared counter would let that loop spend everyone else's
-     allowance, and the next person to report something would be turned away for it. */
+     more than nine entries into the shop within twenty seconds. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
-    const submitter = security.authenticatedUsers.from(req)?.data?.id ?? req.ip ?? 'anonymous'
     const now = Date.now()
-    for (const [key, times] of recentFeedbackSubmissions) {
-      while (times.length > 0 && now - times[0] > 20000) times.shift()
-      if (times.length === 0) recentFeedbackSubmissions.delete(key)
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+      recentFeedbackSubmissions.shift()
     }
-    const submissions = recentFeedbackSubmissions.get(submitter) ?? []
-    if (submissions.length >= 9) {
+    if (recentFeedbackSubmissions.length >= 9) {
       res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
       return
     }
-    submissions.push(now)
-    recentFeedbackSubmissions.set(submitter, submissions)
+    recentFeedbackSubmissions.push(now)
     next()
   })
   /* Captcha Bypass challenge verification */

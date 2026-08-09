@@ -11,11 +11,10 @@ import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
-/* The dependency manifests the team left behind in /ftp name package versions and nothing else,
-   so the folder keeps handing them out: a researcher has to be able to read which versions the
-   team was on in order to report a compromised one. The versions they name are current, so there
-   is nothing left in them to report. The artefacts that do carry secrets are refused by name
-   before this handler ever sees them. */
+/* The dependency manifests the team left behind in /ftp are gone from the repository, and the
+   folder no longer hands out anything the extension allowlist does not cover. A request that
+   smuggles a null byte past that allowlist is refused rather than served under a truncated
+   name. */
 
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
@@ -32,7 +31,7 @@ export function servePublicFiles () {
   function verify (file: string, res: Response, next: NextFunction) {
     const requested = security.cutOffPoisonNullByte(file).split('\0')[0]
 
-    if (file && endsWithAllowlistedFileType(file)) {
+    if (file && !/%00|\0/i.test(file) && endsWithAllowlistedFileType(file)) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return requested.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(requested)
 
