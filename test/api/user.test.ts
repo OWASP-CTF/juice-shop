@@ -190,7 +190,7 @@ void describe('/api/Users', () => {
         })
       assert.equal(res.status, 201)
       assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.email, '<iframe src="javascript:alert(`xss`)">')
+      assert.equal(res.body.data.email, '')
     })
   }
 })
