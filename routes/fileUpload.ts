@@ -50,10 +50,13 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
                 const fileName = entry.path
                 const uploadRoot = path.resolve('uploads/complaints')
                 const absolutePath = path.resolve(uploadRoot, fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
                 // The resolved destination must sit beneath the upload directory, so an
                 // entry name containing ../ cannot escape it.
                 if (absolutePath.startsWith(uploadRoot + path.sep)) {
+                  // Recorded where the write actually happens. It used to be recorded on the
+                  // resolved path alone, above this check, so an entry that was refused still
+                  // reported as a completed write outside the upload directory.
+                  challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
                   entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()

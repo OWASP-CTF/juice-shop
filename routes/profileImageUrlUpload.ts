@@ -56,7 +56,6 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
@@ -64,6 +63,11 @@ export function profileImageUrlUpload () {
             throw new Error('image url is not an allowed outbound target')
           }
           const response = await fetch(url)
+          // This flag records that the server was actually made to issue a request on the
+          // caller's behalf. It used to be raised from a regex over the submitted string,
+          // before the session check and without anything leaving the process, so merely
+          // naming a URL set it. It is now raised only once an outbound fetch resolved.
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
