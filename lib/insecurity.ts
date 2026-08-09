@@ -174,6 +174,18 @@ export const isCustomer = (req: Request) => {
   return decodedToken?.data?.role === roles.customer
 }
 
+/* The signing key is published, so the algorithm has to be pinned before the signature is
+   checked: the jws release in use infers it from the token's own header, which would let a
+   caller HMAC a token with that public key and claim any role. */
+export const isAdmin = (req: Request) => {
+  const token = utils.jwtFrom(req)
+  if (!token || jws.decode(token)?.header?.alg !== 'RS256') {
+    return false
+  }
+  const decodedToken = verify(token) && decode(token)
+  return decodedToken?.data?.role === roles.admin
+}
+
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
