@@ -13,7 +13,8 @@ import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
 
 let app: Express
-const authHeader = { Authorization: `Bearer ${security.authorize({ data: { email: 'admin@juice-sh.op' } })}`, 'content-type': 'application/json' }
+const authHeader = { Authorization: `Bearer ${security.authorize({ data: { email: 'admin@juice-sh.op', role: 'admin' } })}`, 'content-type': 'application/json' }
+const nonAdminAuthHeader = { Authorization: `Bearer ${security.authorize({ data: { email: 'nonadmin@juice-sh.op', role: 'customer' } })}`, 'content-type': 'application/json' }
 
 before(async () => {
   const result = await createTestApp()
@@ -21,6 +22,21 @@ before(async () => {
 }, { timeout: 60000 })
 
 void describe('/rest/user/authentication-details', () => {
+  void it('GET is forbidden for authenticated non-admin users (admin section data must not leak)', async () => {
+    const res = await request(app)
+      .get('/rest/user/authentication-details')
+      .set(nonAdminAuthHeader)
+
+    assert.equal(res.status, 403)
+  })
+
+  void it('GET is forbidden for unauthenticated requests', async () => {
+    const res = await request(app)
+      .get('/rest/user/authentication-details')
+
+    assert.equal(res.status, 401)
+  })
+
   void it('GET all users with password replaced by asterisks', async () => {
     const res = await request(app)
       .get('/rest/user/authentication-details')
