@@ -30,11 +30,12 @@ void describe('/promotion', () => {
     assert.ok(res.text.includes('<source src="./video" type="video/mp4">'))
   })
 
-  void it('GET promotion video page contains subtitles as <script>', async () => {
+  void it('GET promotion video page embeds subtitles as base64 data', async () => {
     const res = await request(app)
       .get('/promotion')
     assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes('<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">'))
+    assert.ok(res.text.includes('<script id="subtitle" type="text/vtt" data-label="English" data-lang="en" data-content="'))
+    assert.ok(!res.text.includes('</script><script>alert(`xss`)</script>'))
   })
 })
 
