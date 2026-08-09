@@ -283,6 +283,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
+  app.use('/support/logs', (_req: Request, res: Response) => { res.sendStatus(404) })
+
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
   app.use('/vendor/material-icons', express.static(path.resolve('node_modules/material-icons/iconfont')))

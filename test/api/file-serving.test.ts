@@ -204,24 +204,18 @@ void describe('Hidden URL', () => {
   void it('GET access log directory is not publicly available', async () => {
     const res = await request(app)
       .get('/support/logs')
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.doesNotMatch(res.text, /access\.log\./)
+    assert.equal(res.status, 404)
   })
 
   void it('GET access log files is not publicly available', async () => {
     const res = await request(app)
       .get('/support/logs/access.log.' + utils.toISO8601(new Date()))
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.doesNotMatch(res.text, /HTTP\/1\.1/)
+    assert.equal(res.status, 404)
   })
 
   void it('GET arbitrary files from the log directory is not publicly available', async () => {
     const res = await request(app)
       .get('/support/logs/audit.json')
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.doesNotMatch(res.text, /"files"\s*:/)
+    assert.equal(res.status, 404)
   })
 })
