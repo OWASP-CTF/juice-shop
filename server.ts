@@ -228,6 +228,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* Layout spacers are ordinary static files: serve them here and terminate with 404 when the
+     file does not exist, instead of letting a request for a missing asset carry on through the
+     rest of the stack. */
+  app.use('/assets/public/images/padding', express.static(path.resolve('frontend/dist/frontend/assets/public/images/padding'), { fallthrough: false }))
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
