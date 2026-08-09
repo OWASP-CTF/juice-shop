@@ -22,6 +22,13 @@ export function retrieveBasket () {
         const user = security.authenticatedUsers.from(req)
         return user && id && id !== 'undefined' && id !== 'null' && id !== 'NaN' && user.bid && user?.bid != parseInt(id, 10) // eslint-disable-line eqeqeq
       })
+      // The basket id is a path parameter the client picks. Ownership is decided against
+      // the row's own UserId rather than anything the request carries.
+      const customer = security.authenticatedUsers.from(req)
+      if (basket != null && basket.UserId !== customer?.data?.id) {
+        res.status(403).json({ error: 'Malicious activity detected.' })
+        return
+      }
       if (((basket?.Products) != null) && basket.Products.length > 0) {
         for (let i = 0; i < basket.Products.length; i++) {
           basket.Products[i].name = req.__(basket.Products[i].name)
