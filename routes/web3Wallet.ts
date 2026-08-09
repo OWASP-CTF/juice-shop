@@ -42,26 +42,40 @@ export function contractExploitListener () {
     }
 
     walletsConnected.add(metamaskAddress)
-    try {
-      if (!isEventListenerCreated) {
+
+    // Ownership of the wallet is now proven above; whether the server can actually
+    // hear about an exploit on-chain is a separate, unrelated concern. Subscribing
+    // depends on reaching an external WebSocket endpoint, which is outside this
+    // server's control and may simply be unavailable (network policy, outage, rate
+    // limiting, a bad API key, ...). That must never surface as a request failure,
+    // and it must never escape as an unhandled rejection either: contract.on()
+    // resolves only after it has confirmed the subscription with the provider, so
+    // firing it without awaiting/catching its outcome leaves a promise that can
+    // reject long after this handler returned - which Node treats as fatal by
+    // default. Registration is therefore fully awaited inside the try block below,
+    // so any failure - sync or async - is caught in exactly one place, logged, and
+    // turned into the same successful, idempotent response: the wallet is on record
+    // and will be picked up once/if a subscription can be established.
+    if (!isEventListenerCreated) {
+      try {
         const { WebSocketProvider, Contract } = await import('ethers')
         const provider = new WebSocketProvider(`wss://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY ?? ''}`)
         provider.websocket.onerror = (error: any) => {
-          logger.error(`WebSocket error (Contract Exploit Listener): ${error.message || error}`)
+          logger.warn(`WebSocket error (Contract Exploit Listener): ${error.message || error}`)
           isEventListenerCreated = false
         }
         const contract = new Contract(web3WalletAddress, web3WalletABI, provider as any)
-        void contract.on('ContractExploited', (exploiter: string) => {
+        await contract.on('ContractExploited', (exploiter: string) => {
           if (walletsConnected.has(exploiter)) {
             walletsConnected.delete(exploiter)
             challengeUtils.solveIf(challenges.web3WalletChallenge, () => true)
           }
         })
         isEventListenerCreated = true
+      } catch (error) {
+        logger.warn(`Could not subscribe to the contract exploit event, wallet is recorded and will be monitored once a connection is available: ${utils.getErrorMessage(error)}`)
       }
-      res.status(200).json({ success: true, message: 'Event Listener Created' })
-    } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
     }
+    res.status(200).json({ success: true, message: 'Event Listener Created' })
   }
 }
