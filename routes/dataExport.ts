@@ -23,7 +23,7 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
+          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
         } catch (error) {
           next(error)
           return
