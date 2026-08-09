@@ -37,6 +37,7 @@ import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
 import { AccountingGuard, LoginGuard } from './app.guard'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
+import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
 import { ChatWelcomePageComponent } from './chatbot/chat-welcome-page/chat-welcome-page.component'
 import { ChatConversationComponent } from './chatbot/chat-conversation/chat-conversation.component'
@@ -72,7 +73,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  /* Administration is not exposed through the public storefront. */
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // {
+  //   path: 'administration',
+  //   component: AdministrationComponent,
+  //   canActivate: [AdminGuard]
+  // },
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -174,6 +182,10 @@ const routes: Routes = [
   {
     path: 'hacking-instructor',
     component: SearchResultComponent
+  },
+  {
+    path: 'score-board', // Must remain as is! Needed for challenge tracking!
+    component: ScoreBoardComponent
   },
   {
     path: 'track-result',
