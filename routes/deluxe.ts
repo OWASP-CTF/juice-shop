@@ -16,23 +16,29 @@ import * as utils from '../lib/utils'
 export function upgradeToDeluxe () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = await UserModel.findOne({ where: { id: req.body.UserId, role: security.roles.customer } })
+      const sessionUser = security.authenticatedUsers.from(req)
+      const userId = sessionUser?.data?.id
+      if (!userId) {
+        res.status(401).json({ status: 'error', error: 'Unauthorized' })
+        return
+      }
+      const user = await UserModel.findOne({ where: { id: userId, role: security.roles.customer } })
       if (user == null) {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
       if (req.body.paymentMode === 'wallet') {
-        const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
+        const wallet = await WalletModel.findOne({ where: { UserId: userId } })
         if ((wallet != null) && wallet.balance < 49) {
           res.status(400).json({ status: 'error', error: 'Insuffienct funds in Wallet' })
           return
         } else {
-          await WalletModel.decrement({ balance: 49 }, { where: { UserId: req.body.UserId } })
+          await WalletModel.decrement({ balance: 49 }, { where: { UserId: userId } })
         }
       }
 
       if (req.body.paymentMode === 'card') {
-        const card = await CardModel.findOne({ where: { id: req.body.paymentId, UserId: req.body.UserId } })
+        const card = await CardModel.findOne({ where: { id: req.body.paymentId, UserId: userId } })
         if ((card == null) || card.expYear < new Date().getFullYear() || (card.expYear === new Date().getFullYear() && card.expMonth - 1 < new Date().getMonth())) {
           res.status(400).json({ status: 'error', error: 'Invalid Card' })
           return
