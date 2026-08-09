@@ -86,7 +86,10 @@ export const verify = (token: string) => {
   if (!token || !hasAcceptedAlgorithm(token)) {
     return false
   }
-  return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+  // hasAcceptedAlgorithm already pinned the header to RS256, so the algorithm passed
+  // here is a literal, never token-supplied, input.
+  type VerifyFn = (token: string, algorithm: string, secret: string) => boolean
+  return (jws.verify as VerifyFn)(token, 'RS256', publicKey)
 }
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
