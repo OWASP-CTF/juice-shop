@@ -97,6 +97,7 @@ import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
 import { countryMapping } from './routes/countryMapping'
 import { retrieveAppVersion } from './routes/appVersion'
+import { requireTokenSaleAuthorization } from './routes/tokenSale'
 import { captchas, verifyCaptcha } from './routes/captcha'
 import * as restoreProgress from './routes/restoreProgress'
 import { checkKeys, nftUnlocked } from './routes/checkKeys'
@@ -227,6 +228,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
+
+  /* The unannounced token sale is access controlled instead of merely hidden. This has to
+     run before every route that could serve one of its assets, no matter which mount the
+     caller picked to ask for it. */
+  app.use(requireTokenSaleAuthorization())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
