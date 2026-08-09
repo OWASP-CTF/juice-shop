@@ -43,17 +43,15 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
-          if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-            challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
-              return utils.contains(
-                description,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            description = security.sanitizeSecure(description)
-          }
-          this.setDataValue('description', description)
+          challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
+            return utils.contains(
+              description,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          // The description is stored through the REST API as well as the shop, so the
+          // sanitiser runs on every write rather than only when the challenge is off.
+          this.setDataValue('description', security.sanitizeSecure(description))
         }
       },
       price: DataTypes.DECIMAL,

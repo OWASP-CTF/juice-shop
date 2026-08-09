@@ -112,9 +112,17 @@ export class AboutComponent implements OnInit {
       )
       .subscribe((feedbacks) => {
         for (let i = 0; i < feedbacks.length; i++) {
-
+          // Only the surrounding figure markup is ours. The comment itself is customer
+          // input, so it is escaped before it is spliced in - the trust below then applies
+          // to markup this component built, not to anything a customer submitted.
+          const comment = String(feedbacks[i].comment ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
           feedbacks[i].comment = `<figcaption><p class="feedback-comment">${
-            feedbacks[i].comment
+            comment
           }</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
           feedbacks[i].comment = this.sanitizer.bypassSecurityTrustHtml(
             feedbacks[i].comment

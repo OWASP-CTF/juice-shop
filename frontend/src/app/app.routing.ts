@@ -75,11 +75,14 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
 const routes: Routes = [
-  { // vuln-code-snippet neutral-line adminSectionChallenge
-    path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
-  }, // vuln-code-snippet neutral-line adminSectionChallenge
+  /* TODO: Externalize admin functions into separate application
+           that is only accessible inside corporate network.
+   */
+  // { // vuln-code-snippet neutral-line adminSectionChallenge
+  //   path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
+  //   component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
+  //   canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+  // }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
     component: AccountingComponent,
@@ -235,10 +238,8 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  // The web3 sandbox is a development-only feature and is not routed in production.
+  // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
@@ -257,10 +258,8 @@ const routes: Routes = [
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
   },
-  { // vuln-code-snippet neutral-line tokenSaleChallenge
-    matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
-  }, // vuln-code-snippet neutral-line tokenSaleChallenge
+  // The unreleased token sale page is not routed. Obscuring its path was never a control.
+  // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',
     loadComponent: async () => await loadCodingChallenge()
