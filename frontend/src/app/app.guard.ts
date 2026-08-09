@@ -7,9 +7,6 @@ import { type CanActivate, Router } from '@angular/router'
 import { jwtDecode } from 'jwt-decode'
 import { roles } from './roles'
 import { Injectable, NgZone, inject } from '@angular/core'
-import { type Observable, of } from 'rxjs'
-import { catchError, map } from 'rxjs/operators'
-import { UserService } from './Services/user.service'
 
 @Injectable()
 export class LoginGuard implements CanActivate {
@@ -50,26 +47,16 @@ export class LoginGuard implements CanActivate {
 @Injectable()
 export class AdminGuard implements CanActivate {
   private readonly loginGuard = inject(LoginGuard)
-  private readonly userService = inject(UserService)
 
-  canActivate (): Observable<boolean> {
+
+  canActivate () {
     const payload = this.loginGuard.tokenDecode()
-    if (!(payload?.data && payload.data.role === roles.admin)) {
+    if (payload?.data && payload.data.role === roles.admin) {
+      return true
+    } else {
       this.loginGuard.forbidRoute()
-      return of(false)
+      return false
     }
-    // The role claim above is read from a client-decoded JWT payload, whose signature is
-    // never verified locally (jwt-decode is decode-only), so it can be forged by simply
-    // writing an arbitrary token into localStorage. Treat it as a UX fast-path only and
-    // confirm real admin access against the server, which does verify the token signature
-    // and enforces the admin role on this endpoint (see security.isAdmin() in server.ts).
-    return this.userService.find().pipe(
-      map(() => true),
-      catchError(() => {
-        this.loginGuard.forbidRoute()
-        return of(false)
-      })
-    )
   }
 }
 
