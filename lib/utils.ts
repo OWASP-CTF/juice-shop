@@ -214,6 +214,114 @@ export const toSimpleIpAddress = (ipv6: string) => {
   }
 }
 
+/**
+ * Expands an IPv6 address (optionally with one embedded trailing IPv4 dotted-decimal
+ * address, e.g. `::ffff:127.0.0.1`) into its 8 constituent 16-bit hex groups, resolving
+ * `::` zero-run compression. Returns null if `ip` isn't a syntactically plausible IPv6
+ * address. Internal helper for extractMappedIpv4Address.
+ */
+const expandIpv6Groups = (ip: string): string[] | null => {
+  let working = ip
+  const lastColon = working.lastIndexOf(':')
+  if (lastColon !== -1) {
+    const tail = working.substring(lastColon + 1)
+    const dotted = tail.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+    if (dotted) {
+      const octets = dotted.slice(1, 5).map(Number)
+      if (octets.some((o) => o < 0 || o > 255)) return null
+      const hi = ((octets[0] << 8) | octets[1]).toString(16)
+      const lo = ((octets[2] << 8) | octets[3]).toString(16)
+      working = working.substring(0, lastColon + 1) + hi + ':' + lo
+    }
+  }
+
+  const doubleColonParts = working.split('::')
+  if (doubleColonParts.length > 2) return null // an IPv6 address may contain at most one '::'
+
+  let groups: string[]
+  if (doubleColonParts.length === 2) {
+    const head = doubleColonParts[0] === '' ? [] : doubleColonParts[0].split(':')
+    const tail = doubleColonParts[1] === '' ? [] : doubleColonParts[1].split(':')
+    const missing = 8 - head.length - tail.length
+    if (missing < 1) return null // '::' must stand in for at least one zero group
+    groups = [...head, ...Array(missing).fill('0'), ...tail]
+  } else {
+    groups = working.split(':')
+  }
+
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null
+  return groups
+}
+
+/**
+ * If `ip` is an IPv4-mapped (`::ffff:0:0/96`) or deprecated IPv4-compatible
+ * (`::0.0.0.0/96`) IPv6 address - in either its dotted-decimal suffix form
+ * (`::ffff:127.0.0.1`) or its canonical hex-group form (`::ffff:7f00:1`, the form
+ * Node's URL parser normalizes bracketed IPv6-literal hosts to) - returns the embedded
+ * IPv4 address in dotted-decimal notation. Returns null for any other IPv6 address,
+ * including ordinary public addresses that merely *end* in two hex groups that happen
+ * to look like a private IPv4 address - the leading 80 (or 96) bits must genuinely be
+ * zero, checked structurally rather than via a suffix-only pattern match, so this can't
+ * misfire on unrelated addresses. This closes an SSRF filter bypass where an attacker
+ * wraps a blocked IPv4 address (e.g. 127.0.0.1) in IPv6 syntax to evade a naive
+ * dotted-decimal-only check.
+ */
+export const extractMappedIpv4Address = (ip: string): string | null => {
+  const groups = expandIpv6Groups(ip.toLowerCase())
+  if (!groups) return null
+
+  const isZero = (group: string) => parseInt(group, 16) === 0
+  if (!groups.slice(0, 5).every(isZero)) return null // leading 80 bits must be zero
+
+  const marker = parseInt(groups[5], 16)
+  if (marker !== 0 && marker !== 0xffff) return null // 6th group: zero (compatible) or ffff (mapped)
+
+  const hi = parseInt(groups[6], 16)
+  const lo = parseInt(groups[7], 16)
+  return [(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff].join('.')
+}
+
+/**
+ * Checks whether the given IP address (IPv4, IPv6, or an IPv4 address embedded in
+ * IPv6 syntax) falls into a private, loopback, link-local or otherwise
+ * non-publicly-routable range. Used to block Server-Side Request Forgery (SSRF)
+ * attacks against internal or local infrastructure. See CWE-918.
+ */
+export const isPrivateOrReservedIpAddress = (ip: string): boolean => {
+  const ipv4Match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4Match) {
+    const octets = ipv4Match.slice(1, 5).map(Number)
+    if (octets.some((octet) => octet < 0 || octet > 255)) {
+      return true // not a valid IP, treat as unsafe
+    }
+    const [a, b] = octets
+    if (a === 127) return true // 127.0.0.0/8 loopback
+    if (a === 0) return true // 0.0.0.0/8 "this" network
+    if (a === 10) return true // 10.0.0.0/8 private
+    if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12 private
+    if (a === 192 && b === 168) return true // 192.168.0.0/16 private
+    if (a === 169 && b === 254) return true // 169.254.0.0/16 link-local
+    if (a === 100 && b >= 64 && b <= 127) return true // 100.64.0.0/10 carrier-grade NAT
+    return false
+  }
+
+  const normalized = ip.toLowerCase()
+  if (normalized === '::1') return true // IPv6 loopback
+  if (normalized === '::') return true // IPv6 unspecified
+  if (normalized.startsWith('fe80:') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true // fe80::/10 link-local
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true // fc00::/7 unique local
+
+  // An IPv4 address wrapped in IPv6 syntax (e.g. `::ffff:127.0.0.1` or its
+  // canonical hex-group form `::ffff:7f00:1`) must be judged by the IPv4 rules
+  // above too, or it becomes a trivial SSRF filter bypass.
+  const mappedIpv4 = extractMappedIpv4Address(normalized)
+  if (mappedIpv4 && isPrivateOrReservedIpAddress(mappedIpv4)) {
+    return true
+  }
+
+  return false
+}
+
 export const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message
   return String(error)

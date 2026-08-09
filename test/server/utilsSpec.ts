@@ -29,6 +29,66 @@ describe('utils', () => {
     })
   })
 
+  describe('isPrivateOrReservedIpAddress', () => {
+    it('flags loopback addresses as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('127.0.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('127.255.255.255')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::1')).to.equal(true)
+    })
+
+    it('flags the unspecified address as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('0.0.0.0')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::')).to.equal(true)
+    })
+
+    it('flags RFC 1918 private ranges as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('10.0.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('172.16.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('172.31.255.255')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('192.168.0.1')).to.equal(true)
+    })
+
+    it('flags link-local ranges as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('169.254.169.254')).to.equal(true) // cloud metadata endpoint
+      expect(utils.isPrivateOrReservedIpAddress('fe80::1')).to.equal(true)
+    })
+
+    it('does not flag public IP addresses as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('8.8.8.8')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('1.1.1.1')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('172.32.0.1')).to.equal(false) // just outside 172.16.0.0/12
+      expect(utils.isPrivateOrReservedIpAddress('172.15.255.255')).to.equal(false) // just below 172.16.0.0/12
+    })
+
+    it('flags an IPv4 address wrapped in IPv6 syntax as private (SSRF filter bypass)', () => {
+      // dotted-decimal suffix form
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:127.0.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:169.254.169.254')).to.equal(true)
+      // canonical hex-group form, e.g. what Node's URL parser normalizes
+      // `[::ffff:127.0.0.1]` to
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:7f00:1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('0:0:0:0:0:ffff:7f00:1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:a9fe:a9fe')).to.equal(true) // 169.254.169.254
+    })
+
+    it('does not flag a public IPv4 address wrapped in IPv6 syntax as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:8.8.8.8')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('::ffff:0808:0808')).to.equal(false) // 8.8.8.8
+    })
+
+    it('does not flag an ordinary public IPv6 address that merely ends in two hex groups resembling a private IPv4 octet pattern', () => {
+      // the leading groups here are NOT zero, so this must not be mistaken for an
+      // IPv4-mapped/-compatible address just because its trailing groups, read as
+      // hex bytes, would look like 10.0.0.1 / 169.254.169.254
+      expect(utils.isPrivateOrReservedIpAddress('2001:db8::a00:1')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('2001:4860:4860::a9fe:a9fe')).to.equal(false)
+    })
+
+    it('does not flag ordinary public IPv6 addresses as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('2001:4860:4860::8888')).to.equal(false)
+    })
+  })
+
   describe('extractFilename', () => {
     it('returns standalone filename unchanged', () => {
       expect(utils.extractFilename('test.exe')).to.equal('test.exe')
