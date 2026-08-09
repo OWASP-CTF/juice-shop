@@ -17,7 +17,7 @@ import { MatPaginator } from '@angular/material/paginator'
 import { MatIconModule } from '@angular/material/icon'
 import { MatTooltip } from '@angular/material/tooltip'
 import { MatButtonModule } from '@angular/material/button'
-import { CookieService } from 'ngy-cookie'
+import { CookieService } from 'ngx-cookie'
 import { MatCheckboxModule } from '@angular/material/checkbox'
 
 import { TranslateModule } from '@ngx-translate/core'
@@ -88,7 +88,10 @@ export class AdministrationComponent implements OnInit {
       next: (feedbacks) => {
         this.feedbackDataSource = feedbacks
         for (const feedback of this.feedbackDataSource) {
-          feedback.comment = this.sanitizer.bypassSecurityTrustHtml(feedback.comment)
+          // Customer text, so the table cell shows it as text and not as markup.
+          const comment = document.createElement('div')
+          comment.textContent = feedback.comment
+          feedback.comment = this.sanitizer.bypassSecurityTrustHtml(comment.innerHTML)
         }
         this.feedbackDataSource = new MatTableDataSource(this.feedbackDataSource)
         this.feedbackDataSource.paginator = this.paginatorFeedb
