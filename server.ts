@@ -272,7 +272,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      stay open to customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop
      links customers straight at it, so a blanket gate here would 403 people on their own order
      confirmation. The leftovers that must never be handed out are named explicitly instead. */
-  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml|acquisitions\.md)$/i
   app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
   app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
   app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {

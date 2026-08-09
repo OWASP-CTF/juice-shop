@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import config from 'config'
-import * as utils from '../utils'
 import { Server } from 'socket.io'
 import { notifications, challenges } from '../../data/datacache'
 import * as challengeUtils from '../challengeUtils'
@@ -16,6 +14,10 @@ const globalWithSocketIO = global as typeof globalThis & {
   io: SocketIOClientStatic & Server
 }
 
+/* The socket channel is an unauthenticated, client-driven message bus: anything a browser can
+   emit, so can any other client. It is therefore never used as evidence that a payload really
+   reached a dangerous sink - the search term is bound as text by the search result component,
+   so there is no client-side script execution left to report. */
 const registerWebsocketEvents = (server: any) => {
   const io = new Server(server, { cors: { origin: 'http://localhost:4200' } })
   // @ts-expect-error FIXME Type safety issue when setting global socket-io object
@@ -36,11 +38,6 @@ const registerWebsocketEvents = (server: any) => {
       if (i > -1) {
         notifications.splice(i, 1)
       }
-    })
-
-    socket.on('verifyLocalXssChallenge', (data: any) => {
-      challengeUtils.solveIf(challenges.localXssChallenge, () => { return utils.contains(data, '<iframe src="javascript:alert(`xss`)">') })
-      challengeUtils.solveIf(challenges.xssBonusChallenge, () => { return utils.contains(data, config.get('challenges.xssBonusPayload')) })
     })
 
     socket.on('verifySvgInjectionChallenge', (data: any) => {

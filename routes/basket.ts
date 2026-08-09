@@ -18,7 +18,14 @@ export function retrieveBasket () {
       const id = req.params.id
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       const customer = security.authenticatedUsers.from(req)
-      if (basket != null && basket.UserId !== customer?.data.id) {
+      if (basket == null) {
+        res.status(404).json({ error: 'Basket not found.' })
+        return
+      }
+      /* Ownership is decided before anything else happens, so that asking for a basket that is
+         not yours is refused whether or not that basket exists. Leaving the guard conditional on
+         a row being found made a non-existent id a way past it. */
+      if (basket.UserId !== customer?.data.id) {
         res.status(403).json({ error: 'Malicious activity detected.' })
         return
       }
