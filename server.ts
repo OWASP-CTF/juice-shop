@@ -414,7 +414,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
       recentFeedbackSubmissions.shift()
     }
-    if (recentFeedbackSubmissions.length >= 8) {
+    if (recentFeedbackSubmissions.length >= 9) {
       res.status(429).json({ error: res.__('Too many feedback submissions. Please try again shortly.') })
       return
     }
