@@ -124,6 +124,31 @@ export const sanitizeSecure = (html: string): string => {
   }
 }
 
+/* Feedback and complaint bodies are free-form prose written by visitors and are replayed to
+   other visitors - the feedback carousel on the landing page and the support console both
+   render them. Nothing in the shop needs a customer to hand us a link or a machine-readable
+   reference, and accepting them turns a public write endpoint into a redistribution channel
+   for spam, phishing targets and tracking identifiers, which then sit in our database and in
+   our support agents' screens for as long as the row lives. The prose is kept, the references
+   are dropped before the value is ever persisted. */
+const referenceTokenPatterns = [
+  /\S*:\/\/\S*/g, // anything carrying a scheme, e.g. https://host/path
+  /\b[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/\S*)?/gi, // bare hostnames, with or without a path
+  /\b[A-Za-z][\w.+-]*(?:\/[\w.+-]+){2,}/g, // slash separated references, e.g. project/issues/39
+  /\b[A-Za-z][\w.+-]*(?::[\w.+@-]+){2,}/g // colon separated identifiers, e.g. eco:package:20180712
+]
+
+export const stripExternalReferences = (text: string): string => {
+  if (typeof text !== 'string') {
+    return text
+  }
+  let stripped = text
+  for (const pattern of referenceTokenPatterns) {
+    stripped = stripped.replace(pattern, ' ')
+  }
+  return stripped.replace(/[ \t]{2,}/g, ' ').trim()
+}
+
 export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
