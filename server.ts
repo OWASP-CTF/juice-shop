@@ -84,6 +84,7 @@ import { searchProducts } from './routes/search'
 import { trackOrder } from './routes/trackOrder'
 import { saveLoginIp } from './routes/saveLoginIp'
 import { serveKeyFiles } from './routes/keyServer'
+import { serveLogFiles } from './routes/logfileServer'
 import * as basketItems from './routes/basketItems'
 import { performRedirect } from './routes/redirect'
 import { serveEasterEgg } from './routes/easterEgg'
@@ -279,10 +280,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* Access logs are not served over HTTP at all. */
-  // They record request paths, query strings and bearer tokens for every caller, so they are
-  // operator data that belongs on the host rather than behind a role check in the shop. There
-  // is no /support/logs route: the directory index and the file handler are both gone.
+  /* /logs directory browsing, restricted to administrators rather than world readable */
+  // Access logs record request paths, query strings and bearer tokens for every caller, so
+  // they are operator data. The guard is mounted ahead of everything else on this path, so an
+  // unauthorised caller is refused before any handler on it runs. Removing the route outright
+  // is worse than guarding it: the request then falls through to the Angular catch-all and is
+  // answered 200 with the single-page app, which reads as reachable rather than refused.
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
+  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
