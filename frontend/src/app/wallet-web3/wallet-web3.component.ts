@@ -120,19 +120,26 @@ export class WalletWeb3Component implements OnInit {
 
       const provider = await connect({ connector: new InjectedConnector() })
       this.metamaskAddress = provider.account
-      this.keysService.walletAddressSend(this.metamaskAddress).subscribe(
-        {
-          next: (response) => {
-            if (response.success) {
-              this.successResponse = response.status
-              this.mintButtonDisabled = true
+      const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner()
+      this.keysService.walletExploitProof(this.metamaskAddress).subscribe({
+        next: async (proof) => {
+          const signature = await signer.signMessage(proof.message)
+          this.keysService.walletAddressSend(this.metamaskAddress, proof.nonce, signature).subscribe({
+            next: (response) => {
+              if (response.success) {
+                this.successResponse = response.status
+                this.mintButtonDisabled = true
+              }
+            },
+            error: (error) => {
+              console.error(error)
             }
-          },
-          error: (error) => {
-            console.error(error)
-          }
+          })
+        },
+        error: (error) => {
+          console.error(error)
         }
-      )
+      })
       this.userData = {
         address: provider.account,
         chain: provider.chain.id,
