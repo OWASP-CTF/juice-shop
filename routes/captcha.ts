@@ -28,7 +28,10 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // The answer is the one thing a CAPTCHA must never hand out: a client that is told the
+    // expected value does not have to solve anything, which is the whole point of the control.
+    // Only the id and the challenge itself go back to the caller.
+    res.json({ captchaId, captcha: expression })
   }
 }
 
