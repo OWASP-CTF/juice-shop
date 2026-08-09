@@ -172,6 +172,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.locals.captchaId = 0
   app.locals.captchaReqId = 1
   app.locals.captchaBypassReqTimes = []
+  /* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
+  app.locals.recentFeedbackSubmissions = []
   app.locals.abused_ssti_bug = false
   app.locals.abused_ssrf_bug = false
 
@@ -228,6 +230,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The spacer images below are laid out by one screen each and are never requested by any other
+     part of the shop. They are part of those screens, so they are served under the same
+     authorisation - a resource that only a restricted area loads must not be world-readable, or
+     the restriction is only ever cosmetic. */
+  app.get('/assets/public/images/padding/19px.png', security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
@@ -278,9 +286,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* The access log records every request the shop has served, with the IP and the URL - including
+     the ones that carry a session token or a password reset. That is operational data, not shop
+     content, so both the listing and the download of a log file require an authenticated
+     administrator. Leaving it on an unadvertised path was not access control: the path is in the
+     bundle and in every crawler's word list. */
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAuthorized(), security.isAdmin(), serveLogFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -359,9 +372,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* The customer register is administrative data, not something any signed-in customer may read */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -394,13 +408,30 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  /* The full user list including login state is administrative data */
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti-automation. Solving a CAPTCHA proves the puzzle was answered, not that a human answered
+     it, and a fresh puzzle can always be requested. The control that actually limits automation is
+     a rate limit on the submission itself, enforced over a sliding window. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    const recent: number[] = req.app.locals.recentFeedbackSubmissions
+    while (recent.length > 0 && now - recent[0] > 21000) {
+      recent.shift()
+    }
+    if (recent.length >= 9) {
+      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
+      return
+    }
+    recent.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
@@ -412,6 +443,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      }
+    }
+    next()
+  })
+  /* Self-registration may only ever create an ordinary customer. The role - and every other
+     attribute the shop decides for itself - is dropped from the request body, so sending
+     "role": "admin" alongside the fields the form shows no longer grants anything. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privilegedAttribute]
       }
     }
     next()
