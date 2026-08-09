@@ -6,50 +6,48 @@
 import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
+import { challenges } from '../data/datacache'
+import * as security from '../lib/insecurity'
+import { ordersCollection } from '../data/mongodb'
+
+/* Every file the shop legitimately publishes here is an invoice it generated itself, named after
+   the order it belongs to. The name is therefore checked against the requester's own orders
+   rather than against a list of extensions: an allow-list of file types says nothing about who
+   the file belongs to, and it was what let the acquisition memo and the developer's leftovers be
+   downloaded by anyone who guessed the name. */
+const INVOICE_PATTERN = /^order_[\w-]+\.pdf$/
 
 export function servePublicFiles () {
-  return ({ params, query }: Request, res: Response, next: NextFunction) => {
-    const file = params.file
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const file = req.params.file
 
-    if (!file.includes('/')) {
-      verify(file, res, next)
-    } else {
+    if (!file || file.includes('/') || /%00|\0/i.test(file)) {
       res.status(403)
       next(new Error('File names cannot contain forward slashes!'))
+      return
     }
-  }
 
-  function verify (file: string, res: Response, next: NextFunction) {
-    if (file &&
-      !/%00|\0/i.test(file) &&
-      endsWithAllowlistedFileType(file)) {
+    challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
 
-      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
-      verifySuccessfulPoisonNullByteExploit(file)
-
-      res.sendFile(path.resolve('ftp/', file))
-    } else {
-      res.status(403)
-      next(new Error('Only .md and .pdf files are allowed!'))
+    if (!INVOICE_PATTERN.test(file)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
     }
-  }
 
-  function verifySuccessfulPoisonNullByteExploit (file: string) {
-    challengeUtils.solveIf(challenges.easterEggLevelOneChallenge, () => { return file.toLowerCase() === 'eastere.gg' })
-    challengeUtils.solveIf(challenges.forgottenDevBackupChallenge, () => { return file.toLowerCase() === 'package.json.bak' })
-    challengeUtils.solveIf(challenges.forgottenBackupChallenge, () => { return file.toLowerCase() === 'coupons_2013.md.bak' })
-    challengeUtils.solveIf(challenges.misplacedSignatureFileChallenge, () => { return file.toLowerCase() === 'suspicious_errors.yml' })
+    const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      res.status(401).json({ error: 'You have to be logged in to download an invoice' })
+      return
+    }
 
-    challengeUtils.solveIf(challenges.nullByteChallenge, () => {
-      return challenges.easterEggLevelOneChallenge.solved || challenges.forgottenDevBackupChallenge.solved || challenges.forgottenBackupChallenge.solved ||
-        challenges.misplacedSignatureFileChallenge.solved || file.toLowerCase() === 'encrypt.pyc'
-    })
-  }
+    const orderId = file.substring('order_'.length, file.length - '.pdf'.length)
+    const orders = await ordersCollection.find({ orderId, email: user.data.email })
+    if (!orders || orders.length === 0) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
 
-  function endsWithAllowlistedFileType (param: string) {
-    return utils.endsWith(param, '.md') || utils.endsWith(param, '.pdf')
+    res.sendFile(path.resolve('ftp/', file))
   }
 }

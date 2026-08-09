@@ -272,26 +272,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      stay open to customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop
      links customers straight at it, so a blanket gate here would 403 people on their own order
      confirmation. The leftovers that must never be handed out are named explicitly instead. */
-  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
-  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin())
+  /* The ftp/ folder is where the shop drops the invoice it generates for each order, and links
+     the customer straight at their own file. It is not a public share: alongside those invoices
+     sit an acquisition memo, a password-protected archive, a coupon key file and other leftovers
+     nobody meant to publish. Browsing the folder handed that inventory to anyone who asked, and
+     an allow-list of file extensions can never answer who a file belongs to. The listing is gone,
+     the quarantine folder stays administrative, and a download is served only when the requested
+     name is an invoice from the requesting customer's own order history. */
   app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin())
-  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
-    let requested = req.params.file ?? ''
-    try {
-      requested = decodeURIComponent(requested)
-    } catch {
-      /* A name that is not valid percent encoding is judged as it arrived */
-    }
-    if (confidentialFtpArtefacts.test(requested)) {
-      res.status(403).json({ error: 'Forbidden' })
-      return
-    }
-    next()
-  })
-  // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
+  app.use('/ftp(?!/quarantine)/:file', security.isAuthorized(), utils.asyncHandler(servePublicFiles()))
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
@@ -396,8 +385,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
-  app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  /* The catalogue is not customer data. POST was open to any signed-in customer and the PUT line
+     was commented out of the authorisation block entirely, so any caller could rewrite a
+     product's name, description or price - and the description is rendered into the shop, so it
+     is also a way to put content in front of every visitor. Writes are refused. */
+  app.post('/api/Products', security.denyAll())
+  app.put('/api/Products/:id', security.denyAll())
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
