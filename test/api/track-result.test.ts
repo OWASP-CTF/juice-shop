@@ -44,4 +44,13 @@ void describe('/rest/track-order/:id', () => {
       assert.equal(typeof item._id, 'string')
     }
   })
+
+  void it('GET does not reflect an unmatched order id back unescaped', async () => {
+    const payload = '<iframe src="javascript:alert(`xss`)">'
+    const res = await request(app)
+      .get(`/rest/track-order/${encodeURIComponent(payload)}`)
+    assert.equal(res.status, 200)
+    assert.equal(res.body.data[0].orderId.includes('<'), false)
+    assert.equal(res.body.data[0].orderId.includes('>'), false)
+  })
 })
