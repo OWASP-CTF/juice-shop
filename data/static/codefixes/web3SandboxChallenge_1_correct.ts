@@ -156,20 +156,12 @@ const routes: Routes = [
     component: NFTUnlockComponent
   },
   {
-    path: 'wallet-web3',
-    loadChildren: async () => await loadWeb3WalletModule()
-  },
-  {
     path: 'chatbot',
     component: ChatbotComponent,
     children: [
       { path: '', component: ChatWelcomePageComponent },
       { path: 'conversation/:id', component: ChatConversationComponent }
     ]
-  },
-  {
-    path: 'bee-haven',
-    loadChildren: async () => await loadFaucetModule()
   },
    {
     matcher: oauthMatcher,

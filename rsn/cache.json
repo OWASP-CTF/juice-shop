@@ -25,37 +25,37 @@
 			7,
 			8,
 			9,
+			155,
+			156,
+			157,
+			158
+		]
+	},
+	"adminSectionChallenge_2.ts": {
+		"added": [],
+		"removed": [
 			159,
 			160,
 			161,
 			162
 		]
 	},
-	"adminSectionChallenge_2.ts": {
-		"added": [],
-		"removed": [
-			163,
-			164,
-			165,
-			166
-		]
-	},
 	"adminSectionChallenge_3.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166
+			159,
+			160,
+			161,
+			162
 		]
 	},
 	"adminSectionChallenge_4.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166
+			159,
+			160,
+			161,
+			162
 		]
 	},
 	"changeProductChallenge_1.ts": {
@@ -1243,19 +1243,19 @@
 	"scoreBoardChallenge_1_correct.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166
+			159,
+			160,
+			161,
+			162
 		]
 	},
 	"scoreBoardChallenge_2.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166
+			159,
+			160,
+			161,
+			162
 		]
 	},
 	"scoreBoardChallenge_3.ts": {
@@ -1263,10 +1263,10 @@
 			113
 		],
 		"removed": [
-			160,
-			161,
-			162,
-			163
+			156,
+			157,
+			158,
+			159
 		]
 	},
 	"tokenSaleChallenge_1.ts": {
@@ -1358,21 +1358,21 @@
 	"web3SandboxChallenge_2.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166,
-			167
+			159,
+			160,
+			161,
+			162,
+			163
 		]
 	},
 	"web3SandboxChallenge_3.ts": {
 		"added": [],
 		"removed": [
-			163,
-			164,
-			165,
-			166,
-			167
+			159,
+			160,
+			161,
+			162,
+			163
 		]
 	},
 	"web3WalletChallenge_1.sol": {
