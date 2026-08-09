@@ -68,7 +68,7 @@ const loadAboutComponent = async () => {
   return module.AboutComponent
 }
 
-// vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
+// vuln-code-snippet start adminSectionChallenge scoreBoardChallenge
 const routes: Routes = [
   { // vuln-code-snippet neutral-line adminSectionChallenge
     path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
@@ -268,7 +268,7 @@ const routes: Routes = [
     component: SearchResultComponent
   }
 ]
-// vuln-code-snippet end adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
+// vuln-code-snippet end adminSectionChallenge scoreBoardChallenge
 
 export const Routing = RouterModule.forRoot(routes, { useHash: true })
 
