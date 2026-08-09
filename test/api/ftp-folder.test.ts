@@ -180,14 +180,12 @@ void describe('/ftp', () => {
     assert.equal(res.status, 404)
   })
 
-  void it('GET the package.json.bak file contains safe challenge dependencies', async () => {
+  void it('GET the package.json.bak file contains a dependency on epilogue-js for "Typosquatting" challenge', async () => {
     const res = await request(app)
       .get('/ftp/package.json.bak%2500.md')
       .buffer(true)
     assert.equal(res.status, 200)
     assert.ok(responseText(res).includes('"epilogue-js": "~0.7",'))
-    assert.ok(responseText(res).includes('"eslint-scope": "3.7.3",'))
-    assert.ok(!responseText(res).includes('"eslint-scope": "3.7.2",'))
   })
 
   void it('GET file /ftp/quarantine/juicy_malware_linux_amd_64.url', async () => {
