@@ -214,7 +214,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      request for this file name under any of them was still read as a visit to the removed
      screen even though the file only ever existed under one of them. */
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.endsWith('/11px.png')) {
+    if (req.path.endsWith('/11px.png') || req.path.endsWith('/19px.png') || req.path.endsWith('/56px.png')) {
       res.status(404).send()
       return
     }
