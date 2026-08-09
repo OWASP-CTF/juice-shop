@@ -224,6 +224,24 @@ export const isAdmin = () => {
   }
 }
 
+export const sameOriginOnly = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const source = req.headers.origin ?? req.headers.referer
+    if (source !== undefined) {
+      try {
+        if (new URL(source).host !== req.headers.host) {
+          res.status(403).json({ error: 'Cross-origin request blocked' })
+          return
+        }
+      } catch {
+        res.status(403).json({ error: 'Invalid request origin' })
+        return
+      }
+    }
+    next()
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
