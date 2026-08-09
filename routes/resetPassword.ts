@@ -20,11 +20,9 @@ export function resetPassword () {
     const answer = body.answer
     const newPassword = body.new
     const repeatPassword = body.repeat
-    const authenticatedUser = security.authenticatedUsers.from(req)
-    if (!authenticatedUser?.data?.email || authenticatedUser.data.email !== email) {
-      res.sendStatus(403)
-      return
-    }
+    // Requiring a session here removed the flow rather than hardening it: the
+    // only user who needs a password reset is one who cannot log in. The
+    // security answer is the credential, and those are no longer guessable.
     if (!email || !answer) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
       return

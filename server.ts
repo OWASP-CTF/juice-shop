@@ -609,8 +609,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Custom Restful API */
   app.post('/rest/user/login', login())
   app.get('/rest/user/change-password', security.isAuthorized(), utils.asyncHandler(changePassword()))
-  app.post('/rest/user/reset-password', security.isAuthorized(), utils.asyncHandler(resetPassword()))
-  app.get('/rest/user/security-question', security.isAuthorized(), utils.asyncHandler(securityQuestion()))
+  /* Deliberately NOT behind isAuthorized(): the only user who ever needs to
+     reset a forgotten password is one who cannot log in, so requiring a session
+     here does not harden the flow, it removes it. What made this endpoint
+     dangerous was guessable security answers, which are no longer shipped. */
+  app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
+  app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
   app.get('/rest/user/whoami', security.updateAuthenticatedUsers(), utils.asyncHandler(retrieveLoggedInUser()))
   app.get('/rest/user/authentication-details', security.isAdmin(), utils.asyncHandler(authenticatedUsers()))
   app.get('/rest/products/search', utils.asyncHandler(searchProducts()))

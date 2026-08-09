@@ -12,9 +12,11 @@ import * as security from '../lib/insecurity'
 export function securityQuestion () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const email = req.query.email?.toString()
-    const authenticatedUser = security.authenticatedUsers.from(req)
-    if (!authenticatedUser?.data?.email || authenticatedUser.data.email !== email) {
-      res.sendStatus(403)
+    // No session requirement: a user who has forgotten their password cannot
+    // have one. What made this dangerous was guessable security answers, which
+    // are no longer shipped; the answer itself is still what gates the reset.
+    if (!email) {
+      res.sendStatus(400)
       return
     }
     try {
