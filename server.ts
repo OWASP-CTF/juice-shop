@@ -281,9 +281,27 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  // The ftp directory holds developer backups, key material and coupon archives that were
-  // never meant to be browsable by shop customers, so the whole tree is operator-only.
-  app.use('/ftp', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  // Browsing the folder is what exposes the forgotten developer artefacts, so the listing
+  // itself is an administrative function, as is the quarantine folder. Individual downloads
+  // have to stay open: placeOrder() writes every invoice to ftp/order_<id>.pdf and links the
+  // customer straight at it, so a blanket gate here answers 403 on somebody's own order
+  // confirmation. The leftovers that must never be handed out are named instead.
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml|acquisitions\.md)$/i
+  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged as it arrived */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
+  })
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
@@ -362,11 +380,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(morgan('combined', { stream: accessLogStream }))
 
   // vuln-code-snippet start resetPasswordMortyChallenge
-  /* Rate limiting */
-  app.enable('trust proxy')
+  /* Rate limiting. "trust proxy" stays off deliberately: with it enabled req.ip is taken
+     from X-Forwarded-For, which the caller sets, so dropping the custom keyGenerator alone
+     was not enough - the default one would still have keyed on a header and handed every
+     request a fresh bucket. The socket address is the one value the caller cannot choose. */
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
-    max: 100 // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    max: 100, // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    keyGenerator ({ socket, ip }: { socket: any, ip: any }) { return socket?.remoteAddress ?? ip }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -407,7 +428,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', recycles.blockRecycleItems())
+  app.get('/api/Recycles', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItems()))
   app.post('/api/Recycles', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(recycles.prepareRecycleItem()))
   /* Challenge evaluation before finale takes over */
   app.get('/api/Recycles/:id', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItem()))
@@ -423,6 +444,22 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Who a feedback belongs to and how many stars it carries are server decisions. finale
+     mass-assigns the body, so a caller could file feedback under another customer's id, or
+     store a rating outside the scale the shop actually renders. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const user = security.authenticatedUsers.from(req)
+      req.body.UserId = user?.data?.id ?? null
+      const rating = Number(req.body.rating)
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
+        return
+      }
+      req.body.rating = rating
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */

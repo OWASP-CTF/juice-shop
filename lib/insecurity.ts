@@ -123,8 +123,18 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
   },
+  // A session is only ever resolved for a token this shop signed. The map was keyed on the
+  // token string alone, so any string that had once been stored under a key kept resolving
+  // to that session - the signature was never re-examined at lookup time.
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const cleaned = utils.unquote(token)
+    if (!verify(cleaned)) {
+      return undefined
+    }
+    return this.tokenMap[cleaned]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -135,7 +145,10 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
-    this.put(token, user)
+    // Nothing that failed verification gets a session entry of its own.
+    if (token && verify(token)) {
+      this.put(token, user)
+    }
   }
 }
 
@@ -262,7 +275,14 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      // Indexing the raw map skipped the verification that the accessor performs, so the
+      // id every ownership check downstream relies on came from an unverified token.
+      const user = authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })

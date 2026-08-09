@@ -25,7 +25,10 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && !containsPoisonNullByte(file) && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
+    // The allowlist had a hole cut in it for one file: incident-support.kdbx, a password
+    // database that nobody browsing the shop has any business downloading. The exception is
+    // gone, so only the document types this endpoint is meant to hand out get served.
+    if (file && !containsPoisonNullByte(file) && endsWithAllowlistedFileType(file)) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
 
       res.sendFile(path.resolve('ftp/', file))

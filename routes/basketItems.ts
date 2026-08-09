@@ -45,6 +45,17 @@ export function addBasketItem () {
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
 
+      // The stock check ran against req.body.ProductId, while the row that actually gets
+      // inserted is built from the last ProductId in the raw body. A body carrying the field
+      // twice therefore had one product vetted and a different one added. The product going
+      // into the basket is the one checked here, and a discontinued one is refused: it is
+      // only soft-deleted, so it still has a stock row to satisfy the check upstream.
+      const onSale = basketItem.ProductId !== undefined ? await ProductModel.findOne({ where: { id: basketItem.ProductId } }) : null
+      if (onSale == null) {
+        res.status(400).json({ error: 'This product is no longer available.' })
+        return
+      }
+
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
         const addedBasketItem = await basketItemInstance.save()

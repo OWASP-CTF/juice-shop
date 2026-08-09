@@ -36,6 +36,13 @@ export function placeOrder () {
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
+          // The basket id is a path parameter the caller picks, so checking out is bound to
+          // the basket the caller actually owns. Without this any logged-in customer can
+          // order somebody else's basket - and have it emptied and billed against them.
+          if (basket.UserId !== customer?.data?.id) {
+            res.status(403).json({ error: 'Malicious activity detected.' })
+            return
+          }
           const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
@@ -143,6 +150,13 @@ export function placeOrder () {
           doc.moveDown()
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
+
+          // An order the shop would have to pay out on is not an order. Refused here as
+          // well as at the basket, so no single arithmetic slip downstream can produce one.
+          if (totalPrice < 0) {
+            next(new Error('Invalid order total'))
+            return
+          }
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 

@@ -54,3 +54,14 @@ export const blockRecycleItems = () => (req: Request, res: Response) => {
   const errMsg = { err: 'Sorry, this endpoint is not supported.' }
   return res.send(utils.queryResultToJson(errMsg))
 }
+
+// Listing recycle requests is a legitimate thing for a customer to do; listing everybody's
+// was the problem. The collection is scoped to the caller instead of being refused outright.
+export const getRecycleItems = () => async (req: Request, res: Response) => {
+  try {
+    const recycleItems = await RecycleModel.findAll({ where: { UserId: req.body.UserId } })
+    res.send(utils.queryResultToJson(recycleItems))
+  } catch {
+    res.status(500).send('Error fetching recycled items. Please try again')
+  }
+}

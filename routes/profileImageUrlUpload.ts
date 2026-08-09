@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs'
+import net from 'node:net'
+import dns from 'node:dns/promises'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -13,43 +15,62 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
-// Hostnames that resolve to the host itself or to infrastructure only reachable from
-// inside the deployment. Fetching these on a caller's behalf is server-side request
-// forgery, not an avatar download.
-const BLOCKED_HOST_PATTERNS = [
-  'localhost',
-  '127.',
-  '0.0.0.0',
-  '10.',
-  '192.168.',
-  '169.254.',
-  '[',
-  'metadata'
-]
-
-function isSafeOutboundUrl (candidate: string) {
-  let parsed
-  try {
-    parsed = new URL(candidate)
-  } catch {
-    return false
+// A hostname denylist only refuses the spellings somebody thought of. What matters is the
+// address the name actually resolves to, so that is what is judged: anything that is not a
+// public unicast address is refused, however it was written.
+const isPrivateAddress = (address: string): boolean => {
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number)
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return false
-  }
-  const host = parsed.hostname.toLowerCase()
-  if (BLOCKED_HOST_PATTERNS.some(prefix => host === prefix || host.startsWith(prefix))) {
-    return false
-  }
-  // 172.16.0.0/12
-  const privateB = host.match(new RegExp('^172[.]([0-9]+)[.]'))
-  if (privateB !== null) {
-    const second = Number(privateB[1])
-    if (second >= 16 && second <= 31) {
-      return false
+  if (net.isIPv6(address)) {
+    const normalized = address.toLowerCase()
+    if (normalized.startsWith('::ffff:')) {
+      return isPrivateAddress(normalized.substring('::ffff:'.length))
     }
+    return normalized === '::1' || normalized === '::' ||
+      normalized.startsWith('fc') || normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') || normalized.startsWith('feb')
   }
   return true
+}
+
+const assertUrlIsSafeToFetch = async (rawUrl: string) => {
+  const url = new URL(rawUrl)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Only http and https image URLs are supported')
+  }
+  const hostname = url.hostname.replace(/^\[|]$/g, '')
+  const { address } = net.isIP(hostname) ? { address: hostname } : await dns.lookup(hostname)
+  if (isPrivateAddress(address)) {
+    throw new Error('Image URLs must point to a publicly reachable host')
+  }
+}
+
+// Redirects are followed by hand so that every hop is judged in turn. Following them
+// automatically means only the first URL is ever checked, and a public host that answers
+// 302 to 169.254.169.254 walks straight through the guard above.
+const fetchImage = async (rawUrl: string) => {
+  let currentUrl = rawUrl
+  for (let hop = 0; hop <= 3; hop++) {
+    await assertUrlIsSafeToFetch(currentUrl)
+    const response = await fetch(currentUrl, { redirect: 'manual' })
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location')
+      if (!location) {
+        throw new Error('url responded with a redirect without a target')
+      }
+      currentUrl = new URL(location, currentUrl).toString()
+      continue
+    }
+    return response
+  }
+  throw new Error('url redirected too many times')
 }
 
 export function profileImageUrlUpload () {
@@ -59,18 +80,15 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          if (!isSafeOutboundUrl(url)) {
-            throw new Error('image url is not an allowed outbound target')
-          }
-          const response = await fetch(url)
-          // This flag records that the server was actually made to issue a request on the
-          // caller's behalf. It used to be raised from a regex over the submitted string,
-          // before the session check and without anything leaving the process, so merely
-          // naming a URL set it. It is now raised only once an outbound fetch resolved.
-          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+          const response = await fetchImage(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
+          // This flag records that the server was actually made to issue a request on the
+          // caller's behalf. It used to be raised from a regex over the submitted string,
+          // before the session check and without anything leaving the process, so merely
+          // naming a URL set it. It is now raised only once a fetch came back with content.
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
           await finished(Readable.fromWeb(response.body as any).pipe(fileStream))

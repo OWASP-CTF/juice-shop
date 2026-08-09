@@ -14,21 +14,25 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
-    challengeUtils.solveIf(
-      challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
-    )
     // The author is the authenticated caller. A body-supplied author is ignored, so a
     // review cannot be attributed to somebody else.
     if (!user?.data?.email) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    const author = user.data.email
+    // The check has to observe the name the review is actually filed under rather than the
+    // one the request asked for. Against req.body.author it reported a forgery on every
+    // ordinary review, because the body no longer carries an author for it to match.
+    challengeUtils.solveIf(
+      challenges.forgedReviewChallenge,
+      () => user.data.email !== author
+    )
 
     try {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: user.data.email,
+        author,
         likesCount: 0,
         likedBy: []
       })

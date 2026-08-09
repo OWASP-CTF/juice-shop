@@ -49,17 +49,15 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    // The username is data. It is escaped for the template and never evaluated.
-    username = '\\' + username
+    // The username is data. Prefixing it with a backslash left it as live markup - the
+    // template still received the tags the customer typed, and every check downstream still
+    // saw them. It is HTML-encoded instead, and spliced into the already rendered page
+    // rather than into the template, so it can be read neither as Pug nor as HTML.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -85,7 +83,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

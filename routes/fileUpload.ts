@@ -95,8 +95,10 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        // noent: false leaves external entities unresolved; nonet: true refuses network fetches.
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
+        // noent: false leaves external entities unresolved; nonet: true refuses network
+        // fetches; dtdload: false stops the internal subset being loaded at all, which is
+        // what an entity-expansion bomb needs before it can expand anything.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, dtdload: false, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
