@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Request, type Response } from 'express'
+import { type Request, type Response, type NextFunction } from 'express'
 
 import * as security from '../lib/insecurity'
 
 export function b2bOrder () {
-  return ({ body }: Request, res: Response) => {
+  return ({ body }: Request, res: Response, next: NextFunction) => {
     res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 
