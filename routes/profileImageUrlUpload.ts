@@ -5,8 +5,10 @@
 
 import fs from 'node:fs'
 import dns from 'node:dns/promises'
+import http, { type IncomingMessage } from 'node:http'
+import https from 'node:https'
 import net from 'node:net'
-import { Readable, Transform } from 'node:stream'
+import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
 
@@ -70,7 +72,7 @@ function isBlockedAddress (address: string) {
 
 /* Parses the given URL and makes sure that requesting it cannot reach anything but a public host over
    HTTP(S). Throws a BlockedUrlError for everything that violates the policy. */
-async function assertSafeRequestTarget (candidateUrl: string): Promise<URL> {
+async function assertSafeRequestTarget (candidateUrl: string): Promise<{ url: URL, addresses: string[] }> {
   let parsedUrl: URL
   try {
     parsedUrl = new URL(candidateUrl)
@@ -110,7 +112,7 @@ async function assertSafeRequestTarget (candidateUrl: string): Promise<URL> {
       throw new BlockedUrlError(`hostname "${hostname}" resolves to non-public address ${address}`)
     }
   }
-  return parsedUrl
+  return { url: parsedUrl, addresses }
 }
 
 function createSizeLimitingStream (maxBytes: number) {
@@ -127,23 +129,54 @@ function createSizeLimitingStream (maxBytes: number) {
   })
 }
 
+/* Issues the request against the very addresses that were just validated. Resolving the name a second
+   time, as any ordinary HTTP client does, would reopen the hole the validation closes: a hostile
+   resolver can answer with a public address while the policy is being checked and a private one a
+   moment later, and the connection would follow the second answer (DNS rebinding). Pinning the
+   lookup removes that window entirely. */
+async function requestPinnedToValidatedAddress (url: URL, addresses: string[]) {
+  const transport = url.protocol === 'https:' ? https : http
+  return await new Promise<IncomingMessage>((resolve, reject) => {
+    const request = transport.request(url, {
+      timeout: REQUEST_TIMEOUT_IN_MS,
+      lookup (_hostname, options, callback) {
+        const address = addresses[0]
+        const family = net.isIPv6(address) ? 6 : 4
+        if (options.all === true) {
+          (callback as any)(null, [{ address, family }])
+        } else {
+          (callback as any)(null, address, family)
+        }
+      }
+    }, resolve)
+    request.on('timeout', () => { request.destroy(new Error('url did not respond in time')) })
+    request.on('error', reject)
+    request.end()
+  })
+}
+
 /* Retrieves the image while following redirects manually, so that every single hop has to pass the same
    policy as the URL originally submitted by the user. */
-async function retrieveImage (url: URL, req: Request) {
+async function retrieveImage (url: URL, addresses: string[], req: Request) {
   let currentUrl = url
+  let currentAddresses = addresses
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (currentUrl.href.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
-    const response = await fetch(currentUrl.href, { redirect: 'manual', signal: AbortSignal.timeout(REQUEST_TIMEOUT_IN_MS) })
-    if (response.status >= 300 && response.status <= 308 && response.headers.has('location')) {
-      await response.body?.cancel()
-      currentUrl = await assertSafeRequestTarget(new URL(response.headers.get('location') as string, currentUrl).href)
+    const response = await requestPinnedToValidatedAddress(currentUrl, currentAddresses)
+    const status = response.statusCode ?? 0
+    if (status >= 300 && status <= 308 && response.headers.location !== undefined) {
+      response.resume()
+      const target = await assertSafeRequestTarget(new URL(response.headers.location, currentUrl).href)
+      currentUrl = target.url
+      currentAddresses = target.addresses
       continue
     }
-    if (!response.ok || !response.body) {
-      throw new Error('url returned a non-OK status code or an empty body')
+    if (status < 200 || status > 299) {
+      response.resume()
+      throw new Error('url returned a non-OK status code')
     }
-    if (Number(response.headers.get('content-length')) > MAX_IMAGE_SIZE_IN_BYTES) {
-      await response.body.cancel()
+    if (Number(response.headers['content-length']) > MAX_IMAGE_SIZE_IN_BYTES) {
+      response.resume()
       throw new Error(`image exceeds the maximum allowed size of ${MAX_IMAGE_SIZE_IN_BYTES} bytes`)
     }
     return response
@@ -158,8 +191,11 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         let safeUrl: URL
+        let safeAddresses: string[]
         try {
-          safeUrl = await assertSafeRequestTarget(url)
+          const target = await assertSafeRequestTarget(url)
+          safeUrl = target.url
+          safeAddresses = target.addresses
         } catch (error) {
           /* Fail closed: a URL the server must not request is not stored as profile image either. */
           logger.warn(`Rejected profile image URL: ${utils.getErrorMessage(error)}`)
@@ -168,10 +204,10 @@ export function profileImageUrlUpload () {
           return
         }
         try {
-          const response = await retrieveImage(safeUrl, req)
+          const response = await retrieveImage(safeUrl, safeAddresses, req)
           const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
-          await pipeline(Readable.fromWeb(response.body as any), createSizeLimitingStream(MAX_IMAGE_SIZE_IN_BYTES), fileStream)
+          await pipeline(response, createSizeLimitingStream(MAX_IMAGE_SIZE_IN_BYTES), fileStream)
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {

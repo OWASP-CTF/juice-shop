@@ -100,7 +100,14 @@ export const verify = (token: string) => {
     return false
   }
   try {
-    return jws.verify(token, jwtSigningAlgorithm, publicKey)
+    if (!jws.verify(token, jwtSigningAlgorithm, publicKey)) {
+      return false
+    }
+    /* A signature only says the token was issued here, never that it is still valid, so the
+       expiry has to be enforced where the token is accepted. */
+    const decoded = jws.decode(token)?.payload
+    const payload = typeof decoded === 'string' ? JSON.parse(decoded) : decoded
+    return typeof payload?.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000)
   } catch {
     return false
   }
