@@ -10,7 +10,6 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
-import { UserModel } from '../../models/user'
 
 let app: Express
 
@@ -139,27 +138,6 @@ void describe('/rest/deluxe-membership', () => {
 
     assert.equal(res.status, 400)
     assert.equal(res.body.error, 'Insuffienct funds in Wallet')
-  })
-
-  void it('POST upgrade deluxe membership rejects missing payment mode', async () => {
-    const email = `jim@${config.get<string>('application.domain')}`
-    const { token } = await login(app, {
-      email,
-      password: 'ncc-1701'
-    })
-    const authHeader = { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }
-
-    const res = await request(app)
-      .post('/rest/deluxe-membership')
-      .set(authHeader)
-      .send({})
-
-    assert.equal(res.status, 400)
-    assert.equal(res.body.status, 'error')
-    assert.equal(res.body.error, 'Invalid payment method')
-
-    const user = await UserModel.findOne({ where: { email } })
-    assert.equal(user?.role, 'customer')
   })
 
   void it('POST deluxe membership status with wrong card id throws error', async () => {

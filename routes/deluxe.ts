@@ -16,11 +16,6 @@ import * as utils from '../lib/utils'
 export function upgradeToDeluxe () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
-        res.status(400).json({ status: 'error', error: 'Invalid payment method' })
-        return
-      }
-
       const user = await UserModel.findOne({ where: { id: req.body.UserId, role: security.roles.customer } })
       if (user == null) {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
