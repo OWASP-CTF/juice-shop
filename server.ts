@@ -215,7 +215,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      screen even though the file only ever existed under one of them. */
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.endsWith('/11px.png')) {
-      res.status(404).send()
+      res.status(403).send()
       return
     }
     next()
