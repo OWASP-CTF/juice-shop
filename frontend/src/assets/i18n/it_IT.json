@@ -460,7 +460,6 @@
   "PLEASE_CONNECT_TO_SEPOLIA_NETWORK": "Please connect to the Sepolia Network.",
   "PLEASE_CONNECT_WEB3_WALLET": "Please connect your Web3 wallet first.",
   "TITLE_CONTRACT_EDITOR": "Contract Editor",
-  "TITLE_WEB3_SANDBOX": "Web3 Code Sandbox",
   "EXPLANATION_SMART_CONTRACT_DEPLOYMENT": "Easily compile/deploy and invoke smart contracts from below",
   "EXPLANATION_GWEI_VALUE_POST_COMPILATION": "You can pass ETH to the contract both while invoking/deploying by entering the GWEI Value post compilation",
   "LABEL_SELECT_COMPILER_VERSION": "Seleziona la versione del compilatore",

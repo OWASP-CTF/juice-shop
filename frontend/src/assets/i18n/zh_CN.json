@@ -460,7 +460,6 @@
   "PLEASE_CONNECT_TO_SEPOLIA_NETWORK": "请连接到 Sepolia 网络。",
   "PLEASE_CONNECT_WEB3_WALLET": "请先连接您的 Web3 钱包。",
   "TITLE_CONTRACT_EDITOR": "合约编辑器",
-  "TITLE_WEB3_SANDBOX": "Web3代码沙箱",
   "EXPLANATION_SMART_CONTRACT_DEPLOYMENT": "轻松编译/部署并从下面调用智能合约",
   "EXPLANATION_GWEI_VALUE_POST_COMPILATION": "您可以在调用/部署时，通过输入 GWEI 值编译后将 ETH 传递给合约",
   "LABEL_SELECT_COMPILER_VERSION": "选择编译器版本",
