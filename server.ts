@@ -270,6 +270,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/.well-known', express.static('.well-known'))
 
   /* /encryptionkeys directory browsing */
+  app.use('/encryptionkeys', security.denyAll())
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
