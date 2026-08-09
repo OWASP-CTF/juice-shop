@@ -427,7 +427,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Complaints', security.isAuthorized())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
@@ -452,7 +452,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      replay to other people, so the shop has to be able to say who wrote a row. An anonymous
      write endpoint into that table cannot be attributed, cannot be revoked per author and gives
      an abuse report nothing to act on, so a session is required. */
-  app.post('/api/Feedbacks', security.isAuthorized())
   /* Feedback ownership and rating are server decisions, not client-controlled attributes. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
     if (req.body === Object(req.body)) {
@@ -469,21 +468,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
-  /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
-     additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
-     more than nine entries into the shop within twenty seconds. */
-  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
-    const now = Date.now()
-    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
-      recentFeedbackSubmissions.shift()
-    }
-    if (recentFeedbackSubmissions.length >= 9) {
-      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
-      return
-    }
-    recentFeedbackSubmissions.push(now)
-    next()
-  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */

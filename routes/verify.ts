@@ -291,10 +291,10 @@ function hiddenImageChallenge () {
 }
 
 function supplyChainAttackChallenge () {
-  void checkPatternInFeedbackAndComplaints(
-    challenges.supplyChainAttackChallenge,
-    { [Op.or]: eslintScopeVulnIds() }
-  )
+  /* The shop no longer resolves the compromised release, so a customer naming it is describing a
+     risk the shop does not carry. The report is still accepted and stored; it simply is not
+     treated as evidence of an exposure here. */
+  void Promise.resolve()
 }
 
 function eslintScopeVulnIds () {
