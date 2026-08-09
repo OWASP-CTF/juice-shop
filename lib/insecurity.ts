@@ -90,6 +90,23 @@ export const isAuthorized = () => {
     dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
   }
 }
+export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
+  const source = req.headers.origin ?? req.headers.referer
+  if (!source) {
+    res.status(403).json({ error: 'A same-origin request is required' })
+    return
+  }
+  try {
+    if (new URL(source).host !== req.headers.host) {
+      res.status(403).json({ error: 'Cross-origin request blocked' })
+      return
+    }
+  } catch {
+    res.status(403).json({ error: 'Invalid request origin' })
+    return
+  }
+  next()
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
 export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
