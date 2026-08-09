@@ -10,8 +10,17 @@ import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
 import { login } from './helpers/auth'
+import * as security from '../../lib/insecurity'
 
 let app: Express
+
+function createConcurrentSession (token: string) {
+  const user = security.authenticatedUsers.get(token)
+  assert.ok(user)
+  const concurrentToken = security.authorize({ ...user, session: 'concurrent' })
+  security.authenticatedUsers.put(concurrentToken, user)
+  return concurrentToken
+}
 
 before(async () => {
   const result = await createTestApp()
@@ -36,6 +45,36 @@ void describe('/rest/user/change-password', () => {
       .set({ Authorization: 'Bearer ' + token })
 
     assert.equal(res.status, 200)
+  })
+
+  void it('revokes every active session after changing a password', async () => {
+    await request(app)
+      .post('/api/Users')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'session-change@be.rt',
+        password: 'old-password'
+      })
+      .expect(201)
+
+    const { token } = await login(app, { email: 'session-change@be.rt', password: 'old-password' })
+    const concurrentToken = createConcurrentSession(token)
+
+    await request(app)
+      .get('/rest/user/change-password?current=old-password&new=new-password&repeat=new-password')
+      .set({ Authorization: 'Bearer ' + token })
+      .expect(200)
+
+    await request(app)
+      .get('/api/Users')
+      .set({ Authorization: 'Bearer ' + concurrentToken })
+      .expect(401)
+
+    const freshSession = await login(app, { email: 'session-change@be.rt', password: 'new-password' })
+    await request(app)
+      .get('/api/Users')
+      .set({ Authorization: 'Bearer ' + freshSession.token })
+      .expect(200)
   })
 
   void it('GET password change with passing wrong current password', async () => {
@@ -104,6 +143,34 @@ void describe('/rest/user/change-password', () => {
 })
 
 void describe('/rest/user/reset-password', () => {
+  void it('revokes every active session after resetting a password', async () => {
+    const email = 'jim@' + config.get<string>('application.domain')
+    const { token } = await login(app, { email, password: 'ncc-1701' })
+    const concurrentToken = createConcurrentSession(token)
+
+    await request(app)
+      .post('/rest/user/reset-password')
+      .set({ Authorization: 'Bearer ' + token, 'content-type': 'application/json' })
+      .send({
+        email,
+        answer: 'Samuel',
+        new: 'session-reset-password',
+        repeat: 'session-reset-password'
+      })
+      .expect(200)
+
+    await request(app)
+      .get('/api/Users')
+      .set({ Authorization: 'Bearer ' + concurrentToken })
+      .expect(401)
+
+    const freshSession = await login(app, { email, password: 'session-reset-password' })
+    await request(app)
+      .get('/api/Users')
+      .set({ Authorization: 'Bearer ' + freshSession.token })
+      .expect(200)
+  })
+
   void it('POST password reset for Jim with correct answer to his security question', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
