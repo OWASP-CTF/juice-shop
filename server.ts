@@ -435,6 +435,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Feedback is written to a table that the landing page carousel and the support console both
+     replay to other people, so the shop has to be able to say who wrote a row. An anonymous
+     write endpoint into that table cannot be attributed, cannot be revoked per author and gives
+     an abuse report nothing to act on, so a session is required. */
+  app.post('/api/Feedbacks', security.isAuthorized())
   /* Feedback ownership and rating are server decisions, not client-controlled attributes. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
     if (req.body === Object(req.body)) {
