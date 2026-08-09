@@ -92,7 +92,6 @@ import { getUserProfile } from './routes/userProfile'
 import { serveAngularClient } from './routes/angular'
 import { resetPassword } from './routes/resetPassword'
 import { serveLogFiles } from './routes/logfileServer'
-import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
 import { countryMapping } from './routes/countryMapping'
@@ -265,10 +264,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
+  /* The ftp folder held forgotten working files, among them the archived manifests naming the
+     compromised eslint-scope build. Browsing it and downloading from it are both gone; the
+     quarantine route stays, since it is reached by its own path and serves nothing else. */
+  app.use('/ftp/quarantine/:file', serveQuarantineFiles())
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
