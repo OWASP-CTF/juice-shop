@@ -49,16 +49,13 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
+    // The username never reaches the template engine: it is HTML-encoded and placed into the
+    // already rendered markup, so it can be read neither as Pug nor as markup.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      // Spliced into the Pug source, so escape HTML and neutralize Pug's #{...} interpolation.
-      username = entities.encode(username).replace(/#/g, '&num;')
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -84,7 +81,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
