@@ -237,7 +237,9 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox stays deployed and reachable; being unlisted was never the control.
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line web3SandboxChallenge
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
