@@ -6,7 +6,7 @@
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt as expressJwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -69,20 +69,22 @@ export const cutOffPoisonNullByte = (str: string) => {
 // `alg` field inside the (attacker-controlled) token itself allows forged
 // tokens - e.g. signed with `alg: none` or resigned with the RSA public key
 // used as an HMAC secret - to be accepted as valid sessions.
+const SESSION_TOKEN_ALGORITHM = 'RS256'
+
 const hasExpectedJwtAlgorithm = (token?: string): boolean => {
   if (!token) {
     return false
   }
   try {
     const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString('utf8'))
-    return header?.alg === 'RS256'
+    return header?.alg === SESSION_TOKEN_ALGORITHM
   } catch {
     return false
   }
 }
 
 export const isAuthorized = () => {
-  const jwtMiddleware = expressJwt(({ secret: publicKey }) as any)
+  const jwtMiddleware = expressJwt({ secret: publicKey, algorithms: [SESSION_TOKEN_ALGORITHM] })
   return (req: Request, res: Response, next: NextFunction) => {
     if (!hasExpectedJwtAlgorithm(utils.jwtFrom(req))) {
       res.status(401).send()
@@ -91,8 +93,13 @@ export const isAuthorized = () => {
     jwtMiddleware(req, res, next)
   }
 }
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
+/* Nothing may pass, so the gate is handed a key nobody holds: a fresh 256-bit random value that
+   is discarded the moment the middleware is built. Math.random is not a source of unguessable
+   material - it is seeded from process state and its output stream can be reconstructed from a
+   handful of prior draws - and the same middleware factory is called repeatedly, so drawing the
+   "impossible" secret from it was the weakest part of a gate whose entire job is to be shut. */
+export const denyAll = () => expressJwt({ secret: crypto.randomBytes(32).toString('hex'), algorithms: [SESSION_TOKEN_ALGORITHM] })
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: SESSION_TOKEN_ALGORITHM })
 /* The pinned jws@0.2.6 exposes `verify(signature, secretOrKey)`, while the bundled @types/jws
    describes the later three-argument `verify(signature, algorithm, secretOrKey)` form. Calling the
    newer shape against this library passes the algorithm name where the key is expected, so every
