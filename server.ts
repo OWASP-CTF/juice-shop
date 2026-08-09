@@ -764,6 +764,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/profile', security.sameOriginOnly(), utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
+  /* The contract sandbox is a development facility, so the material describing it is served to
+     the development team rather than to whoever knows the key to ask for. */
+  app.use('/snippets/web3SandboxChallenge', security.isAuthorized(), security.isAdmin())
+  app.use('/snippets/fixes/web3SandboxChallenge', security.isAuthorized(), security.isAdmin())
   app.get('/snippets/:challenge', utils.asyncHandler(serveCodeSnippet()))
   app.post('/snippets/verdict', utils.asyncHandler(checkVulnLines()))
   app.get('/snippets/fixes/:key', utils.asyncHandler(serveCodeFixes()))
