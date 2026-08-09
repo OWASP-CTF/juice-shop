@@ -51,11 +51,6 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
-}
-
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -236,12 +231,6 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  /* The Web3 code sandbox is a development-only playground and must not be
-     routable in a deployed shop. */
-  // {
-  //   path: 'web3-sandbox',
-  //   loadChildren: async () => await loadWeb3SandboxModule()
-  // },
   {
     path: 'chatbot',
     component: ChatbotComponent,
