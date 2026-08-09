@@ -266,8 +266,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* The ftp/ folder is where the shop drops the invoice it generates for each order, and the
+     customer is linked straight at their own file. It is not a public share: alongside those
+     invoices sit an acquisition memo, a password-protected archive, a coupon key file and other
+     leftovers nobody meant to publish. Listing the folder handed that inventory to anyone who
+     asked, which is what turns "an unlinked file" into "a file anyone can find".
+
+     The listing is gone, and a download is only served when the requested name is an invoice
+     belonging to the order history of the customer asking for it. */
+  app.use('/ftp(?!/quarantine)/:file', security.isAuthorized(), utils.asyncHandler(servePublicFiles()))
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
