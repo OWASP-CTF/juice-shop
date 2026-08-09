@@ -68,6 +68,14 @@ export function quantityCheckBeforeBasketItemUpdate () {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+      // Unlike addBasketItem() above, this update path only ever recorded the mismatch to mark
+      // the challenge solved - it never actually rejected the request, so any authenticated
+      // user could retarget an existing basket item onto someone else's basket. Reject it the
+      // same way addBasketItem() does.
+      if (user && req.body.BasketId && user.bid != req.body.BasketId) { // eslint-disable-line eqeqeq
+        res.status(401).json({ error: 'Invalid BasketId' })
+        return
+      }
       if (req.body.quantity) {
         if (item == null) {
           throw new Error('No such item found!')

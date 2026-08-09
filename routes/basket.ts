@@ -16,12 +16,20 @@ export function retrieveBasket () {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = req.params.id
-      const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       /* jshint eqeqeq:false */
+      const user = security.authenticatedUsers.from(req)
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
-        const user = security.authenticatedUsers.from(req)
         return user && id && id !== 'undefined' && id !== 'null' && id !== 'NaN' && user.bid && user?.bid != parseInt(id, 10) // eslint-disable-line eqeqeq
       })
+      // The mismatch above was only ever used to mark the challenge solved - the basket for
+      // *any* id was still fetched and returned regardless, letting any authenticated user
+      // read another user's basket contents by guessing/incrementing the id. Deny the request
+      // once the caller's own basket id is known and doesn't match.
+      if (user?.bid && id && id !== 'undefined' && id !== 'null' && id !== 'NaN' && user.bid != parseInt(id, 10)) { // eslint-disable-line eqeqeq
+        res.status(403).json({ error: 'Not authorized to access this basket' })
+        return
+      }
+      const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       if (((basket?.Products) != null) && basket.Products.length > 0) {
         for (let i = 0; i < basket.Products.length; i++) {
           basket.Products[i].name = req.__(basket.Products[i].name)
