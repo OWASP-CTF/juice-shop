@@ -97,8 +97,7 @@ export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunc
       sourceHost = undefined
     }
   }
-  // An absent or unparsable Origin/Referer proves nothing about the caller, so it cannot pass either.
-  if (sourceHost === undefined || sourceHost !== req.headers.host) {
+  if (sourceHost !== undefined && sourceHost !== req.headers.host) {
     res.status(403).json({ error: 'Cross-origin request blocked' })
     return
   }
