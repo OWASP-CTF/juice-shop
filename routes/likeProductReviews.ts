@@ -8,7 +8,6 @@ import { type Request, type Response, type NextFunction } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
-import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
 export function likeProductReviews () {
@@ -20,40 +19,19 @@ export function likeProductReviews () {
     }
 
     try {
-      const review = await db.reviewsCollection.findOne({ _id: id })
-      if (!review) {
-        return res.status(404).json({ error: 'Not found' })
-      }
-
-      const likedBy = review.likedBy
-      if (likedBy.includes(user.data.email)) {
+      // One guarded update. The selector itself refuses a review this caller has already
+      // liked, so the check and the write are a single step - two requests racing each
+      // other can no longer both pass a check taken before either had written.
+      const result = await db.reviewsCollection.update(
+        { _id: id, likedBy: { $ne: user.data.email } },
+        { $inc: { likesCount: 1 }, $addToSet: { likedBy: user.data.email } }
+      )
+      const modified = (result as any)?.modified ?? (result as any)?.nModified ?? 0
+      challengeUtils.solveIf(challenges.timingAttackChallenge, () => modified > 1)
+      if (!modified) {
         return res.status(403).json({ error: 'Not allowed' })
       }
-
-      await db.reviewsCollection.update(
-        { _id: id },
-        { $inc: { likesCount: 1 } }
-      )
-
-      // The check above and the write below have to be one logical step. The delay that
-      // used to sit here held the window open long enough for a second request to pass
-      // the same check before the first had recorded its like.
-      try {
-        const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
-        const updatedLikedBy = updatedReview.likedBy
-        updatedLikedBy.push(user.data.email)
-
-        const count = updatedLikedBy.filter(email => email === user.data.email).length
-        challengeUtils.solveIf(challenges.timingAttackChallenge, () => count > 2)
-
-        const result = await db.reviewsCollection.update(
-          { _id: id },
-          { $set: { likedBy: updatedLikedBy } }
-        )
-        res.json(result)
-      } catch (err) {
-        res.status(500).json(err)
-      }
+      res.json(result)
     } catch (err) {
       res.status(400).json({ error: 'Wrong Params' })
     }
