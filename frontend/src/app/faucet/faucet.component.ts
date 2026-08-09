@@ -288,11 +288,20 @@ export class FaucetComponent implements OnInit {
         setTimeout(() => {
           this.keysService.verifyNFTWallet(this.metamaskAddress).subscribe({
             next:
-            (response) => {
-              if (response.success) {
-                this.successResponse = response.status
-                this.mintButtonDisabled = true
-              }
+            async (proof) => {
+              const signature = await signer.signMessage(proof.message)
+              this.keysService.verifyNFTWalletProof(this.metamaskAddress, proof.nonce, signature).subscribe({
+                next: (response) => {
+                  if (response.success) {
+                    this.successResponse = response.status
+                    this.mintButtonDisabled = true
+                  }
+                },
+                error: (error) => {
+                  console.error(error)
+                  this.successResponse = false
+                }
+              })
             },
             error: (error) => {
               console.error(error)

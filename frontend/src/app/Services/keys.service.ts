@@ -51,8 +51,17 @@ export class KeysService {
   }
 
   verifyNFTWallet (walletAddress: string) {
+    return this.http.post(this.host + '/walletNFTProof', { walletAddress }).pipe(
+      map((response: any) => response),
+      catchError((err) => {
+        throw err
+      })
+    )
+  }
+
+  verifyNFTWalletProof (walletAddress: string, nonce: string, signature: string) {
     const endpoint = this.host + '/walletNFTVerify'
-    const params = { walletAddress }
+    const params = { walletAddress, nonce, signature }
     return this.http.post(endpoint, params).pipe(
       map((response: any) => response),
       catchError((err) => {
