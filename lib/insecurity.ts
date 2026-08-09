@@ -52,7 +52,21 @@ export const cutOffPoisonNullByte = (str: string) => {
 }
 
 export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const requireSameOrigin = () => (req: Request, res: Response, next: NextFunction) => {
+  const source = req.headers.origin ?? req.headers.referer
+  if (typeof source !== 'string') {
+    return res.status(403).json({ error: 'Request origin is required.' })
+  }
+  try {
+    const sourceUrl = new URL(source)
+    if (sourceUrl.host !== req.headers.host) {
+      return res.status(403).json({ error: 'Cross-origin account update rejected.' })
+    }
+  } catch {
+    return res.status(403).json({ error: 'Malformed request origin.' })
+  }
+  next()
+}export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
 export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
