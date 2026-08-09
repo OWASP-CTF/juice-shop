@@ -5,6 +5,7 @@
 
 import fs from 'node:fs'
 import net from 'node:net'
+import os from 'node:os'
 import dns from 'node:dns/promises'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
@@ -15,34 +16,46 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
-// Blocks the classic SSRF bypasses (loopback, link-local/cloud-metadata,
-// RFC1918 private ranges, IPv6 equivalents) so the imageUrl feature cannot
-// be abused to make the server issue requests to itself or other internal
-// hosts. See OWASP SSRF Prevention Cheat Sheet.
+class UnsafeUrlError extends Error {}
+
+// Every address this host answers to (loopback plus all of its own network
+// interfaces), so a request that targets "ourselves" is recognized no
+// matter which hostname/alias (localhost, 127.0.0.1, a Docker service name
+// that resolves back to this very container, ...) was used to reach it.
+function ownAddresses (): Set<string> {
+  const addresses = new Set<string>(['127.0.0.1', '::1', '0.0.0.0', '::'])
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const iface of ifaces ?? []) {
+      addresses.add(iface.address)
+    }
+  }
+  return addresses
+}
+
+// Blocks requests aimed back at the server itself (any of its own
+// addresses, under whatever hostname was used to reach them) plus
+// link-local/cloud-metadata addresses, so the imageUrl feature cannot be
+// abused to make the server attack itself or reach cloud metadata.
+// See OWASP SSRF Prevention Cheat Sheet.
 function isForbiddenAddress (address: string): boolean {
   const type = net.isIP(address)
+  if (type === 0) return true // not a literal IP -> treat as unsafe
+  const normalized = type === 6 ? address.toLowerCase() : address
+  if (ownAddresses().has(normalized)) return true // the server attacking itself
   if (type === 4) {
-    const octets = address.split('.').map(Number)
-    const [a, b] = octets
+    const [a, b] = address.split('.').map(Number)
     if (a === 127) return true // loopback
-    if (a === 10) return true // RFC1918
-    if (a === 172 && b >= 16 && b <= 31) return true // RFC1918
-    if (a === 192 && b === 168) return true // RFC1918
-    if (a === 169 && b === 254) return true // link-local incl. cloud metadata (169.254.169.254)
-    if (a === 100 && b >= 64 && b <= 127) return true // carrier-grade NAT
     if (a === 0) return true // "this" network
+    if (a === 169 && b === 254) return true // link-local incl. cloud metadata (169.254.169.254)
     if (a >= 224) return true // multicast/reserved
     return false
   }
-  if (type === 6) {
-    const normalized = address.toLowerCase()
-    if (normalized === '::1' || normalized === '::') return true
-    if (normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')) return true // link-local / unique-local
-    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (mapped != null) return isForbiddenAddress(mapped[1])
-    return false
-  }
-  return true // not a valid literal IP -> treat as unsafe
+  // type === 6
+  if (normalized === '::1' || normalized === '::') return true
+  if (normalized.startsWith('fe80:')) return true // link-local
+  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+  if (mapped != null) return isForbiddenAddress(mapped[1])
+  return false
 }
 
 async function assertUrlIsSafe (rawUrl: string): Promise<void> {
@@ -50,27 +63,32 @@ async function assertUrlIsSafe (rawUrl: string): Promise<void> {
   try {
     parsed = new URL(rawUrl)
   } catch {
-    throw new Error('invalid url')
+    throw new UnsafeUrlError('invalid url')
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('unsupported protocol for url')
+    throw new UnsafeUrlError('unsupported protocol for url')
   }
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '')
   if (hostname.toLowerCase() === 'localhost') {
-    throw new Error('requests to localhost are not allowed')
+    throw new UnsafeUrlError('requests to localhost are not allowed')
   }
   const literalIpType = net.isIP(hostname)
   if (literalIpType !== 0) {
     if (isForbiddenAddress(hostname)) {
-      throw new Error('requests to internal/private addresses are not allowed')
+      throw new UnsafeUrlError('requests to internal addresses are not allowed')
     }
     return
   }
   // Resolve the hostname ourselves and vet every address it can return so
   // DNS rebinding cannot be used to reach internal hosts either.
-  const records = await dns.lookup(hostname, { all: true, verbatim: true })
-  if (records.length === 0 || records.some(record => isForbiddenAddress(record.address))) {
-    throw new Error('requests to internal/private addresses are not allowed')
+  try {
+    const records = await dns.lookup(hostname, { all: true, verbatim: true })
+    if (records.length === 0 || records.some(record => isForbiddenAddress(record.address))) {
+      throw new UnsafeUrlError('requests to internal addresses are not allowed')
+    }
+  } catch (error) {
+    if (error instanceof UnsafeUrlError) throw error
+    throw new UnsafeUrlError('url could not be resolved')
   }
 }
 
@@ -78,12 +96,15 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
           await assertUrlIsSafe(url)
-          const response = await fetch(url, { redirect: 'error' })
+          const response = await fetch(url)
+          // An initially-safe URL could still redirect to an internal
+          // address; only trust the request once we know where it landed.
+          await assertUrlIsSafe(response.url)
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
@@ -93,13 +114,17 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
-          try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
+          if (error instanceof UnsafeUrlError) {
+            logger.warn(`Blocked profile image URL from user ${loggedInUser.data.id} as a likely SSRF attempt: ${utils.getErrorMessage(error)}`)
+          } else {
+            try {
+              const user = await UserModel.findByPk(loggedInUser.data.id)
+              await user?.update({ profileImage: url })
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            } catch (error) {
+              next(error)
+              return
+            }
           }
         }
       } else {
