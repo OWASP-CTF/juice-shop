@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -41,8 +42,18 @@ export function addBasketItem () {
     if (user && requestedBasketId && requestedBasketId !== 'undefined' && Number(user.bid) !== Number(requestedBasketId)) {
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
+      const requestedProductId = Number(productIds[productIds.length - 1])
+      if (!Number.isInteger(requestedProductId) || requestedProductId < 1) {
+        res.status(400).json({ error: 'Invalid product.' })
+        return
+      }
+      const onSale = await ProductModel.findOne({ where: { id: requestedProductId } })
+      if (onSale == null) {
+        res.status(400).json({ error: 'This product is no longer available.' })
+        return
+      }
       const basketItem = {
-        ProductId: productIds[productIds.length - 1],
+        ProductId: requestedProductId,
         BasketId: requestedBasketId,
         quantity: quantities[quantities.length - 1]
       }
