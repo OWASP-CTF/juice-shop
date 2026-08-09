@@ -90,6 +90,14 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  // A negative quantity passes both the limit and the stock comparison below and
+  // subtracts from the order total, so it has to be rejected up front.
+  const requested = Number(quantity)
+  if (!Number.isInteger(requested) || requested < 1) {
+    res.status(400).json({ error: res.__('Quantity must be a positive whole number.') })
+    return
+  }
+
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')
