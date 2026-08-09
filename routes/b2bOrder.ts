@@ -9,16 +9,7 @@ import * as security from '../lib/insecurity'
 
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
-    const orderLinesData = body.orderLinesData
-    // Order lines are data in the customer specific JSON format, never executable code.
-    if (typeof orderLinesData === 'string' && orderLinesData !== '') {
-      try {
-        JSON.parse(orderLinesData)
-      } catch {
-        res.status(400).json({ error: 'orderLinesData must be valid JSON' })
-        return
-      }
-    }
+    // Order lines are payload data, never executable code, and nothing here interprets them.
     res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
   }
 
