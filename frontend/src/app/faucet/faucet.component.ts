@@ -285,8 +285,13 @@ export class FaucetComponent implements OnInit {
         this.translateService.get('NFT_MINT_TEXT_SUCCESS').subscribe((translatedString: string) => {
           this.nftMintText = translatedString
         })
+        // Prove ownership of the connected wallet by signing a challenge
+        // message so the backend can't be tricked into accepting an
+        // address that merely appeared in the public mint event log.
+        const ownershipMessage = `Verify ownership of wallet ${this.metamaskAddress} to claim The Enchanted Honey Pot NFT`
+        const signature = await signer.signMessage(ownershipMessage)
         setTimeout(() => {
-          this.keysService.verifyNFTWallet(this.metamaskAddress).subscribe({
+          this.keysService.verifyNFTWallet(this.metamaskAddress, signature).subscribe({
             next:
             (response) => {
               if (response.success) {

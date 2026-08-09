@@ -120,7 +120,16 @@ export class WalletWeb3Component implements OnInit {
 
       const provider = await connect({ connector: new InjectedConnector() })
       this.metamaskAddress = provider.account
-      this.keysService.walletAddressSend(this.metamaskAddress).subscribe(
+
+      // Prove ownership of the connected wallet by signing a challenge
+      // message so the backend can't be tricked into monitoring (and later
+      // crediting) an address the caller doesn't actually control.
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum)
+      const signer = web3Provider.getSigner()
+      const ownershipMessage = `Verify ownership of wallet ${this.metamaskAddress} to monitor it for the Wallet Depletion challenge`
+      const signature = await signer.signMessage(ownershipMessage)
+
+      this.keysService.walletAddressSend(this.metamaskAddress, signature).subscribe(
         {
           next: (response) => {
             if (response.success) {
