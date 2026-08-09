@@ -38,8 +38,11 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      const metamaskAddress = req.body.walletAddress
-      if (addressesMinted.has(metamaskAddress)) {
+      const metamaskAddress = typeof req.body.walletAddress === 'string' ? req.body.walletAddress : ''
+      // The client only asserts which address minted; the server accepts it exclusively when it
+      // observed the on-chain NFTMinted event for that address itself. Without a working chain
+      // subscription nothing has been observed, so the check fails closed.
+      if (/^0x[0-9a-fA-F]{40}$/.test(metamaskAddress) && isEventListenerCreated && addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })
