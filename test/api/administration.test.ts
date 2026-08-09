@@ -29,13 +29,11 @@ void describe('/rest/admin/application-version', () => {
 })
 
 void describe('/rest/admin/application-configuration', () => {
-  void it('GET application configuration', async () => {
+  void it('GET application configuration is forbidden for anonymous users', async () => {
     const res = await request(app)
       .get('/rest/admin/application-configuration')
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.config, 'object')
-    assert.ok(res.body.config !== null)
+    assert.ok(res.status === 401 || res.status === 403)
+    assert.equal(res.body.config, undefined)
   })
 })
