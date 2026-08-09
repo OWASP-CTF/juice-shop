@@ -20,10 +20,17 @@ contract HoneyPotNFT is ERC721, Ownable {
     constructor() ERC721("The Enchanted Honey Pot", "EHP") {}
 
     function mintNFT() external {
-        token.transferFrom(msg.sender, address(this), mintPrice);
-        _safeMint(msg.sender, totalSupply);
-        totalSupply = totalSupply.add(1); // vuln-code-snippet neutral-line nftMintChallenge
-        emit NFTMinted(msg.sender, totalSupply - 1); // vuln-code-snippet vuln-line nftMintChallenge
+        /* transferFrom reports failure by returning false. Ignoring that return value meant the
+           NFT was minted whether or not the BEE payment ever settled - the caller only had to make
+           the transfer fail. The mint is the effect of a payment, so the payment is checked first
+           and the mint only happens if it succeeded. */
+        require(token.transferFrom(msg.sender, address(this), mintPrice), "BEE payment failed");
+        uint256 tokenId = totalSupply;
+        totalSupply = totalSupply.add(1);
+        _safeMint(msg.sender, tokenId);
+        /* The id is taken before the counter moves. Deriving it afterwards as an unchecked
+           totalSupply - 1 wrapped to 2^256-1 on the very first mint. */
+        emit NFTMinted(msg.sender, tokenId);
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
