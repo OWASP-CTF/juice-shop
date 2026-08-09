@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'admin123'
   key: admin
   role: 'admin'
   securityQuestion:

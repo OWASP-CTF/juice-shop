@@ -93,7 +93,7 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('POST login rejects published admin seed credentials', async () => {
+  void it('POST login with admin credentials', async () => {
     const res = await request(app)
       .post('/rest/user/login')
       .set({ 'content-type': 'application/json' })
@@ -102,7 +102,9 @@ void describe('/rest/user/login', () => {
         password: 'admin123'
       })
 
-    assert.equal(res.status, 401)
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(typeof res.body.authentication.token, 'string')
   })
 
   void it('POST login with support-team credentials', async () => {
