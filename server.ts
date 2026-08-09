@@ -228,6 +228,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The spacer images below were laid out by the token sale screen and by the web3 code sandbox.
+     Neither screen is part of the released application any more, so neither asset is part of the
+     shipped bundle, and a request for one is answered as what it is - a request for something the
+     shop does not serve. Removing the file alone is not enough: everything mounted on this path
+     still sees the request, so leftover assets of a withdrawn screen are refused here explicitly
+     rather than falling through the rest of the chain. */
+  const withdrawnScreenAssets = new Set(['11px.png', '56px.png'])
+  app.use('/assets/public/images/padding/:file', (req: Request, res: Response, next: NextFunction) => {
+    if (withdrawnScreenAssets.has(req.params.file)) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
