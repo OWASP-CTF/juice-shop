@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -51,10 +51,24 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+/* Session tokens are signed RS256 and the matching key is public, so verification has to pin the
+   algorithm: without it a token could be HMAC-signed with the published public key, or presented
+   unsigned as `alg: none`, and still be accepted. */
+const jwtSigningAlgorithm = 'RS256'
+
+export const isAuthorized = () => expressjwt({ secret: publicKey, algorithms: [jwtSigningAlgorithm] })
+export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: ['HS256'] })
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtSigningAlgorithm })
+export const verify = (token: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    return jws.verify(token, jwtSigningAlgorithm, publicKey)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
