@@ -80,12 +80,12 @@ describe('KeysService', () => {
   })
 
   it('should post walletAddressSend directly to the rest api', () => {
-    service.walletAddressSend('walletAddress').subscribe((res) => {
+    service.walletAddressSend('walletAddress', 'signature').subscribe((res) => {
       expect(res).toBe('apiResponse')
     })
     const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletExploitAddress')
     expect(req.request.method).toBe('POST')
-    expect(req.request.body).toEqual({ walletAddress: 'walletAddress' })
+    expect(req.request.body).toEqual({ walletAddress: 'walletAddress', signature: 'signature' })
     req.flush('apiResponse')
   })
 
@@ -131,7 +131,7 @@ describe('KeysService', () => {
 
   it('should handle error in walletAddressSend', () => {
     let capturedError: any
-    service.walletAddressSend('walletAddress').subscribe({ next: () => expect(true).toBe(false), error: (e) => { capturedError = e } })
+    service.walletAddressSend('walletAddress', 'signature').subscribe({ next: () => expect(true).toBe(false), error: (e) => { capturedError = e } })
     const req = httpMock.expectOne('http://localhost:3000/rest/web3/walletExploitAddress')
     req.error(new ErrorEvent('Request failed'), { status: 500, statusText: 'Internal Server Error' })
     expect(capturedError.status).toBe(500)

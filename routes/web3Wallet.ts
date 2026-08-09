@@ -10,9 +10,37 @@ const web3WalletAddress = '0x413744D59d31AFDC2889aeE602636177805Bd7b0'
 const walletsConnected = new Set()
 let isEventListenerCreated = false
 
+export function walletOwnershipMessage (walletAddress: string) {
+  return `Verify ownership of wallet ${walletAddress} to monitor it for the Wallet Depletion challenge`
+}
+
 export function contractExploitListener () {
   return async (req: Request, res: Response) => {
     const metamaskAddress = req.body.walletAddress
+    const signature = req.body.signature
+
+    // Merely naming a wallet address (e.g. one seen exploiting the contract
+    // in the public on-chain event log) must not be enough to get credit
+    // for it. The caller has to prove they actually control that wallet by
+    // signing a challenge message with its private key, otherwise anyone
+    // could watch the chain for someone else's genuine exploit and claim
+    // it as their own by just POSTing that address here.
+    if (typeof metamaskAddress !== 'string' || typeof signature !== 'string') {
+      res.status(400).json({ success: false, message: 'walletAddress and signature are required' })
+      return
+    }
+    try {
+      const { verifyMessage } = await import('ethers')
+      const recoveredAddress = verifyMessage(walletOwnershipMessage(metamaskAddress), signature)
+      if (recoveredAddress.toLowerCase() !== metamaskAddress.toLowerCase()) {
+        res.status(400).json({ success: false, message: 'Wallet ownership could not be verified' })
+        return
+      }
+    } catch (error) {
+      res.status(400).json({ success: false, message: 'Wallet ownership could not be verified' })
+      return
+    }
+
     walletsConnected.add(metamaskAddress)
     try {
       if (!isEventListenerCreated) {
