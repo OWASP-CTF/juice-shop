@@ -356,8 +356,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* BasketItems: API only accessible for authenticated users */
   app.use('/api/BasketItems', security.isAuthorized())
   app.use('/api/BasketItems/:id', security.isAuthorized())
-  /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
+  /* Feedbacks: GET allowed for the feedback carousel. Submitting is tied to an account:
+     feedback is user-generated content that the shop republishes to every visitor, so it needs
+     an identity behind it for accountability, removal and per-account abuse limits. Accepting it
+     anonymously means anything a stranger posts is served to all users with nobody answerable
+     for it. */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  app.post('/api/Feedbacks', security.isAuthorized(), security.appendUserId())
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')
