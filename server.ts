@@ -228,6 +228,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* These two spacer images are served by no screen the shop actually ships: one belongs to an
+     internal contract sandbox, the other to a token sale that has not been announced. Handing
+     them out is what tells an outsider those screens are there at all - the existence of the
+     unannounced sale, and of an internal development tool, leaks from nothing more than a request
+     for a one-pixel image. The shop stops serving them; both screens are otherwise untouched. */
+  app.use(['/assets/public/images/padding/11px.png', '/assets/public/images/padding/56px.png'], (req: Request, res: Response) => {
+    res.status(404).send()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
