@@ -19,8 +19,8 @@ import { ordersCollection } from '../data/mongodb'
 const INVOICE_PATTERN = /^order_[\w-]+\.pdf$/
 
 export function servePublicFiles () {
-  return async ({ params, ...req }: Request, res: Response, next: NextFunction) => {
-    const file = params.file
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const file = req.params.file
 
     if (!file || file.includes('/') || /%00|\0/i.test(file)) {
       res.status(403)
@@ -35,7 +35,7 @@ export function servePublicFiles () {
       return
     }
 
-    const user = security.authenticatedUsers.from(req as Request)
+    const user = security.authenticatedUsers.from(req)
     if (!user?.data?.email) {
       res.status(401).json({ error: 'You have to be logged in to download an invoice' })
       return
