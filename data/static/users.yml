@@ -28,7 +28,7 @@
       expYear: 2086
 -
   email: jim
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'ncc-1701'
   key: jim
   role: 'customer'
   walletBalance: 100
