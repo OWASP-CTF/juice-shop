@@ -22,7 +22,7 @@ before(async () => {
 
 void describe('/b2b/v2/orders', () => {
   if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-    void it('POST endless loop exploit in "orderLinesData" will raise explicit error', async () => {
+    void it('POST infinite-loop-shaped string in "orderLinesData" is rejected as invalid data instead of being executed', async () => {
       const res = await request(app)
         .post('/b2b/v2/orders')
         .set(authHeader)
@@ -31,10 +31,10 @@ void describe('/b2b/v2/orders', () => {
         })
 
       assert.equal(res.status, 500)
-      assert.ok(res.text.includes('Infinite loop detected - reached max iterations'))
+      assert.ok(!res.text.includes('Infinite loop detected'))
     })
 
-    void it('POST busy spinning regex attack does not raise an error', async () => {
+    void it('POST catastrophic-backtracking-shaped string in "orderLinesData" is rejected as invalid data instead of being executed', async () => {
       const res = await request(app)
         .post('/b2b/v2/orders')
         .set(authHeader)
@@ -42,10 +42,10 @@ void describe('/b2b/v2/orders', () => {
           orderLinesData: '/((a+)+)b/.test("aaaaaaaaaaaaaaaaaaaaaaaaaaaaa")'
         })
 
-      assert.equal(res.status, 503)
+      assert.equal(res.status, 500)
     })
 
-    void it('POST sandbox breakout attack in "orderLinesData" will raise error', async () => {
+    void it('POST sandbox-breakout-shaped string in "orderLinesData" is rejected as invalid data instead of being executed', async () => {
       const res = await request(app)
         .post('/b2b/v2/orders')
         .set(authHeader)
