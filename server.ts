@@ -769,6 +769,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/snippets/fixes/:key', utils.asyncHandler(serveCodeFixes()))
   app.post('/snippets/fixes', utils.asyncHandler(checkCorrectFix()))
 
+  /* The web3 sandbox compiles and runs smart-contract code on demand. Dropping its client-side
+     route is not enough on its own: the single-page app is served for every unmatched path, so
+     the screen stayed reachable by typing its address. Refuse the path here too. */
+  app.use('/web3-sandbox', (req: Request, res: Response) => {
+    res.status(404).send()
+  })
+
   app.use(utils.asyncHandler(serveAngularClient()))
 
   /* Error Handling */
