@@ -14,20 +14,18 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
-
-    // Authenticate before anything else is evaluated or written.
-    if (!user?.data?.email) {
-      return res.status(401).json({ error: 'Authentication required' })
-    }
-
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
       () => user?.data?.email !== req.body.author
     )
 
+    if (!user?.data?.email) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+
     try {
       await reviewsCollection.insert({
-        product: Number(req.params.id),
+        product: req.params.id,
         message: req.body.message,
         author: user.data.email,
         likesCount: 0,
