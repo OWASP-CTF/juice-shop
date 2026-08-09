@@ -35,14 +35,19 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
         fs.write(fd, buffer, 0, buffer.length, null, function (err) {
           if (err != null) { next(err) }
           fs.close(fd, function () {
+            const uploadRoot = path.resolve('uploads/complaints')
             fs.createReadStream(tempFile)
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
                 const absolutePath = path.resolve('uploads/complaints/' + fileName)
                 challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                // An entry name is a name, not a path out of the folder it is being written into.
+                // The old check only asked whether the destination was somewhere under the project,
+                // which every ../ escape still satisfies.
+                const relativeToRoot = path.relative(uploadRoot, absolutePath)
+                if (relativeToRoot !== '' && !relativeToRoot.startsWith('..') && !path.isAbsolute(relativeToRoot)) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
