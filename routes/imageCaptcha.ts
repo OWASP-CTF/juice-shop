@@ -28,7 +28,9 @@ export function imageCaptchas () {
       }
       const imageCaptchaInstance = ImageCaptchaModel.build(imageCaptcha)
       await imageCaptchaInstance.save()
-      res.json(imageCaptcha)
+      // Only the rendered image goes back to the caller. The text it depicts is the
+      // answer, and returning it made reading the CAPTCHA unnecessary.
+      res.json({ image: captcha.data })
     } catch (error) {
       res.status(400).send(res.__('Unable to create CAPTCHA. Please try again.'))
     }
@@ -49,7 +51,9 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // An absent CAPTCHA used to satisfy this check, so skipping the request for one - or
+    // simply waiting for it to age out - passed verification without answering anything.
+    if (captchas[0] && req.body.answer === captchas[0].answer) {
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
