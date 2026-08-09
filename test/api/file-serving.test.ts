@@ -201,9 +201,21 @@ void describe('Hidden URL', () => {
     assert.equal(res.status, 200)
   })
 
+  void it('GET access log directory is not publicly available', async () => {
+    const res = await request(app)
+      .get('/support/logs')
+    assert.equal(res.status, 404)
+  })
+
   void it('GET access log files is not publicly available', async () => {
     const res = await request(app)
       .get('/support/logs/access.log.' + utils.toISO8601(new Date()))
+    assert.equal(res.status, 404)
+  })
+
+  void it('GET arbitrary files from the log directory is not publicly available', async () => {
+    const res = await request(app)
+      .get('/support/logs/audit.json')
     assert.equal(res.status, 404)
   })
 })
