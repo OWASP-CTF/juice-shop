@@ -10,7 +10,7 @@ import type { Express } from 'express'
 import config from 'config'
 import path from 'node:path'
 import { createTestApp } from './helpers/setup'
-import { login } from './helpers/auth'
+import { login, register } from './helpers/auth'
 
 let app: Express
 
@@ -35,6 +35,21 @@ void describe('/rest/user/data-export', () => {
     const parsedData = JSON.parse(res.body.userData)
     assert.equal(parsedData.username, 'bkimminich')
     assert.equal(parsedData.email, 'bjoern.kimminich@gmail.com')
+  })
+
+  void it('Export data excludes orders of a user with the same masked email', async () => {
+    const email = 'admun@' + config.get<string>('application.domain')
+    await register(app, { email, password: 'admun123' })
+    const { token } = await login(app, { email, password: 'admun123' })
+
+    const res = await request(app)
+      .post('/rest/user/data-export')
+      .set({ Authorization: 'Bearer ' + token, 'content-type': 'application/json' })
+      .send({ format: '1' })
+
+    assert.equal(res.status, 200)
+    const parsedData = JSON.parse(res.body.userData)
+    assert.deepEqual(parsedData.orders, [])
   })
 
   void it('Export data when CAPTCHA requested need right answer', async () => {
