@@ -21,9 +21,7 @@ export function addMemory () {
 
 export function getMemories () {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const memories = await MemoryModel.findAll({
-      include: [{ model: UserModel, attributes: ['id', 'username', 'profileImage'] }]
-    })
+    const memories = await MemoryModel.findAll({ include: [UserModel] })
     res.status(200).json({ status: 'success', data: memories })
   }
 }

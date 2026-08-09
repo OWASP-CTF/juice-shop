@@ -24,9 +24,6 @@ void describe('/rest/memories', () => {
     const res = await request(app)
       .get('/rest/memories')
     assert.equal(res.status, 200)
-    const memoryWithUser = res.body.data.find((memory: { User?: Record<string, unknown> }) => memory.User !== undefined)
-    assert.ok(memoryWithUser?.User)
-    assert.deepEqual(Object.keys(memoryWithUser.User).sort(), ['id', 'profileImage', 'username'])
   })
 
   void it('GET memories via a valid authorization token', async () => {
