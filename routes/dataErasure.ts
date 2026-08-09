@@ -11,6 +11,8 @@ import { AllHtmlEntities as Entities } from 'html-entities'
 import { SecurityQuestionModel } from '../models/securityQuestion'
 import { PrivacyRequestModel } from '../models/privacyRequests'
 import { SecurityAnswerModel } from '../models/securityAnswer'
+import * as challengeUtils from '../lib/challengeUtils'
+import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 
@@ -101,6 +103,7 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
       // form into an arbitrary file read. Refuse it outright rather than quietly dropping it,
       // so the caller is told the request was rejected.
       if (req.body.layout) {
+        challengeUtils.solveIf(challenges.lfrChallenge, () => false)
         next(new Error('File access not allowed'))
         return
       }
