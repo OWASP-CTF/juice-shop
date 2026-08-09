@@ -405,6 +405,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    /* Public self-registration must never be able to grant a role other than the default
+       customer one - accepting a caller-supplied role (or silently discarding it while
+       still reporting success) would let anyone register as an administrator. Reject the
+       request outright instead of quietly downgrading it, so the rejection is visible to
+       the caller and not just to internal challenge bookkeeping. */
+    if (req.body.role !== undefined && req.body.role !== security.roles.customer) {
+      res.status(400).send(res.__('Invalid role for user registration.'))
+      return
+    }
+    req.body.role = security.roles.customer
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
         req.body.email = req.body.email.trim()
