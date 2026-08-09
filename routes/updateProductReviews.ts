@@ -18,10 +18,15 @@ export function updateProductReviews () {
       res.status(401).json({ error: 'Not authenticated' })
       return
     }
+    const id = req.body.id
+    if (typeof id !== 'string') { // prevent NoSQL operator injection (e.g. { "$ne": -1 }) via the id field
+      res.status(400).json({ error: 'Invalid review id' })
+      return
+    }
     db.reviewsCollection.update( // vuln-code-snippet neutral-line forgedReviewChallenge
-      { _id: req.body.id, author: user.data.email }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
-      { $set: { message: req.body.message } },
-      { multi: true } // vuln-code-snippet vuln-line noSqlReviewsChallenge
+      { _id: id, author: user.data.email }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
+      { $set: { message: req.body.message } }
+
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         challengeUtils.solveIf(challenges.noSqlReviewsChallenge, () => { return result.modified > 1 }) // vuln-code-snippet hide-line
