@@ -44,15 +44,16 @@ const ProductModelInit = (sequelize: Sequelize) => {
         type: DataTypes.STRING,
         set (description: string) {
           if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
+            // Track attempted exploitation for the scoreboard, but never persist
+            // unsanitized markup regardless of challenge/safety-mode state below.
             challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
               return utils.contains(
                 description,
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            description = security.sanitizeSecure(description)
           }
+          description = security.sanitizeSecure(description)
           this.setDataValue('description', description)
         }
       },

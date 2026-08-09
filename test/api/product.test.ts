@@ -55,7 +55,7 @@ void describe('/api/Products', () => {
   })
 
   if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-    void it('POST new product does not filter XSS attacks', async () => {
+    void it('POST new product sanitizes XSS attacks even via the raw API', async () => {
       const res = await request(app)
         .post('/api/Products')
         .set(authHeader)
@@ -66,7 +66,7 @@ void describe('/api/Products', () => {
           image: 'xss3juice.jpg'
         })
       assert.ok(res.headers['content-type']?.includes('application/json'))
-      assert.equal(res.body.data.description, '<iframe src="javascript:alert(`xss`)">')
+      assert.ok(!res.body.data.description.includes('<iframe'))
     })
   }
 })
