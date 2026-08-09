@@ -9,19 +9,15 @@ interface Token {
 
 contract BeeFaucet {
     Token public token = Token(0x36435796Ca9be2bf150CE0dECc2D8Fab5C4d6E13);
-    uint256 public balance = 200;
+    uint8 public balance = 200;
 
-    /* The balance is checked before it is spent, not afterwards. Comparing an unsigned balance
-       against zero is always true, so the old check could never reject anything, and holding the
-       balance in a uint8 meant a large withdrawal wrapped the counter around instead of failing. */
-    function withdraw(uint256 amount) public {
-        require(amount > 0, "Withdrawal amount must be positive");
-        require(amount <= balance, "Withdrew more than the account balance!");
+    function withdraw(uint8 amount) public {
         balance -= amount;
-        require(token.transfer(msg.sender, amount * 1000000000000000000), "BEE transfer failed");
+        require(balance >= 0, "Withdrew more than the account balance!");
+        token.transfer(msg.sender, uint256(amount) * 1000000000000000000);
     }
 
-    function getBalance() public view returns (uint256) {
+    function getBalance() public view returns (uint8) {
         return balance;
     }
 }
