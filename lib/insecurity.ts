@@ -125,6 +125,17 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   }
 }
 
+// A continue code is a bearer claim over the whole progress state, and the salts it was
+// derived from travelled with the source, so anyone could mint a code asserting any
+// progress they liked and have it applied. The salts are drawn per process instead: a
+// code this instance handed out still applies back to it, one minted anywhere else does
+// not decode to anything.
+export const continueCodeSalts = {
+  challenges: crypto.randomBytes(24).toString('hex'),
+  findIt: crypto.randomBytes(24).toString('hex'),
+  fixIt: crypto.randomBytes(24).toString('hex')
+}
+
 export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }

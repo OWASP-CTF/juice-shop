@@ -19,10 +19,11 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
       // Always sanitize: this header is caller-controlled and the value is rendered
       // back to the user later.
       lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
+      // Judge the address that is actually stored and shown, not the raw header.
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
       if (!lastLoginIp) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }

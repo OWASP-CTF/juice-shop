@@ -63,15 +63,20 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
+  // The administration screen, the web3 sandbox and the token sale page are no longer
+  // part of the application, so their visit markers are gone with them. Each keyed off
+  // the URL of a spacer image, and this middleware is mounted on /assets/i18n and the
+  // image folders too, so any caller could claim the visit by asking for the image -
+  // no page needed, and none of those pages exist anymore to be visited.
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
   challengeUtils.solveIf(challenges.securityPolicyChallenge, () => { return utils.endsWith(url, '/security.txt') })
   challengeUtils.solveIf(challenges.missingEncodingChallenge, () => { return utils.endsWith(url.toLowerCase(), '%e1%93%9a%e1%98%8f%e1%97%a2-%23zatschi-%23whoneedsfourlegs-1572600969477.jpg') })
-  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return url.match(/access\.log(0-9-)*/) })
+  // No log file is served anywhere anymore, so a request whose path merely mentions one
+  // discloses nothing. This middleware is mounted on /assets/i18n and the image folders
+  // as well, and Express strips the mount path before this reads req.url, so the old
+  // marker fired for /assets/i18n/access.log just as readily as for a real log download.
   next()
 }
 

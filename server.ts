@@ -413,6 +413,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* Registration decides the role, not the registrant. The generated endpoint writes
+     whatever attributes the body carries, so a role sent along with the credentials used
+     to be persisted verbatim - the later rewrite of context.instance only ever changed
+     what the response showed, never the stored row. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body && typeof req.body === 'object') {
+      delete req.body.role
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
