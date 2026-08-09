@@ -9,6 +9,9 @@ import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
 const addressesMinted = new Set<string>()
+/* Which account a minting address has been credited to, so a mint cannot be claimed twice or
+   claimed by somebody who does not hold the wallet. */
+const claimedBy = new Map<string, number>()
 let isEventListenerCreated = false
 
 /* A wallet address arriving in a request body is a claim, not a proof. Anything the server is
@@ -64,8 +67,19 @@ export function walletNFTVerify () {
         return
       }
 
+      /* An address that has minted is credited to the first account that names it, and stays
+         bound to that account. Without this the set is a shared pool: the addresses that minted
+         are published on chain, so any signed-in customer could read one off the ledger, present
+         it here and be credited for somebody else's mint -- and because the entry was then
+         removed, the account that actually owns the address could no longer claim it. */
+      const claimant = claimedBy.get(metamaskAddress)
+      if (claimant !== undefined && claimant !== user.data.id) {
+        res.status(403).json({ success: false, message: 'This wallet address is already associated with another account.' })
+        return
+      }
+
       if (addressesMinted.has(metamaskAddress)) {
-        addressesMinted.delete(metamaskAddress)
+        claimedBy.set(metamaskAddress, user.data.id)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })
       } else {
