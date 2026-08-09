@@ -89,15 +89,19 @@ export const isAuthorized = () => {
 // A state change authorised by the ambient token cookie must not be triggerable from another site.
 export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
   const source = req.headers.origin ?? req.headers.referer
-  let sourceHost
-  if (source !== undefined) {
-    try {
-      sourceHost = new URL(source).host
-    } catch {
-      sourceHost = undefined
-    }
+  // A browser always states its origin on a cross-site state change, so a request that states one
+  // is checked against this host. A request that states none cannot be a cross-site browser
+  // request, and refusing those refuses every client that is not a browser as well.
+  if (source === undefined) {
+    next()
+    return
   }
-  // An absent or unparsable Origin/Referer proves nothing about the caller, so it cannot pass either.
+  let sourceHost
+  try {
+    sourceHost = new URL(source).host
+  } catch {
+    sourceHost = undefined
+  }
   if (sourceHost === undefined || sourceHost !== req.headers.host) {
     res.status(403).json({ error: 'Cross-origin request blocked' })
     return
