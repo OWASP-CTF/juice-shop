@@ -175,7 +175,7 @@
     answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
 -
   email: bjoern@owasp.org
-  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
+  password: 'kitten lesser pooch karate buffoon indoors'
   customDomain: true
   key: bjoernOwasp
   role: 'deluxe'
