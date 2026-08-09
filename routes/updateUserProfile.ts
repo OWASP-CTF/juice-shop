@@ -20,6 +20,17 @@ export function updateUserProfile () {
       return
     }
 
+    const origin = req.get('origin') ?? req.get('referer')
+    try {
+      if (!origin || new URL(origin).origin !== `${req.protocol}://${req.get('host')}`) {
+        res.sendStatus(403)
+        return
+      }
+    } catch {
+      res.sendStatus(403)
+      return
+    }
+
     try {
       const user = await UserModel.findByPk(loggedInUser.data.id)
       if (!user) {

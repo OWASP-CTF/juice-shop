@@ -3,12 +3,29 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
+let sbtWallet: any
+
+/*
+ * The wallet backing the Soul Bound Token must never have its secret material in
+ * the source tree. It is taken from the environment and, when none is provided,
+ * a fresh random wallet is generated per boot so that nothing recoverable from
+ * the repository can unlock it.
+ */
+async function getSbtWallet () {
+  if (!sbtWallet) {
+    const { HDNodeWallet, Mnemonic } = await import('ethers')
+    const phrase = process.env.SBT_WALLET_MNEMONIC
+    sbtWallet = phrase
+      ? HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(phrase))
+      : HDNodeWallet.createRandom()
+  }
+  return sbtWallet
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
+      const mnemonicWallet = await getSbtWallet()
       const privateKey = mnemonicWallet.privateKey
       const publicKey = mnemonicWallet.publicKey
       const address = mnemonicWallet.address

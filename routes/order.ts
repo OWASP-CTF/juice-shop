@@ -36,7 +36,11 @@ export function placeOrder () {
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
-          const email = customer ? customer.data ? customer.data.email : '' : ''
+          if (!customer?.bid || Number(customer.bid) !== Number(id)) {
+            res.status(403).json({ error: 'Access denied' })
+            return
+          }
+          const email = customer.data.email
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
           const { default: PDFDocument } = await import('pdfkit')
@@ -164,6 +168,7 @@ export function placeOrder () {
             orderId,
             delivered: false,
             email: (email ? email.replace(/[aeiou]/gi, '*') : undefined),
+            UserId: req.body.UserId,
             totalPrice,
             products: basketProducts,
             bonus: totalPoints,

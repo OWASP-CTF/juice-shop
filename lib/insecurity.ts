@@ -41,7 +41,17 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+// Protects the stored security answers. With the key committed in the source,
+// the answers - which come from a small, guessable candidate space - could be
+// recovered offline by anyone with the repository.
+const securityAnswerKey = process.env.SECURITY_ANSWER_KEY ?? crypto.randomBytes(32).toString('hex')
+export const hmac = (data: string) => crypto.createHmac('sha256', securityAnswerKey).update(data).digest('hex')
+export const hmacEquals = (data: string, expected?: string) => {
+  if (!expected) return false
+  const candidate = Buffer.from(hmac(data))
+  const stored = Buffer.from(expected)
+  return candidate.length === stored.length && crypto.timingSafeEqual(candidate, stored)
+}
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
@@ -51,10 +61,46 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+// jws@0.2.6 takes the algorithm from the token's own header, and jwa@0.0.1
+// implements "none" as `signature === ''`. Every verification path below would
+// therefore accept an unsigned token, or one signed with HMAC using the public
+// key as the secret. The pinned jsonwebtoken@0.4.0 has no `algorithms` option,
+// so the header has to be pinned before the library is ever reached.
+const hasRsaSignature = (token?: string) => {
+  if (!token) return false
+  try {
+    const [header, , signature] = token.split('.')
+    if (!signature) return false
+    return JSON.parse(Buffer.from(header, 'base64').toString())?.alg === 'RS256'
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const requireJwt = expressJwt(({ secret: publicKey }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!hasRsaSignature(req.cookies?.token || utils.jwtFrom(req))) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    requireJwt(req, res, next)
+  }
+}
+export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
+  res.status(401).json({ error: 'Unauthorized' })
+}
+// jsonwebtoken@0.4.0 only understands expiresInMinutes; it silently ignores
+// expiresIn, so issued tokens carried no exp claim at all and never expired.
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresInMinutes: 360, algorithm: 'RS256' } as any)
+export const verify = (token: string) => {
+  if (!hasRsaSignature(token)) return false
+  try {
+    return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -96,9 +142,17 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+// z85 only encodes inputs whose length is a multiple of 4, so the payload is
+// kept at a fixed 8 characters (MMMYY-DD) and the tag at 8.
+const couponSigningKey = process.env.COUPON_SIGNING_KEY ?? crypto.randomBytes(32).toString('hex')
+
+function couponTag (payload: string) {
+  return crypto.createHmac('sha256', couponSigningKey).update(payload).digest('hex').substring(0, 8)
+}
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const payload = utils.toMMMYY(date) + '-' + Math.max(0, Math.min(99, Math.trunc(discount))).toString().padStart(2, '0')
+  return z85.encode(payload + couponTag(payload))
 }
 
 export const discountFromCoupon = (coupon?: string) => {
@@ -106,13 +160,25 @@ export const discountFromCoupon = (coupon?: string) => {
     return undefined
   }
   const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  if (!decoded) {
+    return undefined
+  }
+  const text = decoded.toString()
+  if (text.length !== 16) {
+    return undefined
+  }
+  const payload = text.substring(0, 8)
+  const tag = Buffer.from(text.substring(8))
+  const expected = Buffer.from(couponTag(payload))
+  if (tag.length !== expected.length || !crypto.timingSafeEqual(tag, expected)) {
+    return undefined
+  }
+  if (hasValidFormat(payload) == null) {
+    return undefined
+  }
+  const parts = payload.split('-')
+  if (utils.toMMMYY(new Date()) === parts[0]) {
+    return parseInt(parts[1])
   }
 }
 
@@ -123,9 +189,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +198,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -157,6 +220,17 @@ export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
     if (decodedToken?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -187,7 +261,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasRsaSignature(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {

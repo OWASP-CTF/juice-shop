@@ -9,9 +9,16 @@ import { RecycleModel } from '../models/recycle'
 import * as utils from '../lib/utils'
 
 export const getRecycleItem = () => (req: Request, res: Response) => {
+  // JSON.parse turned the path segment into whatever the caller wanted, so
+  // "[1,2,3]" became an IN clause and this unauthenticated route enumerated
+  // other users' recycle records in one request.
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id)) {
+    return res.status(400).send('Error fetching recycled items. Please try again')
+  }
   RecycleModel.findAll({
     where: {
-      id: JSON.parse(req.params.id)
+      id
     }
   }).then((Recycle) => {
     return res.send(utils.queryResultToJson(Recycle))
