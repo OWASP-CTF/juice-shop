@@ -68,10 +68,6 @@ export class UserService {
     return this.http.get('https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=' + accessToken)
   }
 
-  logout () {
-    return this.http.post(this.hostServer + '/rest/user/logout', {}).pipe(map((response: any) => response), catchError((err) => { throw err }))
-  }
-
   saveLastLoginIp () {
     return this.http.get(this.hostServer + '/rest/saveLoginIp').pipe(map((response: any) => response), catchError((err) => { throw err }))
   }

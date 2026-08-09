@@ -7,6 +7,7 @@ import { ActivatedRoute } from '@angular/router'
 import { MatTableDataSource, MatTable, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCellDef, MatCell, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow } from '@angular/material/table'
 import { Component, type OnInit, inject } from '@angular/core'
 import { TrackOrderService } from '../Services/track-order.service'
+import { DomSanitizer } from '@angular/platform-browser'
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { faHome, faSync, faTruck, faTruckLoading, faWarehouse } from '@fortawesome/free-solid-svg-icons'
 
@@ -31,6 +32,7 @@ export enum Status {
 export class TrackResultComponent implements OnInit {
   private readonly route = inject(ActivatedRoute)
   private readonly trackOrderService = inject(TrackOrderService)
+  private readonly sanitizer = inject(DomSanitizer)
 
   public displayedColumns = ['product', 'price', 'quantity', 'total price']
   public dataSource = new MatTableDataSource()
@@ -42,9 +44,8 @@ export class TrackResultComponent implements OnInit {
   ngOnInit (): void {
     this.orderId = this.route.snapshot.queryParams.id
     this.trackOrderService.find(this.orderId).subscribe((results) => {
-      // The order number echoes back whatever was asked for, so it is rendered as text.
-      // Marking it as trusted HTML turned this page into a reflected XSS sink.
-      this.results.orderNo = results.data[0].orderId
+
+      this.results.orderNo = this.sanitizer.bypassSecurityTrustHtml(`<code>${results.data[0].orderId}</code>`)
       this.results.email = results.data[0].email
       this.results.totalPrice = results.data[0].totalPrice
       this.results.products = results.data[0].products

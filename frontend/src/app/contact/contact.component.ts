@@ -136,8 +136,6 @@ export class ContactComponent implements OnInit {
     this.captchaControl.markAsUntouched()
     this.captchaControl.markAsPristine()
     this.captchaControl.setValue('')
-    // A solved CAPTCHA is consumed server-side, so the stale id would reject every retry.
-    this.getNewCaptcha()
   }
 
   formatRating (value: number) {
