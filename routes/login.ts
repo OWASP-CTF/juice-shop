@@ -34,7 +34,7 @@ export function login () {
     models.sequelize.query('SELECT * FROM Users WHERE email = $1 AND password = $2 AND deletedAt IS NULL AND isActive = 1', {
       model: UserModel,
       plain: true,
-      bind: [req.body.email || '', security.hashPassword(req.body.password || '')]
+      bind: [req.body.email || '', security.hash(req.body.password || '')]
     }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
       .then((authenticatedUser) => { // vuln-code-snippet neutral-line loginAdminChallenge loginBenderChallenge loginJimChallenge
         const user = utils.queryResultToJson(authenticatedUser)
