@@ -78,7 +78,9 @@ export class OAuthComponent implements OnInit {
          the address - a one-off random secret keeps this flow self-consistent instead. */
       return this.randomPassword()
     }
-    return btoa(`${OAuthComponent.oauthPasswordScope}:${String(subject)}:${String(profile?.email ?? '')}`)
+    /* encodeURIComponent keeps the payload inside the Latin-1 range btoa accepts, so an
+       internationalised address cannot make the derivation throw. */
+    return btoa(encodeURIComponent(`${OAuthComponent.oauthPasswordScope}:${String(subject)}:${String(profile?.email ?? '')}`))
   }
 
   randomPassword (): string {

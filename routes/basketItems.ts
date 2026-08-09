@@ -35,12 +35,29 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
+
+    // parseJsonCustom is a streaming parser: it keeps EVERY occurrence of a duplicated key.
+    // The guard used to read basketIds[0] while the insert below used the last entry, so a
+    // body carrying two BasketId values was authorised against one basket and written into
+    // another. Check and write now agree on this single value, and a body whose duplicates
+    // disagree is rejected instead of being resolved in the sender's favour.
+    const requestedBasketId = basketIds.length > 0 ? basketIds[basketIds.length - 1] : undefined
+    let conflictingBasketIds = false
+    for (let i = 0; i < basketIds.length; i++) {
+      if (String(basketIds[i]) !== String(requestedBasketId)) {
+        conflictingBasketIds = true
+      }
+    }
+
+    if (conflictingBasketIds) {
+      res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
+    } else if (user && requestedBasketId && requestedBasketId !== 'undefined' && Number(user.bid) != Number(requestedBasketId)) { // eslint-disable-line eqeqeq
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
+        // The session's own basket wins over anything the body names.
+        BasketId: user?.bid ?? requestedBasketId,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -68,6 +85,20 @@ export function quantityCheckBeforeBasketItemUpdate () {
     try {
       const item = await BasketItemModel.findOne({ where: { id: req.params.id } })
       const user = security.authenticatedUsers.from(req)
+
+      // The path id was unscoped, so any authenticated user could address another customer's
+      // line item and have the finale update it. A line item is only updatable from inside
+      // the basket it belongs to.
+      if (item != null && (!user?.bid || Number(item.BasketId) !== Number(user.bid))) {
+        res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
+        return
+      }
+      // Moving a line item to a different basket is not an update this endpoint offers, so a
+      // BasketId in the body is pinned to the item's own basket before the finale writes it.
+      if (item != null && req.body.BasketId !== undefined) {
+        req.body.BasketId = item.BasketId
+      }
+
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
         if (item == null) {
