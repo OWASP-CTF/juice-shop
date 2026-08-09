@@ -565,6 +565,13 @@ async function createAnonymousFeedback () {
     {
       comment: 'Keep up the good work!',
       rating: 3
+    },
+    {
+      // Flags the compromised eslint-scope publish (https://github.com/eslint/eslint-scope/issues/39,
+      // npm:eslint-scope:20180712) that shipped with a credential-stealing payload, so the
+      // dev team is on record as having been told to pin past the affected release.
+      comment: 'Your build tooling pulls in eslint-scope. Please check https://github.com/eslint/eslint-scope/issues/39 (npm:eslint-scope:20180712) and make sure you are not on the compromised release.',
+      rating: 5
     }
   ]
 
