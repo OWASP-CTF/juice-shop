@@ -116,13 +116,16 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
-      if (err === null) {
-        challengeUtils.solveIf(challenge, () => {
-          return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
-        })
-      }
-    })
+    // Ask the application's own verification routine rather than calling jsonwebtoken
+    // directly. 0.4.0 reads the algorithm out of the header, so a token declaring none, or
+    // one signed HS256 with the published public key, verified here even though every
+    // other path had been pinned to RS256. The detector is unchanged; it now simply asks
+    // the same question the rest of the application asks.
+    if (security.verify(token)) {
+      challengeUtils.solveIf(challenge, () => {
+        return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
+      })
+    }
   }
 }
 

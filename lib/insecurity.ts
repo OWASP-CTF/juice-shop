@@ -51,10 +51,43 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+// Tokens are minted RS256 and nothing else is legitimate. The two-argument jws.verify
+// takes the algorithm from the token's own header, so a token declaring alg:none, or one
+// signed HS256 using the RSA public key that is published at /encryptionkeys/jwt.pub,
+// would verify against this same key. The header is therefore pinned before the
+// signature is trusted, and express-jwt 0.1.3 forwards no algorithm restriction of its
+// own, so the same check runs in front of it.
+const hasAcceptedAlgorithm = (token: string) => {
+  try {
+    return jws.decode(token)?.header?.alg === 'RS256'
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const requireValidToken = expressJwt(({ secret: publicKey }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (token && !hasAcceptedAlgorithm(token)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    requireValidToken(req, res, next)
+  }
+}
+// These routes have no authorised caller at all, so this denies unconditionally rather
+// than checking a token against a random secret - a check alg:none walked straight past.
+export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
+  res.status(401).json({ error: 'Unauthorized' })
+}
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!token || !hasAcceptedAlgorithm(token)) {
+    return false
+  }
+  return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -123,9 +156,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +165,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -157,6 +187,20 @@ export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
     if (decodedToken?.data?.role === roles.accounting) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+// The administration screen is guarded in the browser by AdminGuard, which decodes the
+// token without verifying it, so the role it reads is supplied by the caller. This
+// verifies the signature before the role claim is read.
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -187,7 +231,9 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
+  // would be admitted to the session map here even though the guards reject it elsewhere.
+  if (token && hasAcceptedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
