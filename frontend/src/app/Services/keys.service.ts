@@ -61,9 +61,9 @@ export class KeysService {
     )
   }
 
-  walletAddressSend (walletAddress: string, signature: string) {
+  walletAddressSend (walletAddress: string) {
     const endpoint = this.host + '/walletExploitAddress'
-    const params = { walletAddress, signature }
+    const params = { walletAddress }
     return this.http.post(endpoint, params).pipe(
       map((response: any) => response),
       catchError((err) => {

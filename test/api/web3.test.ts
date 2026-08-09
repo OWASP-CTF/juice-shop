@@ -7,9 +7,8 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
-import { Wallet } from 'ethers'
 import { createTestApp } from './helpers/setup'
-import { walletOwnershipMessage } from '../../routes/web3Wallet'
+import { login } from './helpers/auth'
 
 let app: Express
 
@@ -126,9 +125,24 @@ void describe('/walletNFTVerify', { skip: skipReason }, () => {
 })
 
 void describe('/walletExploitAddress', { skip: skipReason }, () => {
-  void it('POST missing wallet address in request body is rejected', async () => {
+  const credentials = { email: 'jim@juice-sh.op', password: 'ncc-1701' }
+
+  void it('POST wallet address without a session is rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0' })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.success, false)
+  })
+
+  void it('POST missing wallet address in request body is rejected', async () => {
+    const { token } = await login(app, credentials)
+
+    const res = await request(app)
+      .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
       .send({})
 
     assert.equal(res.status, 400)
@@ -136,47 +150,26 @@ void describe('/walletExploitAddress', { skip: skipReason }, () => {
     assert.equal(res.body.success, false)
   })
 
-  void it('POST wallet address without a signature is rejected', async () => {
+  void it('POST malformed wallet address in request body is rejected', async () => {
+    const { token } = await login(app, credentials)
+
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
+      .send({ walletAddress: 'lalalalala' })
+
+    assert.equal(res.status, 400)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.success, false)
+  })
+
+  void it('POST well-formed wallet address by a logged-in user leads to success notification', async () => {
+    const { token } = await login(app, credentials)
+
+    const res = await request(app)
+      .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
       .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0' })
-
-    assert.equal(res.status, 400)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, false)
-  })
-
-  void it('POST wallet address with a bogus signature is rejected', async () => {
-    const res = await request(app)
-      .post('/rest/web3/walletExploitAddress')
-      .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0', signature: 'lalalalala' })
-
-    assert.equal(res.status, 400)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, false)
-  })
-
-  void it('POST wallet address signed by a different wallet is rejected', async () => {
-    const owner = Wallet.createRandom()
-    const impersonator = Wallet.createRandom()
-    const signature = await impersonator.signMessage(walletOwnershipMessage(owner.address))
-
-    const res = await request(app)
-      .post('/rest/web3/walletExploitAddress')
-      .send({ walletAddress: owner.address, signature })
-
-    assert.equal(res.status, 400)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, false)
-  })
-
-  void it('POST wallet address with a matching ownership signature leads to success notification', async () => {
-    const wallet = Wallet.createRandom()
-    const signature = await wallet.signMessage(walletOwnershipMessage(wallet.address))
-
-    const res = await request(app)
-      .post('/rest/web3/walletExploitAddress')
-      .send({ walletAddress: wallet.address, signature })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
