@@ -59,6 +59,7 @@ import cleanupFtpFolder from './lib/startup/cleanupFtpFolder'
 import customizeEasterEgg from './lib/startup/customizeEasterEgg' // vuln-code-snippet hide-line
 import customizeApplication from './lib/startup/customizeApplication'
 import validatePreconditions, { preconditionsReady } from './lib/startup/validatePreconditions'
+import { redactWalletSecrets } from './lib/redactWalletSecrets'
 import registerWebsocketEvents from './lib/startup/registerWebsocketEvents'
 import restoreOverwrittenFilesWithOriginals from './lib/startup/restoreOverwrittenFilesWithOriginals'
 
@@ -358,6 +359,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
+  /* Feedbacks: never hand out a wallet recovery phrase a customer accidentally pasted into a public comment */
+  app.use('/api/Feedbacks', redactWalletSecrets())
+  app.use('/api/Feedbacks/:id', redactWalletSecrets())
+  app.use('/rest/products/:id/reviews', redactWalletSecrets())
   /* Users: Only POST is allowed in order to register a new user */
   app.get('/api/Users', security.isAuthorized())
   app.route('/api/Users/:id')
