@@ -67,7 +67,7 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
-  void it('POST login active deluxe user', async () => {
+  void it('POST login rejects published Bjoern OWASP seed credentials', async () => {
     const res = await request(app)
       .post('/rest/user/login')
       .set({ 'content-type': 'application/json' })
@@ -76,9 +76,7 @@ void describe('/rest/user/login', () => {
         password: 'kitten lesser pooch karate buffoon indoors'
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login without credentials', async () => {
