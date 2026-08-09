@@ -45,9 +45,11 @@ describe('RegisterComponent', () => {
         }
         securityQuestionService.find.mockReturnValue(of([{}]))
         userService = {
-            save: vi.fn().mockName("UserService.save")
+            save: vi.fn().mockName("UserService.save"),
+            authenticate: vi.fn().mockName("UserService.authenticate")
         }
         userService.save.mockReturnValue(of({}))
+        userService.authenticate.mockReturnValue(of({ token: 'token' }))
         TestBed.configureTestingModule({
             imports: [RouterTestingModule.withRoutes([
                     { path: 'login', component: LoginComponent }
@@ -153,11 +155,13 @@ describe('RegisterComponent', () => {
         component.securityQuestionControl.setValue(1)
         component.securityAnswerControl.setValue('Answer')
         const user = { email: 'x@x.xx', password: 'password', passwordRepeat: 'password', securityQuestion: { id: 1, question: 'Wat is?' }, securityAnswer: 'Answer' }
-        const securityAnswerObject = { UserId: 1, answer: 'Answer', SecurityQuestionId: 1 }
+        /* No UserId is sent any more - the server binds the answer to the authenticated caller. */
+        const securityAnswerObject = { answer: 'Answer', SecurityQuestionId: 1 }
         component.save()
         await fixture.whenStable()
         expect(vi.mocked(userService.save).mock.calls[0][0]).toEqual(user)
         expect(vi.mocked(securityAnswerService.save).mock.calls[0][0]).toEqual(securityAnswerObject)
+        expect(vi.mocked(securityAnswerService.save).mock.calls[0][1]).toBe('token')
         expect(location.path()).toBe('/login')
         fixture.destroy()
     })

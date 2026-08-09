@@ -68,6 +68,9 @@ export const sanitizeSecure = (html: string): string => {
     return sanitizeSecure(sanitized)
   }
 }
+// Rejects values that could break out of a CSP directive if interpolated raw
+// (e.g. "; script-src 'unsafe-inline'"). Used for profileImage-derived CSP sources.
+export const isCspSafeUrl = (candidate: string): boolean => !/[\s;'"<>`]/.test(candidate)
 
 export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
@@ -120,12 +123,11 @@ function hasValidFormat (coupon: string) {
   return coupon.match(/(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[0-9]{2}-[0-9]{2}/)
 }
 
-// vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
+// The three cryptocurrency donation addresses were removed: they are outdated and
+// keeping stale endpoints on an allowlist is itself the weakness (A01:2025, "Outdated
+// Allowlist"). The remaining entries are the still-current outbound links.
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,11 +137,14 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    // Require an exact match. A substring test (url.includes(allowedUrl)) let an
+    // attacker smuggle an allowlisted string into an otherwise arbitrary target,
+    // e.g. ?to=https://evil.example/?x=https://github.com/juice-shop/juice-shop
+    // (A01:2025 open redirect / allowlist bypass, CWE-601).
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
-// vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
 export const roles = {
   customer: 'customer',
@@ -153,16 +158,22 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
-export const isAccounting = () => {
+/* Verifies the JWT signature before trusting the role claim, so it cannot be
+   forged the way the client-side route guards can be. */
+const hasRole = (role: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-    if (decodedToken?.data?.role === roles.accounting) {
+    if (decodedToken?.data?.role === role) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
     }
   }
 }
+
+export const isAccounting = () => hasRole(roles.accounting)
+
+export const isAdmin = () => hasRole(roles.admin)
 
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))

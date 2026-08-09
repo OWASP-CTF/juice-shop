@@ -9,7 +9,7 @@ import request from 'supertest'
 import type { Express } from 'express'
 import config from 'config'
 import { createTestApp } from './helpers/setup'
-import { login } from './helpers/auth'
+import { login, register } from './helpers/auth'
 
 let app: Express
 
@@ -104,7 +104,7 @@ void describe('/rest/user/change-password', () => {
 })
 
 void describe('/rest/user/reset-password', () => {
-  void it('POST password reset for Jim with correct answer to his security question', async () => {
+  void it('POST password reset for Jim with correct answer to his security question only requests a reset', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
       .set({ 'content-type': 'application/json' })
@@ -115,7 +115,39 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'ncc-1701'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 202)
+    assert.equal(res.body.user, undefined)
+    assert.equal(res.body.token, undefined)
+  })
+
+  void it('POST password reset without the one-time token does not change the password', async () => {
+    const email = 'jim@' + config.get<string>('application.domain')
+    await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({ email, answer: 'Samuel', new: 'attacker-chosen', repeat: 'attacker-chosen' })
+
+    const res = await request(app)
+      .post('/rest/user/login')
+      .send({ email, password: 'attacker-chosen' })
+
+    assert.equal(res.status, 401)
+  })
+
+  void it('POST password reset with a bogus one-time token gets rejected', async () => {
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'jim@' + config.get<string>('application.domain'),
+        answer: 'Samuel',
+        token: 'a'.repeat(64),
+        new: 'ncc-1701',
+        repeat: 'ncc-1701'
+      })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.text.includes('Invalid or expired password reset token.'))
   })
 
   void it('POST password reset for Bender with correct answer to his security question', async () => {
@@ -129,7 +161,8 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'OhG0dPlease1nsertLiquor!'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 202)
+    assert.equal(res.body.user, undefined)
   })
 
   void it('POST password reset for Bjoern\u00b4s internal account with correct answer to his security question', async () => {
@@ -143,7 +176,8 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'monkey summer birthday are all bad passwords but work just fine in a long passphrase'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 202)
+    assert.equal(res.body.user, undefined)
   })
 
   void it('POST password reset for Bjoern\u00b4s OWASP account with correct answer to his security question', async () => {
@@ -157,7 +191,8 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'kitten lesser pooch karate buffoon indoors'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 202)
+    assert.equal(res.body.user, undefined)
   })
 
   void it('POST password reset for Morty with correct answer to his security question', async () => {
@@ -171,7 +206,8 @@ void describe('/rest/user/reset-password', () => {
         repeat: 'iBurri3dMySe1fInTheB4ckyard!'
       })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 202)
+    assert.equal(res.body.user, undefined)
   })
 
   void it('POST password reset with wrong answer to security question', async () => {
@@ -258,5 +294,59 @@ void describe('/rest/user/reset-password', () => {
     assert.ok(res.headers['content-type']?.includes('text/html'))
     assert.ok(res.text.includes('<h1>' + config.get<string>('application.name') + ' (Express'))
     assert.ok(res.text.includes('Error: Blocked illegal activity'))
+  })
+})
+
+void describe('/rest/user/reset-password brute force protection', () => {
+  const SECURITY_ANSWER = 'Zaya'
+  const MAX_FAILED_ATTEMPTS = 5
+
+  async function createUserWithSecurityAnswer (email: string) {
+    const credentials = { email, password: 'v3ry-s3cret' }
+    await register(app, credentials)
+    const { token } = await login(app, credentials)
+
+    await request(app)
+      .post('/api/SecurityAnswers')
+      .set({ Authorization: `Bearer ${token}`, 'content-type': 'application/json' })
+      .send({ SecurityQuestionId: 1, answer: SECURITY_ANSWER })
+  }
+
+  function resetWith (email: string, answer: string) {
+    return request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({ email, answer, new: 'n3w-p4ssword', repeat: 'n3w-p4ssword' })
+  }
+
+  void it('locks the account out after too many wrong answers, even for the correct one', async () => {
+    const email = 'lockout.probe@te.st'
+    await createUserWithSecurityAnswer(email)
+
+    for (let attempt = 0; attempt < MAX_FAILED_ATTEMPTS; attempt++) {
+      const res = await resetWith(email, `wrong-guess-${attempt}`)
+      assert.equal(res.status, 401)
+      assert.ok(res.text.includes('Wrong answer to security question.'))
+    }
+
+    /* Knowing the answer is no longer enough once the account is locked, which is what
+       stops an attacker from walking a list of common pet names. */
+    const lockedOutRes = await resetWith(email, SECURITY_ANSWER)
+    assert.equal(lockedOutRes.status, 429)
+    assert.ok(lockedOutRes.text.includes('Too many failed attempts.'))
+  })
+
+  void it('counts failed attempts per account, so another account is unaffected', async () => {
+    const lockedEmail = 'lockout.neighbour@te.st'
+    const untouchedEmail = 'lockout.bystander@te.st'
+    await createUserWithSecurityAnswer(lockedEmail)
+    await createUserWithSecurityAnswer(untouchedEmail)
+
+    for (let attempt = 0; attempt < MAX_FAILED_ATTEMPTS; attempt++) {
+      await resetWith(lockedEmail, `wrong-guess-${attempt}`)
+    }
+
+    assert.equal((await resetWith(lockedEmail, SECURITY_ANSWER)).status, 429)
+    assert.equal((await resetWith(untouchedEmail, SECURITY_ANSWER)).status, 202)
   })
 })

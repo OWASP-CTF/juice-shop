@@ -7,7 +7,7 @@ describe('/rest/products/reviews', () => {
     beforeEach(() => {
       cy.login({ email: 'admin', password: 'admin123' })
     })
-    it('should be possible to inject a command into the get route', () => {
+    it('should no longer be possible to inject a command into the get route', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.window().then(() => {
@@ -21,14 +21,16 @@ describe('/rest/products/reviews', () => {
               }
             )
           })
-          cy.expectChallengeSolved({ challenge: 'NoSQL DoS' })
+          cy.request('/api/Challenges/?key=noSqlCommandChallenge').then((res) => {
+            expect(res.body.data[0].solved).to.equal(false)
+          })
         }
       })
     })
   })
 
   describe('challenge "NoSQL Exfiltration"', () => {
-    it('should be possible to inject and get all the orders', () => {
+    it('should no longer be possible to inject and get all the orders', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.window().then(async () => {
@@ -42,7 +44,9 @@ describe('/rest/products/reviews', () => {
               }
             )
           })
-          cy.expectChallengeSolved({ challenge: 'NoSQL Exfiltration' })
+          cy.request('/api/Challenges/?key=noSqlOrdersChallenge').then((res) => {
+            expect(res.body.data[0].solved).to.equal(false)
+          })
         }
       })
     })
@@ -53,7 +57,7 @@ describe('/rest/products/reviews', () => {
       cy.login({ email: 'admin', password: 'admin123' })
     })
 
-    it('should be possible to inject a selector into the update route', () => {
+    it('should no longer be possible to inject a selector into the update route', () => {
       cy.window().then(async () => {
         await fetch(`${Cypress.config('baseUrl')}/rest/products/reviews`, {
           method: 'PATCH',
@@ -67,7 +71,9 @@ describe('/rest/products/reviews', () => {
           })
         })
       })
-      cy.expectChallengeSolved({ challenge: 'NoSQL Manipulation' })
+      cy.request('/api/Challenges/?key=noSqlReviewsChallenge').then((res) => {
+        expect(res.body.data[0].solved).to.equal(false)
+      })
     })
   })
 
@@ -76,7 +82,7 @@ describe('/rest/products/reviews', () => {
       cy.login({ email: 'mc.safesearch', password: 'Mr. N00dles' })
     })
 
-    it('should be possible to edit any existing review', () => {
+    it('should no longer be possible to edit another user\u2019s review', () => {
       cy.visit('/')
       cy.window().then(async () => {
         const response = await fetch(
@@ -111,7 +117,9 @@ describe('/rest/products/reviews', () => {
           }
         }
       })
-      cy.expectChallengeSolved({ challenge: 'Forged Review' })
+      cy.request('/api/Challenges/?key=forgedReviewChallenge').then((res) => {
+        expect(res.body.data[0].solved).to.equal(false)
+      })
     })
   })
 
