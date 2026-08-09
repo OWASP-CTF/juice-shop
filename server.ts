@@ -401,13 +401,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.email = req.body.email.trim()
         req.body.password = req.body.password.trim()
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
-        if (req.body.password !== req.body.passwordRepeat) {
-          res.status(400).send(res.__('Password and repeated password do not match.'))
-          return
-        }
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
-        return
       }
     }
     next()
@@ -673,17 +668,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-    // errorhandler() renders the stack trace and the surrounding source into the
-    // response, which hands out the application's internals to anyone able to
-    // provoke an exception. Keep the detail in the server log only.
-    logger.error(`${req.method} ${req.originalUrl} failed: ${error.stack ?? error.message}`)
-    if (res.headersSent) {
-      next(error)
-      return
-    }
-    res.status(500).json({ error: { message: 'Internal Server Error' } })
-  })
+  app.use(errorhandler())
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.

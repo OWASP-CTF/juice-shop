@@ -96,17 +96,9 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
-// z85 only encodes inputs whose length is a multiple of 4, so the payload is
-// kept at a fixed 8 characters (MMMYY-DD) and the tag at 8.
-const couponSigningKey = process.env.COUPON_SIGNING_KEY ?? crypto.randomBytes(32).toString('hex')
-
-function couponTag (payload: string) {
-  return crypto.createHmac('sha256', couponSigningKey).update(payload).digest('hex').substring(0, 8)
-}
-
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const payload = utils.toMMMYY(date) + '-' + Math.max(0, Math.min(99, Math.trunc(discount))).toString().padStart(2, '0')
-  return z85.encode(payload + couponTag(payload))
+  const coupon = utils.toMMMYY(date) + '-' + discount
+  return z85.encode(coupon)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
@@ -114,25 +106,13 @@ export const discountFromCoupon = (coupon?: string) => {
     return undefined
   }
   const decoded = z85.decode(coupon)
-  if (!decoded) {
-    return undefined
-  }
-  const text = decoded.toString()
-  if (text.length !== 16) {
-    return undefined
-  }
-  const payload = text.substring(0, 8)
-  const tag = Buffer.from(text.substring(8))
-  const expected = Buffer.from(couponTag(payload))
-  if (tag.length !== expected.length || !crypto.timingSafeEqual(tag, expected)) {
-    return undefined
-  }
-  if (hasValidFormat(payload) == null) {
-    return undefined
-  }
-  const parts = payload.split('-')
-  if (utils.toMMMYY(new Date()) === parts[0]) {
-    return parseInt(parts[1])
+  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
+    const parts = decoded.toString().split('-')
+    const validity = parts[0]
+    if (utils.toMMMYY(new Date()) === validity) {
+      const discount = parts[1]
+      return parseInt(discount)
+    }
   }
 }
 

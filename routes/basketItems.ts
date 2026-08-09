@@ -6,7 +6,6 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
-import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -44,12 +43,6 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
-
-      const product = await ProductModel.findByPk(basketItem.ProductId)
-      if (product == null) {
-        res.status(400).json({ status: 'error', error: 'Product is no longer available' })
-        return
-      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
@@ -90,14 +83,6 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
-  // A negative quantity passes both the limit and the stock comparison below and
-  // subtracts from the order total, so it has to be rejected up front.
-  const requested = Number(quantity)
-  if (!Number.isInteger(requested) || requested < 1) {
-    res.status(400).json({ error: res.__('Quantity must be a positive whole number.') })
-    return
-  }
-
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')
