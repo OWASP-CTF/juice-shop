@@ -241,7 +241,6 @@ const routes: Routes = [
     path: 'bee-haven',
     loadChildren: async () => await loadFaucetModule()
   },
-  // vuln-code-snippet start tokenSaleChallenge
   {
     matcher: oauthMatcher,
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
