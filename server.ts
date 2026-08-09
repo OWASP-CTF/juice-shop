@@ -228,6 +228,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The web3 code sandbox is an internal screen for the developers of the shop. Its only
+     protection was that nothing links to it: the single-page app is served for every path and
+     every asset below /assets is public, so anyone who knows - or guesses - the address reaches
+     it. Not linking to something is not access control, so the screen and the spacer image that
+     only that screen loads are put behind the administrator role on the server, where a client
+     side route guard cannot be stepped around. */
+  app.use([
+    '/web3-sandbox',
+    /^\/web3-sandbox\.module-[A-Za-z0-9_-]+\.js$/,
+    '/assets/public/images/padding/11px.png'
+  ], security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
