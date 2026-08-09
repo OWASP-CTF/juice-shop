@@ -36,7 +36,7 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }
@@ -49,11 +49,17 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
+      // The session caches the credential it was issued against, so both the caller's copy and
+      // every other session of this user have to follow the password rather than outlive it.
+      loggedInUser.data.password = user.password
+      security.authenticatedUsers.invalidateAllFor(loggedInUser.data.id, token)
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      // The whole model carries the password hash and the TOTP secret, and the caller only
+      // needs to know which account was changed.
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -72,7 +73,9 @@ export function quantityCheckBeforeBasketItemUpdate () {
         if (item == null) {
           throw new Error('No such item found!')
         }
-        void quantityCheck(req, res, next, item.ProductId, req.body.quantity)
+        void quantityCheck(req, res, next, item.ProductId, req.body.quantity).catch((error: Error) => {
+          next(error)
+        })
       } else {
         next()
       }
@@ -83,9 +86,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
+  // A withdrawn product keeps no stock row and ProductModel is paranoid, so both lookups come back
+  // empty for one. Either way the caller named a product the shop does not sell, which is a bad
+  // request - raising here would report a server fault for something the caller got wrong.
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
-  if (product == null) {
-    throw new Error('No such product found!')
+  if (product == null || await ProductModel.findByPk(id) == null) {
+    res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })
+    return
   }
 
   // is product limited per user and order, except if user is deluxe?
