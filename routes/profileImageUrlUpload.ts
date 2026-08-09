@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs'
+import dns from 'node:dns/promises'
+import net from 'node:net'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
