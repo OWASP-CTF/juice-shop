@@ -50,9 +50,9 @@ export class KeysService {
     )
   }
 
-  verifyNFTWallet (walletAddress: string) {
+  verifyNFTWallet (walletAddress: string, signature: string) {
     const endpoint = this.host + '/walletNFTVerify'
-    const params = { walletAddress }
+    const params = { walletAddress, signature }
     return this.http.post(endpoint, params).pipe(
       map((response: any) => response),
       catchError((err) => {
