@@ -28,14 +28,17 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // The answer stays on the server side, otherwise the CAPTCHA is trivial to automate
+    res.json({ captchaId, captcha: expression })
   }
 }
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
+    const captchaId = Number(req.body.captchaId)
+    const captcha = Number.isInteger(captchaId) ? await CaptchaModel.findOne({ where: { captchaId } }) : null
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      await captcha.destroy() // A solved CAPTCHA must not be replayable for a second submission
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

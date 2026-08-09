@@ -113,11 +113,12 @@ export class AboutComponent implements OnInit {
       .subscribe((feedbacks) => {
         for (let i = 0; i < feedbacks.length; i++) {
 
-          feedbacks[i].comment = `<figcaption><p class="feedback-comment">${
-            feedbacks[i].comment
-          }</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
+          // The comment is customer text, so it is escaped before it becomes part of the markup
+          // this component then marks as trusted.
+          const comment = document.createElement('div')
+          comment.textContent = feedbacks[i].comment
           feedbacks[i].comment = this.sanitizer.bypassSecurityTrustHtml(
-            feedbacks[i].comment
+            `<figcaption><p class="feedback-comment">${comment.innerHTML}</p><div class="feedback-stars">(${this.stars[feedbacks[i].rating]})</div></figcaption>`
           )
 
           this.galleryRef.addImage({
