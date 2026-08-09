@@ -74,8 +74,19 @@ export function getUserProfile () {
       // The profile image value is user-controlled and must never be interpolated raw into
       // a header value - doing so allowed CSP directive injection (e.g. appending a
       // permissive script-src) which combined with unsafe-eval enabled a full CSP bypass.
-      const safeProfileImage = String(user?.profileImage ?? '').replace(/[^\w\-./:?=&%]/g, '')
-      const CSP = `img-src 'self' ${safeProfileImage}; script-src 'self'`
+      // Rather than trying to blocklist dangerous characters, only ever add something the
+      // header syntax cannot misinterpret: the origin of a well-formed http(s) URL, and
+      // nothing else if the value isn't one.
+      let imageOrigin = ''
+      try {
+        const parsedImage = new URL(String(user?.profileImage ?? ''))
+        if (parsedImage.protocol === 'http:' || parsedImage.protocol === 'https:') {
+          imageOrigin = ` ${parsedImage.origin}`
+        }
+      } catch {
+        imageOrigin = ''
+      }
+      const CSP = `img-src 'self'${imageOrigin}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return displayedUsername && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(displayedUsername, '<script>alert(`xss`)</script>')
