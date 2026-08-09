@@ -77,8 +77,7 @@ const loadAboutComponent = async () => {
 const routes: Routes = [
   { // vuln-code-snippet neutral-line adminSectionChallenge
     path: 'administration', // vuln-code-snippet vuln-line adminSectionChallenge
-    component: AdministrationComponent, // vuln-code-snippet neutral-line adminSectionChallenge
-    canActivate: [AdminGuard] // vuln-code-snippet neutral-line adminSectionChallenge
+    component: ErrorPageComponent
   }, // vuln-code-snippet neutral-line adminSectionChallenge
   {
     path: 'accounting',
@@ -237,7 +236,7 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    component: ErrorPageComponent
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
@@ -259,7 +258,7 @@ const routes: Routes = [
   },
   { // vuln-code-snippet neutral-line tokenSaleChallenge
     matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+    component: ErrorPageComponent
   }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',

@@ -22,28 +22,33 @@ export const emptyUserRegistration = () => (req: Request, res: Response, next: N
   challengeUtils.solveIf(challenges.emptyUserRegistration, () => {
     return req.body && req.body.email === '' && req.body.password === ''
   })
+  if (req.body && (req.body.email === '' || req.body.password === '' || req.body.email == null || req.body.password == null)) {
+    res.status(400).send(res.__('Email and password are required.'))
+    return
+  }
   next()
 }
 
 export const forgedFeedbackChallenge = () => (req: Request, res: Response, next: NextFunction) => {
+  const user = security.authenticatedUsers.from(req)
+  const userId = user?.data ? user.data.id : undefined
   challengeUtils.solveIf(challenges.forgedFeedbackChallenge, () => {
-    const user = security.authenticatedUsers.from(req)
-    const userId = user?.data ? user.data.id : undefined
     return req.body?.UserId && req.body.UserId != userId // eslint-disable-line eqeqeq
   })
+  req.body.UserId = userId ?? null
   next()
 }
 
 export const captchaBypassChallenge = () => (req: Request, res: Response, next: NextFunction) => {
-  if (challengeUtils.notSolved(challenges.captchaBypassChallenge)) {
-    if (req.app.locals.captchaReqId >= 10) {
-      if ((new Date().getTime() - req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 10]) <= 20000) {
-        challengeUtils.solve(challenges.captchaBypassChallenge)
-      }
-    }
-    req.app.locals.captchaBypassReqTimes[req.app.locals.captchaReqId - 1] = new Date().getTime()
-    req.app.locals.captchaReqId++
+  const now = Date.now()
+  const times: number[] = req.app.locals.captchaBypassReqTimes ?? []
+  if (times.length >= 9 && (now - times[times.length - 9]) <= 20000) {
+    res.status(429).send(res.__('Too many requests. Please try again later.'))
+    return
   }
+  times.push(now)
+  req.app.locals.captchaBypassReqTimes = times.slice(-20)
+  req.app.locals.captchaReqId = (req.app.locals.captchaReqId ?? 1) + 1
   next()
 }
 
@@ -51,11 +56,19 @@ export const registerAdminChallenge = () => (req: Request, res: Response, next: 
   challengeUtils.solveIf(challenges.registerAdminChallenge, () => {
     return req.body && req.body.role === security.roles.admin
   })
+  if (req.body) {
+    // Do not allow clients to self-assign privileged roles at registration.
+    req.body.role = security.roles.customer
+  }
   next()
 }
 
 export const passwordRepeatChallenge = () => (req: Request, res: Response, next: NextFunction) => {
   challengeUtils.solveIf(challenges.passwordRepeatChallenge, () => { return req.body && req.body.passwordRepeat !== req.body.password })
+  if (req.body && req.body.passwordRepeat !== req.body.password) {
+    res.status(400).send(res.__('Passwords do not match.'))
+    return
+  }
   next()
 }
 
@@ -116,7 +129,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
