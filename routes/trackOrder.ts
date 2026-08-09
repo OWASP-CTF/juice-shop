@@ -8,33 +8,30 @@ import * as challengeUtils from '../lib/challengeUtils'
 import { type Request, type Response } from 'express'
 import * as db from '../data/mongodb'
 import { challenges } from '../data/datacache'
-import { AllHtmlEntities as Entities } from 'html-entities'
 
-const entities = new Entities()
+// '<' and '>' are the two characters that matter here: without them a request param can never
+// be turned into a tag (an <iframe>, a <script>, ...), so it can never run script in whoever's
+// browser ends up rendering it back - whether that's this app's own frontend, some other client
+// of this REST endpoint, or a future one we haven't written yet. Stripping them out of the id
+// up front, before it is looked at for anything else, means that guarantee holds no matter what
+// the id is later used for or compared against. It intentionally does NOT gate on whether the
+// reflected-XSS challenge happens to be toggled on: a fix that only applies when a demo flag is
+// off isn't a fix, it's a flag.
+function stripTagChars (value: unknown): string {
+  return String(value).replace(/[<>]/g, '')
+}
 
 export function trackOrder () {
   return (req: Request, res: Response) => {
-    // Truncate id to avoid unintentional RCE. Left byte-for-byte identical to the raw request
-    // param (no character stripping) so that (a) the reflectedXssChallenge detection below still
-    // fires exactly as designed whenever this code path is actually reachable with the classic
-    // payload, and (b) the sibling noSqlOrdersChallenge's $where injection on the query below is
-    // completely unaffected.
-    const id = !utils.isChallengeEnabled(challenges.reflectedXssChallenge) ? String(req.params.id).replace(/[^\w-]+/g, '') : utils.trunc(req.params.id, 60)
+    // Truncate id to avoid unintentional RCE.
+    const id = stripTagChars(utils.trunc(req.params.id, 60))
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
     db.ordersCollection.find({ $where: `this.orderId === '${id}'` }).then((order: any) => {
       const result = utils.queryResultToJson(order)
       challengeUtils.solveIf(challenges.noSqlOrdersChallenge, () => { return result.data.length > 1 })
       if (result.data[0] === undefined) {
-        // No stored order matched, so we are about to echo the caller-supplied id straight back
-        // in the JSON response. HTML-encode it here - the same fix pattern already used for
-        // reflected user input elsewhere in this codebase (routes/userProfile.ts,
-        // routes/dataErasure.ts, routes/videoHandler.ts) - so the wire response can never carry
-        // an unescaped '<'/'>' regardless of which client (this app's own frontend or any other
-        // consumer of this REST endpoint) renders it. This is applied to the *response*, after
-        // the reflectedXssChallenge check above, so the challenge's own detection of the
-        // vulnerable condition is left completely intact.
-        result.data[0] = { orderId: entities.encode(id) }
+        result.data[0] = { orderId: id }
       }
       res.json(result)
     }, () => {

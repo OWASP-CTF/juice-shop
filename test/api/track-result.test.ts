@@ -53,4 +53,15 @@ void describe('/rest/track-order/:id', () => {
     assert.equal(res.body.data[0].orderId.includes('<'), false)
     assert.equal(res.body.data[0].orderId.includes('>'), false)
   })
+
+  void it('does not mark the reflected-XSS challenge solved when the classic payload is submitted', async () => {
+    await request(app)
+      .get('/rest/track-order/%3Ciframe%20src%3D%22javascript%3Aalert(%60xss%60)%22%3E')
+    const res = await request(app)
+      .get('/api/Challenges')
+    assert.equal(res.status, 200)
+    const reflectedXss = res.body.data.find((c: { key: string }) => c.key === 'reflectedXssChallenge')
+    assert.ok(reflectedXss, 'expected reflectedXssChallenge to be present in /api/Challenges')
+    assert.equal(reflectedXss.solved, false)
+  })
 })
