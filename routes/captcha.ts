@@ -28,6 +28,8 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
+    /* The answer stays on the server. Handing it out with the puzzle turned the CAPTCHA into a
+       formality that any script could satisfy by reading the response it had just been given. */
     res.json({ captchaId, captcha: expression })
   }
 }
@@ -36,7 +38,8 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
-      /* A CAPTCHA can only ever be redeemed once */
+      /* A CAPTCHA is a one-time proof. Without this, one solved puzzle could be replayed for
+         every submission that followed. */
       await captcha.destroy()
       next()
     } else {

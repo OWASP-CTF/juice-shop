@@ -109,7 +109,20 @@ export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunc
 }
 export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: [jwtAlgorithm] } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
-export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    /* The algorithm is named here rather than read out of the token. jws.verify() took it from
+       the token's own header, which is what let a signature made with HMAC over the published
+       RSA public key pass as a genuine RS256 one. */
+    jwt.verify(token, publicKey, { algorithms: [jwtAlgorithm] })
+    return true
+  } catch (error: unknown) {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -265,7 +278,7 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token && hasExpectedAlgorithm(token)) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: [jwtAlgorithm] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
