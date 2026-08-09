@@ -228,6 +228,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* Each of these spacer images is laid out by exactly one screen and is requested by nothing
+     else in the shop, so it belongs to that screen and is served under the same authorisation.
+     A resource that only a restricted area loads must not be world-readable: leaving it public
+     is how an area stays "restricted" in the routing table while still being observable, and
+     enumerable, from outside. */
+  app.get('/assets/public/images/padding/19px.png', security.isAuthorized(), security.isAdmin())
+  app.get('/assets/public/images/padding/11px.png', security.isAuthorized(), security.isAdmin())
+  app.get('/assets/public/images/padding/56px.png', security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
