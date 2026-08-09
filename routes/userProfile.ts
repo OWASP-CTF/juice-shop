@@ -52,14 +52,18 @@ export function getUserProfile () {
     let username = user.username
 
     // The username is data. It is escaped for the template and never evaluated.
+    // NOTE: this prefixed copy is only used for the challenge check below; it is not
+    // rendered and it is not put into the template source.
     username = '\\' + username
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
+    // The username is NEVER spliced into the template source. It is handed to Pug as a
+    // local (see views/userProfile.pug) so the compiler treats it as data, not syntax.
+    // Substituting it here would make `#{...}`, `!{...}` or a leading `- ` inside the
+    // username part of the template that gets compiled and evaluated.
+    // Only values that come from static config/themes below are safe as source substitutions.
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())

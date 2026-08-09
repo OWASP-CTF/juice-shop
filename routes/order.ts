@@ -144,14 +144,6 @@ export function placeOrder () {
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
-          // A basket assembled with a negative quantity produces a negative total, which
-          // used to be checked out and then credited back to the wallet. The order is
-          // refused outright before any payment or wallet movement happens.
-          if (!Number.isFinite(totalPrice) || totalPrice < 0) {
-            res.status(400).json({ error: 'Order total must not be negative.' })
-            return
-          }
-
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
           if (req.body.UserId) {
