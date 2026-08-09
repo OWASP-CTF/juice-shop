@@ -93,7 +93,12 @@ export const verify = (token: string) => {
   if (!token || !hasAcceptedAlgorithm(token)) {
     return false
   }
-  return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+  try {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] })
+    return true
+  } catch (error) {
+    return false
+  }
 }
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
@@ -268,7 +273,7 @@ export const updateAuthenticatedUsers = () => (req: Request, res: Response, next
   // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
   // would be admitted to the session map here even though the guards reject it elsewhere.
   if (token && hasAcceptedAlgorithm(token)) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
