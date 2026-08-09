@@ -18,65 +18,26 @@
 		"removed": []
 	},
 	"adminSectionChallenge_1_correct.ts": {
+		"added": [
+			7
+		],
+		"removed": [
+			7,
+			8,
+			9
+		]
+	},
+	"adminSectionChallenge_2.ts": {
 		"added": [],
 		"removed": []
 	},
-	"adminSectionChallenge_2.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8
-		]
-	},
 	"adminSectionChallenge_3.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8
-		]
+		"added": [],
+		"removed": []
 	},
 	"adminSectionChallenge_4.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8
-		]
+		"added": [],
+		"removed": []
 	},
 	"changeProductChallenge_1.ts": {
 		"added": [
@@ -1261,64 +1222,18 @@
 		"removed": []
 	},
 	"scoreBoardChallenge_1_correct.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8,
-			106
-		]
+		"added": [],
+		"removed": []
 	},
 	"scoreBoardChallenge_2.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8,
-			106
-		]
+		"added": [],
+		"removed": []
 	},
 	"scoreBoardChallenge_3.ts": {
 		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9,
-			116
+			113
 		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8
-		]
+		"removed": []
 	},
 	"tokenSaleChallenge_1.ts": {
 		"added": [
@@ -1404,63 +1319,17 @@
 	},
 	"web3SandboxChallenge_1_correct.ts": {
 		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9,
-			169
+			166
 		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8
-		]
+		"removed": []
 	},
 	"web3SandboxChallenge_2.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8,
-			160
-		]
+		"added": [],
+		"removed": []
 	},
 	"web3SandboxChallenge_3.ts": {
-		"added": [
-			2,
-			3,
-			4,
-			5,
-			6,
-			7,
-			8,
-			9
-		],
-		"removed": [
-			4,
-			5,
-			6,
-			7,
-			8,
-			160
-		]
+		"added": [],
+		"removed": []
 	},
 	"web3WalletChallenge_1.sol": {
 		"added": [],

@@ -347,6 +347,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
+  app.delete('/api/Feedbacks/:id', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Users/:id', security.isAuthorized(), security.isAdmin())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
