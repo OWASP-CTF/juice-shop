@@ -8,6 +8,7 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
 import { createTestApp } from './helpers/setup'
+import { login } from './helpers/auth'
 
 let app: Express
 
@@ -124,31 +125,50 @@ void describe('/walletNFTVerify', { skip: skipReason }, () => {
 })
 
 void describe('/walletExploitAddress', { skip: skipReason }, () => {
-  void it('POST missing wallet address in request body still leads to success notification', async () => {
+  const credentials = { email: 'jim@juice-sh.op', password: 'ncc-1701' }
+
+  void it('POST wallet address without a session is rejected', async () => {
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0' })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.success, false)
+  })
+
+  void it('POST missing wallet address in request body is rejected', async () => {
+    const { token } = await login(app, credentials)
+
+    const res = await request(app)
+      .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
       .send({})
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Event Listener Created')
+    assert.equal(res.body.success, false)
   })
 
-  void it('POST invalid wallet address in request body still leads to success notification', async () => {
+  void it('POST malformed wallet address in request body is rejected', async () => {
+    const { token } = await login(app, credentials)
+
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
       .send({ walletAddress: 'lalalalala' })
 
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 400)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, true)
-    assert.equal(res.body.message, 'Event Listener Created')
+    assert.equal(res.body.success, false)
   })
 
-  void it('POST self-referential address in request body leads to success notification', async () => {
+  void it('POST well-formed wallet address by a logged-in user leads to success notification', async () => {
+    const { token } = await login(app, credentials)
+
     const res = await request(app)
       .post('/rest/web3/walletExploitAddress')
+      .set({ Authorization: `Bearer ${token}`, Cookie: `token=${token}` })
       .send({ walletAddress: '0x413744D59d31AFDC2889aeE602636177805Bd7b0' })
 
     assert.equal(res.status, 200)
