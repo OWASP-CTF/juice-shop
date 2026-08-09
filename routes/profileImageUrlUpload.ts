@@ -8,9 +8,9 @@ import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as security from '../lib/insecurity'
 import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
+import * as security from '../lib/insecurity'
 import logger from '../lib/logger'
 
 export function profileImageUrlUpload () {
@@ -33,8 +33,12 @@ export function profileImageUrlUpload () {
         } catch (error) {
           try {
             const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            if (security.isCspSafeUrl(url)) {
+              await user?.update({ profileImage: url })
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            } else {
+              logger.warn(`Rejected unsafe profile image URL containing CSP-breaking characters: ${url}`)
+            }
           } catch (error) {
             next(error)
             return

@@ -41,9 +41,15 @@ export class UserService {
     )
   }
 
+  /* Obtains a token without announcing the user as logged in, for flows that need
+     to call an authenticated endpoint on the user's behalf without starting a session. */
+  authenticate (params: any) {
+    return this.http.post(this.hostServer + '/rest/user/login', params).pipe(map((response: any) => response.authentication), catchError((err) => { throw err }))
+  }
+
   login (params: any) {
     this.isLoggedIn.next(true)
-    return this.http.post(this.hostServer + '/rest/user/login', params).pipe(map((response: any) => response.authentication), catchError((err) => { throw err }))
+    return this.authenticate(params)
   }
 
   getLoggedInState () {

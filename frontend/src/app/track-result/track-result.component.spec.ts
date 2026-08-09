@@ -11,7 +11,6 @@ import { MatTableModule } from '@angular/material/table'
 import { MatCardModule } from '@angular/material/card'
 import { RouterTestingModule } from '@angular/router/testing'
 import { TrackOrderService } from '../Services/track-order.service'
-import { DomSanitizer } from '@angular/platform-browser'
 import { of } from 'rxjs'
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 
@@ -19,19 +18,12 @@ describe('TrackResultComponent', () => {
     let component: TrackResultComponent
     let fixture: ComponentFixture<TrackResultComponent>
     let trackOrderService: any
-    let sanitizer: any
 
     beforeEach(async () => {
         trackOrderService = {
             find: vi.fn().mockName("TrackOrderService.find")
         }
         trackOrderService.find.mockReturnValue(of({ data: [{}] }))
-        sanitizer = {
-            bypassSecurityTrustHtml: vi.fn().mockName("DomSanitizer.bypassSecurityTrustHtml"),
-            sanitize: vi.fn().mockName("DomSanitizer.sanitize")
-        }
-        sanitizer.bypassSecurityTrustHtml.mockImplementation((args: any) => args)
-        sanitizer.sanitize.mockReturnValue({})
 
         TestBed.configureTestingModule({
             imports: [TranslateModule.forRoot(),
@@ -41,7 +33,6 @@ describe('TrackResultComponent', () => {
                 TrackResultComponent],
             providers: [
                 { provide: TrackOrderService, useValue: trackOrderService },
-                { provide: DomSanitizer, useValue: sanitizer },
                 provideHttpClient(withInterceptorsFromDi()),
                 provideHttpClientTesting()
             ]
@@ -59,12 +50,14 @@ describe('TrackResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should consider order number as trusted HTML', () => {
+    it('should bind the order number as a plain string so Angular sanitizes it', () => {
         component.orderId = '<a src="link">Link</a>'
         trackOrderService.find.mockReturnValue(of({ data: [{ orderId: component.orderId }] }))
         component.ngOnInit()
 
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<code><a src="link">Link</a></code>')
+        // A plain string, not a bypassed SafeHtml value, so Angular's own sanitizer runs on it.
+        expect(component.results.orderNo).toBe('<code><a src="link">Link</a></code>')
+        expect(typeof component.results.orderNo).toBe('string')
     })
 
     it('should set "delivered" status for delivered orders', () => {
