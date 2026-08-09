@@ -162,10 +162,12 @@ export function placeOrder () {
           }
 
           db.ordersCollection.insert({
+            UserId: customer.data.id,
             promotionalAmount: discountAmount,
             paymentId: req.body.orderDetails ? req.body.orderDetails.paymentId : null,
             addressId: req.body.orderDetails ? req.body.orderDetails.addressId : null,
             orderId,
+            status: 'PROCESSING',
             delivered: false,
             email: (email ? email.replace(/[aeiou]/gi, '*') : undefined),
             totalPrice,

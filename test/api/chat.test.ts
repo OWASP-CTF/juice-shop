@@ -8,7 +8,12 @@ import assert from 'node:assert/strict'
 import request from 'supertest'
 import type { Express } from 'express'
 import * as http from 'http'
+import config from 'config'
+import { UserModel } from '../../models/user'
+import { ordersCollection } from '../../data/mongodb'
+import * as security from '../../lib/insecurity'
 import { createTestApp } from './helpers/setup'
+import { login } from './helpers/auth'
 
 const MOCK_LLM_PORT = 43210
 
@@ -70,6 +75,31 @@ function sendSSE (res: http.ServerResponse, chunks: object[]): void {
   }
   res.write('data: [DONE]\n\n')
   res.end()
+}
+
+async function requestCoupon (orderId: string, token?: string): Promise<{ status: number, text: string }> {
+  let callCount = 0
+  onLlmRequest = (_req, body, res) => {
+    callCount++
+    if (callCount === 1) {
+      sendSSE(res, [
+        toolCallChunk('call_coupon', 'generateCoupon', JSON.stringify({ discount: 10, orderId })),
+        finishChunk('tool_calls')
+      ])
+      return
+    }
+
+    const toolMessage = JSON.parse(body).messages.find((message: { role: string }) => message.role === 'tool')
+    assert.ok(toolMessage)
+    sendSSE(res, [contentChunk(toolMessage.content), finishChunk()])
+  }
+
+  const chatRequest = request(app)
+    .post('/rest/chat')
+    .set({ 'content-type': 'application/json' })
+    .send({ messages: [{ role: 'user', content: 'Please generate my coupon.' }] })
+  if (token) chatRequest.set({ Authorization: 'Bearer ' + token })
+  return await chatRequest
 }
 
 before(async () => {
@@ -205,6 +235,76 @@ void describe('/rest/chat', { timeout: 120000 }, () => {
     assert.equal(res.status, 200)
     assert.ok(res.text.includes('Apple Juice'))
     assert.ok(res.text.includes('data: [DONE]'))
+  })
+
+  void it('POST refuses coupon generation for an anonymous customer', { timeout: 15000 }, async () => {
+    const order = await ordersCollection.findOne({ status: 'DAMAGED' })
+    assert.ok(order?.orderId)
+
+    const res = await requestCoupon(order.orderId)
+
+    assert.equal(res.status, 200)
+    assert.ok(res.text.includes('Customer not authenticated'))
+    assert.ok(!res.text.includes('couponCode'))
+  })
+
+  void it('POST refuses coupon generation with an expired token', { timeout: 15000 }, async () => {
+    const admin = await UserModel.findOne({ where: { email: 'admin@' + config.get<string>('application.domain') } })
+    const order = await ordersCollection.findOne({ UserId: admin?.id, status: 'DAMAGED' })
+    assert.ok(order?.orderId)
+    const originalNow = Date.now
+    let expiredToken = ''
+    try {
+      Date.now = () => originalNow() - (7 * 60 * 60 * 1000)
+      expiredToken = security.authorize({ data: { id: admin?.id } })
+    } finally {
+      Date.now = originalNow
+    }
+
+    const res = await requestCoupon(order.orderId, expiredToken)
+
+    assert.equal(res.status, 200)
+    assert.ok(res.text.includes('Customer not authenticated'))
+    assert.ok(!res.text.includes('couponCode'))
+  })
+
+  void it('POST refuses a coupon for another customer\'s order', { timeout: 15000 }, async () => {
+    const admin = await UserModel.findOne({ where: { email: 'admin@' + config.get<string>('application.domain') } })
+    const order = await ordersCollection.findOne({ UserId: admin?.id, status: 'DAMAGED' })
+    assert.ok(order?.orderId)
+    const authentication = await login(app, { email: 'jim@' + config.get<string>('application.domain'), password: 'ncc-1701' })
+
+    const res = await requestCoupon(order.orderId, authentication.token)
+
+    assert.equal(res.status, 200)
+    assert.ok(res.text.includes('Order does not belong to the current customer'))
+    assert.ok(!res.text.includes('couponCode'))
+  })
+
+  void it('POST refuses a coupon for an owned order that is not damaged', { timeout: 15000 }, async () => {
+    const admin = await UserModel.findOne({ where: { email: 'admin@' + config.get<string>('application.domain') } })
+    const order = await ordersCollection.findOne({ UserId: admin?.id, status: 'DELIVERED' })
+    assert.ok(order?.orderId)
+    const authentication = await login(app, { email: 'admin@' + config.get<string>('application.domain'), password: 'admin123' })
+
+    const res = await requestCoupon(order.orderId, authentication.token)
+
+    assert.equal(res.status, 200)
+    assert.ok(res.text.includes('Order does not belong to the current customer'))
+    assert.ok(!res.text.includes('couponCode'))
+  })
+
+  void it('POST generates a coupon for the authenticated order owner', { timeout: 15000 }, async () => {
+    const admin = await UserModel.findOne({ where: { email: 'admin@' + config.get<string>('application.domain') } })
+    const order = await ordersCollection.findOne({ UserId: admin?.id, status: 'DAMAGED' })
+    assert.ok(order?.orderId)
+    const authentication = await login(app, { email: 'admin@' + config.get<string>('application.domain'), password: 'admin123' })
+
+    const res = await requestCoupon(order.orderId, authentication.token)
+
+    assert.equal(res.status, 200)
+    assert.ok(res.text.includes('couponCode'))
+    assert.ok(res.text.includes('"discount":10'))
   })
 
   void it('POST handles LLM API error gracefully', { timeout: 15000 }, async () => {
