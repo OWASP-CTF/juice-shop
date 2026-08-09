@@ -265,7 +265,30 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
+  /* Browsing the folder is what exposes the forgotten developer artefacts, so the listing
+     and the quarantine folder are administrative. Individual downloads have to stay open to
+     customers: placeOrder() writes every invoice to ftp/order_<id>.pdf and the shop links
+     customers straight at it, so a blanket gate here answers 403 on somebody's own order
+     confirmation. The leftovers that must never be handed out are named instead, and the
+     refusal is mounted ahead of the handler so nothing decodes or reads them at all.
+     A percent-encoded null byte is decoded before the name is judged, so appending an
+     allowlisted extension to a confidential name does not smuggle it past this. */
+  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml|acquisitions\.md)/i
+  app.get(['/ftp', '/ftp/'], security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/quarantine', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line directoryListingChallenge
+  app.use('/ftp/:file', (req: Request, res: Response, next: NextFunction) => {
+    let requested = req.params.file ?? ''
+    try {
+      requested = decodeURIComponent(requested)
+    } catch {
+      /* A name that is not valid percent encoding is judged exactly as it arrived */
+    }
+    if (confidentialFtpArtefacts.test(requested)) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    next()
+  })
   app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
