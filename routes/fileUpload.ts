@@ -14,6 +14,7 @@ import { type NextFunction, type Request, type Response } from 'express'
 
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
+import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
@@ -24,11 +25,13 @@ function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunctio
   }
 }
 
+const complaintsDirectory = path.resolve('uploads/complaints')
+
 function handleZipFileUpload ({ file }: Request, res: Response, next: NextFunction) {
   if (utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.fileWriteChallenge)) {
       const buffer = file.buffer
-      const filename = file.originalname.toLowerCase()
+      const filename = security.sanitizeFilename(file.originalname.toLowerCase())
       const tempFile = path.join(os.tmpdir(), filename)
       fs.open(tempFile, 'w', function (err, fd) {
         if (err != null) { next(err) }
@@ -39,10 +42,13 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                const absolutePath = path.resolve(complaintsDirectory, fileName)
+                // An archive entry may only ever be written inside the upload directory.
+                // Comparing the resolved destination against the upload directory (with a
+                // trailing separator) rejects '../' traversal and absolute entry paths alike.
+                if (absolutePath.startsWith(complaintsDirectory + path.sep)) {
+                  challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -80,7 +86,10 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        // External entities are never resolved (`noent`/`dtdload`/`net` off, `nonet` on),
+        // so a document cannot make the parser read local files or reach the network, and
+        // `huge` stays off so libxml keeps enforcing its entity expansion limits.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, dtdload: false, nonet: true, huge: false })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)

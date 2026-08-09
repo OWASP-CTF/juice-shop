@@ -8,6 +8,10 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+// The only attributes this endpoint is ever allowed to disclose. `fields` selects a
+// subset of these; it can never be used to project other columns of the user record.
+const SELECTABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage', 'role'] as const
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -17,10 +21,12 @@ export function retrieveLoggedInUser () {
       if (security.verify(req.cookies.token)) {
         user = security.authenticatedUsers.get(req.cookies.token)
 
-        // Parse the fields parameter into an array, splitting by comma.
-        // If not provided, both these variables will be undefined.
+        // Parse the fields parameter into an array, splitting by comma, and keep only
+        // the attributes that are safe to expose.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        const requestedFields = fieldsParam
+          ? fieldsParam.split(',').map(f => f.trim()).filter((f): f is typeof SELECTABLE_FIELDS[number] => (SELECTABLE_FIELDS as readonly string[]).includes(f))
+          : []
 
         let baseUser: any = {}
 

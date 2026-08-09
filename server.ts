@@ -199,14 +199,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
-  /* Remove duplicate slashes from URL which allowed bypassing subsequent filters */
+  /* Canonicalise the request path before any filter or authorisation decision looks at it.
+     Duplicate slashes and '.' / '..' segments let the very same resource be addressed by a
+     spelling that a path based check does not recognise. */
   app.use((req: Request, res: Response, next: NextFunction) => {
-    req.url = req.url.replace(/[/]+/g, '/')
+    const queryStart = req.url.indexOf('?')
+    const rawPath = queryStart === -1 ? req.url : req.url.substring(0, queryStart)
+    const query = queryStart === -1 ? '' : req.url.substring(queryStart)
+    const normalizedPath = path.posix.normalize(rawPath.replace(/[/]+/g, '/'))
+    req.url = (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath) + query
     next()
   })
 
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
+
+  /* Parse cookies early so that authorisation decisions can be made for plain browser
+     requests (documents, images) that carry no Authorization header */
+  app.use(cookieParser('kekse'))
 
   /* Security Policy */
   const securityTxtExpiration = new Date()
@@ -227,6 +237,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
+
+  /* Assets that only exist as part of a privileged area are subject to the same
+     authorisation as the area itself - an anonymous client has no business fetching
+     them, whether it navigated there or requested them directly. */
+  const privilegedAreaAsset = /\/(19|56|11)px\.png$/i // administration, token sale, web3 sandbox
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(req.path)
+    } catch {
+      // Malformed percent-encoding: fall back to the raw path for the decision below.
+    }
+    if (privilegedAreaAsset.test(path.posix.normalize(requestedPath))) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
@@ -277,7 +305,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  /* /logs directory browsing: server access logs are an operational artefact and are
+     only available to authenticated administrators */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAdmin()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
   app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
@@ -286,7 +316,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
   /* Serve vendor dependencies locally instead of from CDN */
@@ -343,9 +372,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    validate: false,
+    keyGenerator (req: Request) { return req.socket.remoteAddress ?? 'unknown' } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
+
+  /* Reject any token declaring a signing algorithm we do not issue, before it reaches any
+     middleware that would verify or decode it */
+  app.use(security.enforceJwtAlgorithm())
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
@@ -358,8 +392,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Users: Only POST is allowed in order to register a new user. Listing every user
+     account is an administration function and is authorised as such. */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
@@ -397,6 +432,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Anti-automation: a CAPTCHA alone only proves a single interaction, so feedback
+     submission is additionally rate limited. The key is the address of the actual
+     connection rather than req.ip, because `trust proxy` is enabled and a client can
+     otherwise pick its own bucket with an X-Forwarded-For header. */
+  app.post('/api/Feedbacks', rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    keyGenerator (req: Request) { return req.socket.remoteAddress ?? 'unknown' }
+  }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
@@ -416,6 +463,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* Self-registration may only ever create an ordinary customer: attributes that decide
+     privileges or identity are server-owned and are dropped from the request body. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'createdAt', 'updatedAt', 'deletedAt']) {
+      delete req.body[privilegedAttribute]
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
@@ -428,8 +483,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.delete('/api/Quantitys/:id', security.denyAll())
   app.post('/api/Quantitys', security.denyAll())
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
-  /* Feedbacks: Do not allow changes of existing feedback */
+  /* Feedbacks: Do not allow changes of existing feedback, deletion is an administration function */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())

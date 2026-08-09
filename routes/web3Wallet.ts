@@ -12,7 +12,14 @@ let isEventListenerCreated = false
 
 export function contractExploitListener () {
   return async (req: Request, res: Response) => {
-    const metamaskAddress = req.body.walletAddress
+    const metamaskAddress = typeof req.body.walletAddress === 'string' ? req.body.walletAddress : ''
+    // Only well-formed addresses are remembered, and remembering one is not by itself a claim
+    // that anything happened: the challenge is still only resolved from an on-chain event the
+    // server observed for that same address.
+    if (!/^0x[0-9a-fA-F]{40}$/.test(metamaskAddress)) {
+      res.status(400).json({ success: false, message: 'A valid wallet address is required' })
+      return
+    }
     walletsConnected.add(metamaskAddress)
     try {
       if (!isEventListenerCreated) {
