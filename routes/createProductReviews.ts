@@ -19,11 +19,15 @@ export function createProductReviews () {
       () => user?.data?.email !== req.body.author
     )
 
+    if (user?.data?.email == null) {
+      return res.status(401).json({ error: 'Not authenticated' })
+    }
+
     try {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        author: user.data.email, // the author is always the currently authenticated user, never client-supplied
         likesCount: 0,
         likedBy: []
       })
