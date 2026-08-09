@@ -49,12 +49,26 @@ const assertUrlIsSafeToFetch = async (rawUrl: string) => {
   if (isPrivateAddress(address)) {
     throw new Error('Image URLs must point to a publicly reachable host')
   }
+  return { internal: false }
+}
+
+/* Whether a url is one this handler would have been willing to fetch. Used to decide what may
+   be stored, so a target the guard turned away is not written to the profile instead. */
+const isFetchableUrl = async (rawUrl: string) => {
+  try {
+    await assertUrlIsSafeToFetch(rawUrl)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const fetchImage = async (rawUrl: string) => {
   let currentUrl = rawUrl
+  let reachedInternalTarget = false
   for (let hop = 0; hop <= 3; hop++) {
-    await assertUrlIsSafeToFetch(currentUrl)
+    const { internal } = await assertUrlIsSafeToFetch(currentUrl)
+    reachedInternalTarget = reachedInternalTarget || internal
     const response = await fetch(currentUrl, { redirect: 'manual' })
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location')
@@ -64,7 +78,7 @@ const fetchImage = async (rawUrl: string) => {
       currentUrl = new URL(location, currentUrl).toString()
       continue
     }
-    return response
+    return { response, reachedInternalTarget }
   }
   throw new Error('url redirected too many times')
 }
@@ -76,11 +90,16 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          const response = await fetchImage(url)
+          const { response, reachedInternalTarget } = await fetchImage(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
-          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+          /* A forgery is the server being made to reach something the caller could not. Keying
+             off the url string alone meant an ordinary public host whose path merely spelled the
+             same words recorded a successful forgery - a request the caller could have made
+             themselves. This now requires a hop to have actually landed on an internal target,
+             which the guard above refuses to allow. */
+          if (reachedInternalTarget && url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
           await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
@@ -88,6 +107,15 @@ export function profileImageUrlUpload () {
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
           try {
+            /* Falling back to the raw url turned "we refused to fetch this" into "we stored
+               this": profileImage is handed back out by whoami and rendered as an img src, so a
+               target the guard turned away came straight back out of the shop. */
+            if (!await isFetchableUrl(url)) {
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; image link refused, keeping the current profile image`)
+              res.location(process.env.BASE_PATH + '/profile')
+              res.redirect(process.env.BASE_PATH + '/profile')
+              return
+            }
             const user = await UserModel.findByPk(loggedInUser.data.id)
             await user?.update({ profileImage: url })
             logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
