@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -51,10 +51,94 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+/* The shop only ever issues RS256 tokens, so that is the only signature algorithm it accepts.
+   Taking the algorithm from the token itself lets an attacker sign one with HMAC using the RSA
+   *public* key - which is published under /encryptionkeys and therefore no secret at all. */
+export const jwtAlgorithm = 'RS256'
+
+export const hasExpectedAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+    return header?.alg === jwtAlgorithm
+  } catch (error: unknown) {
+    return false
+  }
+}
+
+/* Drops a token whose header asks for any other algorithm before anything downstream gets to look
+   at it. The request then simply counts as unauthenticated, which is what a signature the shop
+   never issued is worth - and endpoints that do require a session answer 401 as they always do. */
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (utils.jwtFrom(req) && !hasExpectedAlgorithm(utils.jwtFrom(req))) {
+      delete req.headers.authorization
+    }
+    if (req.cookies?.token && !hasExpectedAlgorithm(req.cookies.token)) {
+      delete req.cookies.token
+    }
+    next()
+  }
+}
+
+// Single source of truth for the password policy: registration and the change-password route
+// both enforce it, so the rule cannot drift between the two entry points. Follows NIST
+// SP 800-63B - length is the control that matters, plus a blocklist of known-weak values, and
+// deliberately no composition rules.
+export const PASSWORD_MIN_LENGTH = 12
+const WEAK_PASSWORDS = new Set([
+  'admin123', 'password', 'password1', 'passw0rd', 'welcome1', 'letmein',
+  'qwertyuiop', '123456789012', 'administrator', 'juiceshop', 'owasp', 'changeme'
+])
+
+export const validatePasswordPolicy = (password: unknown): string | null => {
+  if (typeof password !== 'string' || password === '') {
+    return 'Password cannot be empty.'
+  }
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`
+  }
+  if (password.length > 128) {
+    return 'Password must be at most 128 characters long.'
+  }
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) {
+    return 'Password is too common. Please choose a less predictable one.'
+  }
+  if (new Set(password).size < 4) {
+    return 'Password is not varied enough. Please choose a less predictable one.'
+  }
+  return null
+}
+
+export const isAuthorized = () => {
+  const dropForgedAlgorithm = denyForgedTokenAlgorithm()
+  const authorizeToken = expressjwt({ secret: publicKey, algorithms: [jwtAlgorithm] })
+  return (req: Request, res: Response, next: NextFunction) => {
+    dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
+  }
+}
+export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
+  const source = req.headers.origin ?? req.headers.referer
+  if (!source) {
+    res.status(403).json({ error: 'A same-origin request is required' })
+    return
+  }
+  try {
+    if (new URL(source).host !== req.headers.host) {
+      res.status(403).json({ error: 'Cross-origin request blocked' })
+      return
+    }
+  } catch {
+    res.status(403).json({ error: 'Invalid request origin' })
+    return
+  }
+  next()
+}
+export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: [jwtAlgorithm] })
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
+export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -77,7 +161,14 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const cleaned = utils.unquote(token)
+    if (!verify(cleaned)) {
+      return undefined
+    }
+    return this.tokenMap[cleaned]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -88,7 +179,9 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
     const token = utils.jwtFrom(req)
-    this.put(token, user)
+    if (token && verify(token)) {
+      this.put(token, user)
+    }
   }
 }
 
@@ -123,9 +216,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +225,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
@@ -151,6 +241,17 @@ export const roles = {
 export const deluxeToken = (email: string) => {
   const hmac = crypto.createHmac('sha256', privateKey)
   return hmac.update(email + roles.deluxe).digest('hex')
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
 }
 
 export const isAccounting = () => {
@@ -177,7 +278,12 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      const user = authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -187,7 +293,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {

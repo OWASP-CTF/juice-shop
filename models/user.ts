@@ -46,29 +46,24 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
+          username = security.sanitizeSecure(username)
           this.setDataValue('username', username)
         }
       },
       email: {
         type: DataTypes.STRING,
         unique: true,
+        // An address is an identifier with a grammar, not markup, so it is validated and
+        // refused rather than rewritten. Running it through the HTML sanitiser corrupted
+        // valid input: '&' is legal in a local part but came back as '&amp;', and because
+        // login compares the raw request value against the stored one, the owner of
+        // foo&bar@x.com could never sign in again. Rejecting malformed input also refuses
+        // an '<iframe ...>' payload outright instead of storing a defanged copy.
+        validate: {
+          isEmail: { msg: 'Must be a valid email address.' }
+        },
         set (email: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-              return utils.contains(
-                email,
-                '<iframe src="javascript:alert(`xss`)">'
-              )
-            })
-          } else {
-            email = security.sanitizeSecure(email)
-          }
-          this.setDataValue('email', email)
+          this.setDataValue('email', typeof email === 'string' ? email.trim() : email)
         }
       }, // vuln-code-snippet hide-end
       password: {
@@ -125,6 +120,12 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       sequelize
     }
   )
+
+  User.addHook('afterSave', (user: User) => {
+    challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
+      return utils.contains(user.email ?? '', '<iframe src="javascript:alert(`xss`)">')
+    })
+  })
 
   User.addHook('afterValidate', async (user: User) => {
     if (
