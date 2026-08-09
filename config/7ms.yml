@@ -143,9 +143,9 @@ memories:
     image: 'favorite-hiking-place.png'
     caption: 'I love going hiking here...'
     geoStalkingMetaSecurityQuestion: 14
-    geoStalkingMetaSecurityAnswer: 'Daniel Boone National Forest'
+    geoStalkingMetaSecurityAnswer: 'Ld9w-Wgb5-Xrf2-Zmt7'
   -
     image: 'IMG_4253.jpg'
     caption: 'My old workplace...'
     geoStalkingVisualSecurityQuestion: 10
-    geoStalkingVisualSecurityAnswer: 'ITsec'
+    geoStalkingVisualSecurityAnswer: 'Cq4n-Nvh8-Ktp3-Bsr6'
