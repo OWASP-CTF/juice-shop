@@ -143,8 +143,14 @@ export function chat () {
           id: z.string().describe('The product ID to get reviews for')
         }),
         execute: async ({ id }) => {
+          /* Looking up reviews is a plain equality on the product id, so it is written as one.
+             Phrasing it as a `$where` expression instead turned the lookup into a fragment of
+             JavaScript assembled from a value that reaches here through the model's tool call -
+             i.e. from whatever the conversation talked the model into passing. Numeric coercion
+             happens to make the current fragment harmless, but a query that is code is only ever
+             one refactor away from being injectable, and a selector cannot be. */
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 

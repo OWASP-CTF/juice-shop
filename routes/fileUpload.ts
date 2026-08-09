@@ -7,6 +7,7 @@ import os from 'node:os'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import yaml from 'js-yaml'
 import libxml from 'libxmljs2'
 import unzipper from 'unzipper'
@@ -28,14 +29,24 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
   if (utils.endsWith(file?.originalname.toLowerCase(), '.zip')) {
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.fileWriteChallenge)) {
       const buffer = file.buffer
-      const filename = file.originalname.toLowerCase()
-      const tempFile = path.join(os.tmpdir(), filename)
+      /* The archive has to be parked on disk before it can be streamed back out again, and the
+         name it is parked under used to be the name the client put in the multipart part. That
+         name is a free-form string: nothing in the upload stack strips path separators from it,
+         so a part announced as ../../var/www/html/shell.zip resolved out of the temporary folder
+         and the request then chose both where a file landed and what went into it - which is the
+         whole of an arbitrary file write, before the archive is even opened. Nothing downstream
+         needs the submitted name (the extraction step reads the names out of the archive itself),
+         so it is not used for the path at all: the staging copy gets a fresh random name that no
+         request can steer, and it is removed again once the archive has been read. */
+      const tempFile = path.join(os.tmpdir(), `juice-shop-upload-${crypto.randomUUID()}.zip`)
       fs.open(tempFile, 'w', function (err, fd) {
         if (err != null) { next(err) }
         fs.write(fd, buffer, 0, buffer.length, null, function (err) {
           if (err != null) { next(err) }
           fs.close(fd, function () {
-            fs.createReadStream(tempFile)
+            const archive = fs.createReadStream(tempFile)
+            archive.on('close', function () { fs.unlink(tempFile, function () { /* the staged copy is scratch space; failing to reap it must not fail the request */ }) })
+            archive
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 // The name inside the archive is attacker-authored and is stripped of every
