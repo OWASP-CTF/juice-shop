@@ -502,15 +502,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
-  /* Self-registration may only ever set the attributes of an ordinary customer */
-  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body) {
-      for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
-        delete req.body[privilegedAttribute]
-      }
-    }
-    next()
-  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
@@ -607,7 +598,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         WalletModel.create({ UserId: context.instance.id }).catch((err: unknown) => {
           console.log(err)
         })
-        context.instance.role = security.roles.customer
         return context.continue // vuln-code-snippet neutral-line registerAdminChallenge
       }) // vuln-code-snippet neutral-line registerAdminChallenge
     } // vuln-code-snippet neutral-line registerAdminChallenge
