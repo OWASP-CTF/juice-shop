@@ -728,24 +728,45 @@
 	},
 	"forgedReviewChallenge_1.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			12
 		],
 		"removed": [
-			6
+			7,
+			8
 		]
 	},
 	"forgedReviewChallenge_2_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			12
+		],
+		"removed": [
+			6,
+			7,
+			8
+		]
 	},
 	"forgedReviewChallenge_3.ts": {
 		"added": [
+			4,
+			5,
 			6,
-			7
+			7,
+			8,
+			9
 		],
-		"removed": [
-			6
-		]
+		"removed": []
 	},
 	"localXssChallenge_1.ts": {
 		"added": [],
@@ -854,35 +875,26 @@
 	},
 	"noSqlReviewsChallenge_1.ts": {
 		"added": [
-			6
+			5
 		],
 		"removed": [
-			4,
-			6,
-			8,
-			9,
-			6
+			5
 		]
 	},
 	"noSqlReviewsChallenge_2.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			8,
+			9
 		],
-		"removed": [
-			6
-		]
+		"removed": []
 	},
 	"noSqlReviewsChallenge_3_correct.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			4,
-			6,
-			8,
-			9,
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"redirectChallenge_1.ts": {
 		"added": [],
@@ -915,20 +927,36 @@
 		"removed": []
 	},
 	"redirectCryptoCurrencyChallenge_1.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectCryptoCurrencyChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectCryptoCurrencyChallenge_3_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			13
+		]
 	},
 	"redirectCryptoCurrencyChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"registerAdminChallenge_1.ts": {
 		"added": [],

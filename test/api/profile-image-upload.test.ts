@@ -70,6 +70,21 @@ void describe('/profile/image/file', () => {
 })
 
 void describe('/profile/image/url', () => {
+  void it('POST blocks loopback profile image URLs', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://127.0.0.1:3000/rest/admin/application-version')
+      .redirects(0)
+
+    assert.equal(res.status, 302)
+  })
+
   void it('POST profile image URL valid for image available online', async () => {
     const { token } = await login(app, {
       email: `jim@${config.get<string>('application.domain')}`,

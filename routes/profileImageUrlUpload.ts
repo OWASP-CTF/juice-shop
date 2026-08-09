@@ -4,6 +4,8 @@
  */
 
 import fs from 'node:fs'
+import { lookup } from 'node:dns/promises'
+import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -17,11 +19,10 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          const response = await fetch(url)
+          const response = await fetchPublicUrl(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
@@ -48,4 +49,33 @@ export function profileImageUrlUpload () {
     res.location(process.env.BASE_PATH + '/profile')
     res.redirect(process.env.BASE_PATH + '/profile')
   }
+}
+
+async function fetchPublicUrl (input: string) {
+  let url = new URL(input)
+  for (let redirects = 0; redirects <= 5; redirects++) {
+    if (!['http:', 'https:'].includes(url.protocol) || await resolvesToPrivateAddress(url.hostname)) {
+      throw new Error('Profile image URL must resolve to a public HTTP(S) address')
+    }
+    const response = await fetch(url, { redirect: 'manual' })
+    if (response.status < 300 || response.status >= 400) return response
+    const location = response.headers.get('location')
+    if (!location) return response
+    url = new URL(location, url)
+  }
+  throw new Error('Too many redirects while retrieving profile image')
+}
+
+async function resolvesToPrivateAddress (hostname: string) {
+  const addresses = isIP(hostname) ? [{ address: hostname }] : await lookup(hostname, { all: true })
+  return addresses.length === 0 || addresses.some(({ address }) => isPrivateAddress(address))
+}
+
+function isPrivateAddress (address: string) {
+  const normalized = address.toLowerCase()
+  if (normalized.includes(':')) {
+    return normalized === '::' || normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || /^fe[89ab]/.test(normalized) || normalized.startsWith('::ffff:')
+  }
+  const [a, b] = normalized.split('.').map(Number)
+  return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
 }
