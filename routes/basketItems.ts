@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -85,6 +86,13 @@ export function quantityCheckBeforeBasketItemUpdate () {
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
+    throw new Error('No such product found!')
+  }
+
+  // QuantityModel is not paranoid, so a discontinued product keeps its quantity row.
+  // ProductModel is, so a soft-deleted product resolves to null here and is refused.
+  const orderedProduct = await ProductModel.findByPk(id)
+  if (orderedProduct == null) {
     throw new Error('No such product found!')
   }
 
