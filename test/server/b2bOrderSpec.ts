@@ -28,12 +28,14 @@ describe('b2bOrder', () => {
     challenges.rceChallenge = { solved: false, save } as unknown as Challenge
   })
 
-  xit('infinite loop payload does not succeed but solves "rceChallenge"', () => { // FIXME Started failing on Linux regularly
+  it('infinite loop payload is treated as invalid data and does not solve "rceChallenge"', () => {
     req.body.orderLinesData = '(function dos() { while(true); })()'
 
     b2bOrder()(req, res, next)
 
-    expect(challenges.rceChallenge.solved).to.equal(true)
+    expect(challenges.rceChallenge.solved).to.equal(false)
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    expect(next).to.have.been.calledOnce
   })
 
   // FIXME Disabled as test started failing on Linux regularly
