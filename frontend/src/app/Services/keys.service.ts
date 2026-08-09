@@ -39,17 +39,6 @@ export class KeysService {
     )
   }
 
-  submitKey (privateKey: string) {
-    const endpoint = this.host + '/submitKey'
-    const params = { privateKey }
-    return this.http.post(endpoint, params).pipe(
-      map((response: any) => response),
-      catchError((err) => {
-        throw err
-      })
-    )
-  }
-
   verifyNFTWallet (walletAddress: string) {
     const endpoint = this.host + '/walletNFTVerify'
     const params = { walletAddress }

@@ -59,16 +59,6 @@ describe('KeysService', () => {
     req.flush('apiResponse')
   })
 
-  it('should post submitKey directly to the rest api', () => {
-    service.submitKey('privateKey').subscribe((res) => {
-      expect(res).toBe('apiResponse')
-    })
-    const req = httpMock.expectOne('http://localhost:3000/rest/web3/submitKey')
-    expect(req.request.method).toBe('POST')
-    expect(req.request.body).toEqual({ privateKey: 'privateKey' })
-    req.flush('apiResponse')
-  })
-
   it('should post verifyNFTWallet directly to the rest api', () => {
     service.verifyNFTWallet('walletAddress').subscribe((res) => {
       expect(res).toBe('apiResponse')
@@ -109,14 +99,6 @@ describe('KeysService', () => {
     let capturedError: any
     service.checkNftMinted().subscribe({ next: () => expect(true).toBe(false), error: (e) => { capturedError = e } })
     const req = httpMock.expectOne('http://localhost:3000/api/Challenges/?key=nftMintChallenge')
-    req.error(new ErrorEvent('Request failed'), { status: 500, statusText: 'Internal Server Error' })
-    expect(capturedError.status).toBe(500)
-  })
-
-  it('should handle error in submitKey', () => {
-    let capturedError: any
-    service.submitKey('privateKey').subscribe({ next: () => expect(true).toBe(false), error: (e) => { capturedError = e } })
-    const req = httpMock.expectOne('http://localhost:3000/rest/web3/submitKey')
     req.error(new ErrorEvent('Request failed'), { status: 500, statusText: 'Internal Server Error' })
     expect(capturedError.status).toBe(500)
   })
