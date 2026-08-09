@@ -266,30 +266,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  /* Browsing the folder is what surfaces the forgotten artefacts, so the listing is an
-     administrative view. Individual downloads stay open, because placeOrder writes every
-     invoice to ftp/order_<id>.pdf and the shop links customers straight at it - a blanket
-     gate here would refuse people their own order confirmation. */
-  app.use('/ftp', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  /* The artefacts that were never meant to be handed out are named explicitly and require
-     the same administrative role, rather than relying on nobody guessing the filename. */
-  const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|acquisitions\.md|eastere\.gg|suspicious_errors\.yml)$/i
-  app.use('/ftp(?!/quarantine)/:file', (req: Request, res: Response, next: NextFunction) => {
-    let requested = req.params.file ?? ''
-    try {
-      requested = decodeURIComponent(requested)
-    } catch {
-      /* A name that is not valid percent encoding is judged exactly as it arrived. */
-    }
-    if (confidentialFtpArtefacts.test(requested)) {
-      security.isAuthorized()(req, res, (err?: any) => {
-        if (err) { next(err); return }
-        security.isAdmin()(req, res, next)
-      })
-      return
-    }
-    next()
-  })
+  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true }))
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -412,10 +389,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', security.isAuthorized(), utils.asyncHandler(recycles.getRecycleItems()))
+  app.get('/api/Recycles', recycles.blockRecycleItems())
   app.post('/api/Recycles', security.isAuthorized())
   /* Challenge evaluation before finale takes over */
-  app.get('/api/Recycles/:id', security.isAuthorized(), utils.asyncHandler(recycles.getRecycleItem()))
+  app.get('/api/Recycles/:id', recycles.getRecycleItem())
   app.put('/api/Recycles/:id', security.denyAll())
   app.delete('/api/Recycles/:id', security.denyAll())
   /* SecurityQuestions: Only GET list of questions allowed. */
@@ -808,7 +785,7 @@ let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
 /* Process and business metrics are operational data, not something every signed-in
    customer may read. */
-app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAuthorized(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
