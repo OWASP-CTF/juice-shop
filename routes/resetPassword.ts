@@ -43,7 +43,10 @@ export function resetPassword () {
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
           verifySecurityAnswerChallenges(updatedUser, answer)
-          res.json({ user: updatedUser })
+          // Handing back the freshly saved row would also hand back the password hash and the
+          // TOTP seed stored alongside it. A caller who has just set a new password needs to know
+          // which account it landed on and nothing further.
+          res.json({ user: { id: updatedUser.id, email: updatedUser.email } })
         }
       } else {
         res.status(401).send(res.__('Wrong answer to security question.'))

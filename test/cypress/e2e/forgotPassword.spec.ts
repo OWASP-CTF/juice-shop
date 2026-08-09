@@ -17,7 +17,7 @@ describe('/#/forgot-password', () => {
         }
       )
       cy.wait('@securityQuestion')
-      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Samuel')
+      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Wq4t-Bn7v-Xj2c-Rm8h')
       // recordings to properly fix behavior during test
       cy.get('#newPassword').focus().type('I <3 Spock')
       cy.get('#newPasswordRepeat').focus().type('I <3 Spock')
@@ -36,7 +36,7 @@ describe('/#/forgot-password', () => {
         }
       )
       cy.wait('@securityQuestion')
-      cy.get('#securityAnswer').should('not.be.disabled').focus().type("Stop'n'Drop")
+      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Vd6k-Ptm3-Ghs9-Ynb4')
       // recordings to properly fix behavior during test
       cy.get('#newPassword').focus().type('Brannigan 8=o Leela')
       cy.get('#newPasswordRepeat').focus().type('Brannigan 8=o Leela')
@@ -56,7 +56,7 @@ describe('/#/forgot-password', () => {
           }
         )
         cy.wait('@securityQuestion')
-        cy.get('#securityAnswer').should('not.be.disabled').focus().type('West-2082')
+        cy.get('#securityAnswer').should('not.be.disabled').focus().type('Ns5b-Kxr9-Dhq4-Wvt6')
         // recordings to properly fix behavior during test
         cy.get('#newPassword').focus().type('monkey birthday ')
         cy.get('#newPasswordRepeat').focus().type('monkey birthday ')
@@ -94,7 +94,7 @@ describe('/#/forgot-password', () => {
         }
       )
       cy.wait('@securityQuestion')
-      cy.get('#securityAnswer').should('not.be.disabled').focus().type('5N0wb41L')
+      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Lc8n-Rwq5-Tfd2-Zjm7')
       // recordings to properly fix behavior during test
       cy.get('#newPassword').focus().type('iBurri3dMySe1f!')
       cy.get('#newPasswordRepeat').focus().type('iBurri3dMySe1f!')
@@ -113,7 +113,7 @@ describe('/#/forgot-password', () => {
         }
       )
       cy.wait('@securityQuestion')
-      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Silence of the Lambs')
+      cy.get('#securityAnswer').should('not.be.disabled').focus().type('Jf3m-Cwz8-Qbn6-Hkr2')
       // Cypress recordings to properly fix behavior during test
       cy.get('#newPassword').focus().type('ora-ora > muda-muda')
       cy.get('#newPasswordRepeat').focus().type('ora-ora > muda-muda')

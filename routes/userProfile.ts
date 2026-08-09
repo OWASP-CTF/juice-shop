@@ -99,19 +99,25 @@ export function getUserProfile () {
       // 'unsafe-eval' is gone with the template evaluation that used to need it.
       const CSP = `img-src ${imgSrc}; script-src 'self'`
 
+      // Substituted into the rendered page rather than into the Pug source, so no
+      // interpolation form ever reaches the compiler. The replacement is a callback
+      // because a replacement *string* would let '$&' or "$'" in a name expand into
+      // the surrounding markup - a splice that entity-encoding does not cover.
+      const encodedUsername = entities.encode(username)
+
+      // The name is inspected in the form it is actually rendered in, so a payload that has been
+      // encoded out of existence is no longer reported as an injection. `match` yields null when
+      // nothing matched and the whole expression is undefined when there is no profile image at
+      // all, so the result is coerced instead of compared - an optional chain that short-circuits
+      // used to make this read as "not null" and hold for every visitor.
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return Boolean(username) && user?.profileImage?.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
+        return Boolean(encodedUsername) && Boolean(user?.profileImage?.match(/;[ ]*script-src(.)*'unsafe-inline'/g)) && utils.contains(encodedUsername, '<script>alert(`xss`)</script>')
       })
 
       res.set({
         'Content-Security-Policy': CSP
       })
 
-      // Substituted into the rendered page rather than into the Pug source, so no
-      // interpolation form ever reaches the compiler. The replacement is a callback
-      // because a replacement *string* would let '$&' or "$'" in a name expand into
-      // the surrounding markup - a splice that entity-encoding does not cover.
-      const encodedUsername = entities.encode(username)
       res.send(fn(user).replace(/_username_/g, () => encodedUsername))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))

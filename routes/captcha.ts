@@ -38,8 +38,12 @@ export function captchas () {
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
+    const requestedId = Number(req.body.captchaId)
+    const captcha = Number.isInteger(requestedId) ? await CaptchaModel.findOne({ where: { captchaId: requestedId } }) : null
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // One puzzle buys one submission. Leaving the row in place would let a single correct
+      // answer be replayed indefinitely, which turns the whole check into a formality.
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

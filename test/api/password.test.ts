@@ -110,7 +110,7 @@ void describe('/rest/user/reset-password', () => {
       .set({ 'content-type': 'application/json' })
       .send({
         email: 'jim@' + config.get<string>('application.domain'),
-        answer: 'Samuel',
+        answer: 'Wq4t-Bn7v-Xj2c-Rm8h',
         new: 'ncc-1701',
         repeat: 'ncc-1701'
       })
@@ -138,7 +138,7 @@ void describe('/rest/user/reset-password', () => {
       .set({ 'content-type': 'application/json' })
       .send({
         email: 'bjoern@' + config.get<string>('application.domain'),
-        answer: 'West-2082',
+        answer: 'Ns5b-Kxr9-Dhq4-Wvt6',
         new: 'monkey summer birthday are all bad passwords but work just fine in a long passphrase',
         repeat: 'monkey summer birthday are all bad passwords but work just fine in a long passphrase'
       })
@@ -181,7 +181,7 @@ void describe('/rest/user/reset-password', () => {
       .set({ 'content-type': 'application/json' })
       .send({
         email: 'morty@' + config.get<string>('application.domain'),
-        answer: '5N0wb41L',
+        answer: 'Lc8n-Rwq5-Tfd2-Zjm7',
         new: 'iBurri3dMySe1fInTheB4ckyard!',
         repeat: 'iBurri3dMySe1fInTheB4ckyard!'
       })

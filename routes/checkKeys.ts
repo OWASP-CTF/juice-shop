@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
@@ -42,19 +43,32 @@ async function walletKeys (): Promise<WalletKeys> {
   }
 }
 
+/*
+ * `===` on two strings stops at the first character that differs, so a rejected guess takes
+ * measurably longer the more of its prefix was right. Repeated often enough that difference alone
+ * reconstructs the key one character at a time, which is why every comparison against the wallet
+ * goes through a length check plus a comparison that always inspects every byte.
+ */
+function matchesSecret (candidate: unknown, secret: string): boolean {
+  if (typeof candidate !== 'string') return false
+  const offered = Buffer.from(candidate, 'utf8')
+  const expected = Buffer.from(secret, 'utf8')
+  return offered.length === expected.length && crypto.timingSafeEqual(offered, expected)
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
       const { privateKey, publicKey, address } = await walletKeys()
-      challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
-        return req.body.privateKey === privateKey
-      })
-      if (req.body.privateKey === privateKey) {
+      const submitted: unknown = req.body?.privateKey
+      const unlocked = matchesSecret(submitted, privateKey)
+      challengeUtils.solveIf(challenges.nftUnlockChallenge, () => unlocked)
+      if (unlocked) {
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftUnlockChallenge })
       } else {
-        if (req.body.privateKey === address) {
+        if (matchesSecret(submitted, address)) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else if (req.body.privateKey === publicKey) {
+        } else if (matchesSecret(submitted, publicKey)) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
         } else {
           res.status(401).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })

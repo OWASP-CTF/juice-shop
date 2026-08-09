@@ -43,9 +43,12 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
+          // Cleaning has to happen first: whatever the scoreboard inspects afterwards must be the
+          // very same text this column is going to hand back to the catalogue pages later on.
+          // Judging the raw payload and only then stripping it would report an injection that the
+          // shop no longer actually carries.
+          description = security.sanitizeSecure(description)
           if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
-            // Track attempted exploitation for the scoreboard, but never persist
-            // unsanitized markup regardless of challenge/safety-mode state below.
             challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
               return utils.contains(
                 description,
@@ -53,7 +56,6 @@ const ProductModelInit = (sequelize: Sequelize) => {
               )
             })
           }
-          description = security.sanitizeSecure(description)
           this.setDataValue('description', description)
         }
       },

@@ -38,9 +38,15 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
             fs.createReadStream(tempFile)
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
-                const fileName = entry.path
+                // The name inside the archive is attacker-authored and is stripped of every
+                // leading step out of the extraction folder before it is joined to it. Doing this
+                // first means the destination examined below is the destination that will really
+                // be written, so an entry called ../../ftp/legal.md lands in the complaints folder
+                // under a harmless name instead of reporting an escape that never happens.
+                const declaredName: string = entry.path
+                const containedName = path.normalize(declaredName).replace(/^(?:\.\.(?:[/\\]|$))+/, '')
                 const uploadsDir = path.resolve('uploads/complaints')
-                const absolutePath = path.resolve(uploadsDir, fileName)
+                const absolutePath = path.resolve(uploadsDir, containedName)
                 challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
                 if (absolutePath === uploadsDir || absolutePath.startsWith(uploadsDir + path.sep)) {
                   entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
@@ -117,9 +123,19 @@ function handleYamlUpload ({ file }: Request, res: Response, next: NextFunction)
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) {
       const data = file.buffer.toString()
       try {
+        // An anchor that is referenced over and over lets a few lines of YAML expand into
+        // gigabytes once the parser resolves them, so a document that uses the feature at all is
+        // turned away before any parsing starts rather than being raced against a timeout.
+        if (/(^|[\s[{,])[*&][^\s*&]/.test(data)) {
+          res.status(410)
+          next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: anchors and aliases are not accepted (' + file.originalname + ')'))
+          return
+        }
+        // The default loader understands type tags that construct arbitrary JavaScript; the safe
+        // schema is limited to plain data, which is all a complaint document ever needs to be.
         const sandbox = { yaml, data }
         vm.createContext(sandbox)
-        const yamlString = vm.runInContext('JSON.stringify(yaml.load(data))', sandbox, { timeout: 2000 })
+        const yamlString = vm.runInContext('JSON.stringify(yaml.safeLoad(data))', sandbox, { timeout: 2000 })
         res.status(410)
         next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: ' + utils.trunc(yamlString, 400) + ' (' + file.originalname + ')'))
       } catch (err: unknown) {

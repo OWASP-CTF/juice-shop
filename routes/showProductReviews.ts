@@ -12,37 +12,23 @@ import { type Review } from 'data/types'
 import * as db from '../data/mongodb'
 import * as utils from '../lib/utils'
 
-// Blocking sleep function as in native MongoDB
-// @ts-expect-error FIXME Type safety broken for global object
-global.sleep = (time: number) => {
-  // Ensure that users don't accidentally dos their servers for too long
-  if (time > 2000) {
-    time = 2000
-  }
-  const stop = new Date().getTime()
-  while (new Date().getTime() < stop + time) {
-    ;
-  }
-}
+// The blocking sleep helper that used to be published on the global object has been dropped
+// along with the query evaluation that was its only caller. Handing every piece of evaluated
+// query text a primitive whose whole purpose is to stall the event loop is a denial of service
+// waiting to be reached; nothing that runs here needs it.
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Always coerce the id to a number before it is concatenated into the
-    // $where query below, regardless of challenge enablement / safety mode
-    // (that is a demo toggle, not a security control, and must not gate the
-    // sanitization). Number() can only ever stringify back to a finite
-    // numeric literal, "NaN", "Infinity" or "-Infinity" - none of which can
-    // break out of the numeric literal context in the $where expression.
-    // Passing the raw, untrusted request parameter through instead allowed
-    // arbitrary JavaScript (e.g. a call to sleep()) to be injected into and
-    // executed by the database, which is a classic NoSQL injection based
-    // Denial of Service vector.
+    // The product is selected by value rather than by a snippet of JavaScript built around the
+    // request parameter. A selector is data the database matches; an expression is code the
+    // database runs, and there is no way to write untrusted input into code safely enough that
+    // it is worth doing when a plain equality match answers the same question.
     const id = Number(req.params.id)
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ $where: 'this.product == ' + id }).then((reviews: Review[]) => {
+    db.reviewsCollection.find({ product: id }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)

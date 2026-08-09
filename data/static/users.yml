@@ -34,7 +34,11 @@
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'Samuel' # https://en.wikipedia.org/wiki/James_T._Kirk
+    # A security answer is a second credential, so it must not be a fact about the account holder
+    # that anybody can look up. The name that used to sit here is printed in every reference work
+    # about this character, which turned the forgot-password flow into a one-step takeover. It is
+    # now an opaque secret bearing no relation to the question being asked.
+    answer: 'Wq4t-Bn7v-Xj2c-Rm8h'
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -65,7 +69,9 @@
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: "Stop'n'Drop" # http://futurama.wikia.com/wiki/Suicide_booth
+    # Replaced for the same reason as the answer above: the old value was a piece of trivia
+    # published on fan wikis, so it was a password everybody already had.
+    answer: 'Vd6k-Ptm3-Ghs9-Ynb4'
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -126,7 +132,10 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
+    # The old answer was both a researchable detail and short enough to fall to a wordlist, which
+    # is exactly what the rate limiting in front of this endpoint should never have to be the only
+    # defence against. High entropy now, unrelated to the question.
+    answer: 'Lc8n-Rwq5-Tfd2-Zjm7'
 -
   email: mc.safesearch
   password: 'Mr. N00dles'
@@ -172,7 +181,10 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    # An administrator's recovery answer being a postcode anyone can derive from a hometown is the
+    # weakest link in the whole account: the password strength above counts for nothing while this
+    # exists. Replaced with a secret unrelated to any biographical detail.
+    answer: 'Ns5b-Kxr9-Dhq4-Wvt6'
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -217,7 +229,9 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
+    # A favourite-film answer is guessable from a handful of tries even without research, so it is
+    # replaced by an opaque value like the other recovery secrets in this file.
+    answer: 'Jf3m-Cwz8-Qbn6-Hkr2'
 -
   email: demo
   password: 'demo'

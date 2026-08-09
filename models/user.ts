@@ -58,6 +58,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
+          // The address is cleaned up front, so the value examined below is the one that will
+          // really end up on the account and be echoed back on the profile and admin screens.
+          // Anything markup-like is already gone by then, which is why nothing here can turn into
+          // a stored script no matter what the registration form was fed.
+          email = security.sanitizeSecure(email)
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
             challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
               return utils.contains(
@@ -66,12 +71,6 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
               )
             })
           }
-          // Regardless of challenge state, the value that actually gets
-          // persisted (and later rendered elsewhere in the app) must always
-          // be sanitized server-side. Client-side validation on the Angular
-          // form can be bypassed by calling the API directly, so relying on
-          // it alone allows a persisted XSS payload to be stored unescaped.
-          email = security.sanitizeSecure(email)
           this.setDataValue('email', email)
         }
       }, // vuln-code-snippet hide-end
