@@ -80,12 +80,17 @@ describe('/', () => {
   })
 
   describe('challenge "accessLogDisclosure"', () => {
-    it("should be able to access today's access log file", () => {
-      // cy.visit requires a text/html response hence cy.request has been used
+    it('should no longer be able to browse or download server access log files', () => {
       cy.task<Date>('toISO8601').then((date: Date) => {
-        cy.request(`/support/logs/access.log.${date.toString()}`)
+        cy.request({
+          url: `/support/logs/access.log.${date.toString()}`,
+          failOnStatusCode: false
+        }).then((response) => {
+          // the /support/logs route was removed, so this now falls through to the SPA
+          expect(response.headers['content-type']).to.include('text/html')
+          expect(response.body).to.not.include('GET /rest/')
+        })
       })
-      cy.expectChallengeSolved({ challenge: 'Access Log' })
     })
   })
 })
