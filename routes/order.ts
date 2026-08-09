@@ -141,6 +141,10 @@ export function placeOrder () {
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
+          if (totalPrice < 0) {
+            totalPrice = 0
+          }
+
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
           if (req.body.UserId) {
