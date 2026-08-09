@@ -28,7 +28,7 @@ export function imageCaptchas () {
       }
       const imageCaptchaInstance = ImageCaptchaModel.build(imageCaptcha)
       await imageCaptchaInstance.save()
-      res.json(imageCaptcha)
+      res.json({ image: imageCaptcha.image, UserId: imageCaptcha.UserId })
     } catch (error) {
       res.status(400).send(res.__('Unable to create CAPTCHA. Please try again.'))
     }
@@ -38,7 +38,11 @@ export function imageCaptchas () {
 export const verifyImageCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = security.authenticatedUsers.from(req)
-    const UserId = user ? user.data ? user.data.id : undefined : undefined
+    if (!user) {
+      res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
+      return
+    }
+    const UserId = user.data.id
     const captchas = await ImageCaptchaModel.findAll({
       limit: 1,
       where: {
@@ -49,7 +53,12 @@ export const verifyImageCaptcha = () => async (req: Request, res: Response, next
       },
       order: [['createdAt', 'DESC']]
     })
-    if (!captchas[0] || req.body.answer === captchas[0].answer) {
+    // The delete is what makes the proof single-use: only the request that removes the row
+    // may continue, so a captured answer cannot be replayed.
+    const redeemed = captchas[0] && req.body.answer === captchas[0].answer
+      ? await ImageCaptchaModel.destroy({ where: { id: captchas[0].id } })
+      : 0
+    if (redeemed === 1) {
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

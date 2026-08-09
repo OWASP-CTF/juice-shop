@@ -8,7 +8,8 @@
       "node"
     ],
     "paths": {
-      "ng-gallery": ["./src/mocks/ng-gallery.ts"]
+      "ng-gallery": ["./src/mocks/ng-gallery.ts"],
+      "ngy-cookie": ["./node_modules/ngx-cookie"]
     }
   },
   "include": [

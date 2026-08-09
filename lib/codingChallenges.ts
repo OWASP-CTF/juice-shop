@@ -1,8 +1,21 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import config from 'config'
 import logger from './logger'
+import { challenges } from '../data/datacache'
+import { type ChallengeKey } from '../models/challenge'
 
 export const SNIPPET_PATHS = Object.freeze(['./server.ts', './routes', './lib', './data', './data/static/web3-snippets', './frontend/src/app', './models'])
+
+// A snippet and its candidate fixes quote the very code the challenge is about, so the shipped
+// policy only releases them once the challenge is solved. Enforcing it here and not just in the
+// score board keeps the source out of reach of a caller who never loads the app.
+export const codingChallengeUnlocked = (challengeKey: string) => {
+  const policy = config.get<string>('challenges.codingChallengesEnabled')
+  if (policy === 'never') return false
+  if (policy === 'always') return true
+  return challenges[challengeKey as ChallengeKey]?.solved === true
+}
 
 interface FileMatch {
   path: string

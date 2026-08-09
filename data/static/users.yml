@@ -34,7 +34,7 @@
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'Samuel' # https://en.wikipedia.org/wiki/James_T._Kirk
+    answer: 'Rk9d-Tq4m-Vhz7-Pb2s'
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -65,7 +65,7 @@
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: "Stop'n'Drop" # http://futurama.wikia.com/wiki/Suicide_booth
+    answer: 'Zm3f-Hx8t-Ndq5-Ljw6'
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -126,10 +126,10 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
+    answer: 'Cw7p-Rbn2-Ykt9-Xsf4'
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  password: 'hV3q@Ndx7!Ptw2$Kmr8'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'bT9!Zrk4@Qxm6#Lnv3'
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    answer: 'Ht5v-Qmd8-Bzr3-Nkp7'
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    answer: 'qF7Rzt2mVcXpLd9K'
 -
   email: chris.pike
   password: 'uss enterprise'
@@ -209,7 +209,7 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
+    answer: 'Dp2j-Lwx6-Fgt4-Mvc9'
 -
   email: demo
   password: 'demo'
@@ -262,7 +262,7 @@
   key: evm
   role: 'deluxe'
   feedback:
-    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft : "purpose betray marriage blame crunch monitor spin slide donate sport lift clutch"'
+    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft'
     rating: 1
   securityQuestion:
     id: 10
