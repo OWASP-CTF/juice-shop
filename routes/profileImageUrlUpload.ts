@@ -124,48 +124,77 @@ async function isSelfOrInternalTarget (rawUrl: string): Promise<boolean> {
   }
 }
 
+// Separates "this destination is not allowed" from "this destination is allowed but did
+// not answer". The two must not end the same way. A host that merely failed to respond is
+// an ordinary retrieval problem, and the customer's link stays on the profile as before. A
+// host the shop refuses to contact is a rejected request: it is answered as a client error
+// and nothing about it is written to the account.
+class RefusedTargetError extends Error {
+  constructor (message: string) {
+    super(message)
+    this.name = 'RefusedTargetError'
+  }
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
-      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
-      if (loggedInUser) {
-        try {
-          if (await isSelfOrInternalTarget(url)) {
-            throw new Error('refusing to fetch a URL that targets this deployment or its internal network')
-          }
-          // The check above only validates the URL the caller supplied. A remote server the
-          // caller does control can still redirect an initially-allowed request to an internal
-          // target; fetch() follows redirects by default, which would carry the request there
-          // without ever re-running the check. Take redirects out of fetch's hands entirely -
-          // any 3xx response is treated as a failure rather than silently followed - so nothing
-          // this server sends a request to can redirect it anywhere else.
-          const response = await fetch(url, { redirect: 'manual' })
-          if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
-            throw new Error('url redirected to another location, which is not permitted')
-          }
-          if (!response.ok || !response.body) {
-            throw new Error('url returned a non-OK status code or an empty body')
-          }
-          const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
-          const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
-          await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
-          const user = await UserModel.findByPk(loggedInUser.data.id)
-          await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
-        } catch (error) {
-          try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
-          }
-        }
-      } else {
+      if (!loggedInUser) {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
         return
+      }
+
+      // Whether this URL may be requested at all is settled here: before the request is
+      // issued, and before any other part of this handler is allowed to observe the URL.
+      // A destination that fails the gate is declined outright - answered 400, and the
+      // handler stops. It must not fall through to the ordinary "here is your profile
+      // again" redirect, because that is the very same answer a successful upload
+      // produces: it reports a refused request as an accepted one, and on the way there
+      // the previous shape of this handler also wrote the refused URL onto the account. A
+      // refusal has to read as a refusal in the response and leave nothing behind.
+      if (await isSelfOrInternalTarget(url)) {
+        logger.warn(`Declined profile image URL ${url}: it targets this deployment or its internal network`)
+        res.status(400).send('imageUrl must be an http(s) URL for a host outside this deployment')
+        return
+      }
+
+      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+
+      try {
+        // The gate above judged the URL the caller supplied. A remote host the caller does
+        // control can still answer with a redirect aimed at an internal target, and fetch()
+        // follows redirects on its own, which would carry the request there without the gate
+        // ever seeing the second destination. So redirects are taken out of fetch's hands: a
+        // 3xx answer ends the exchange rather than being followed, and no host this shop
+        // contacts can steer the request somewhere the gate has not already cleared.
+        const response = await fetch(url, { redirect: 'manual' })
+        if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+          throw new RefusedTargetError('the host answered with a redirect to another destination')
+        }
+        if (!response.ok || !response.body) {
+          throw new Error('url returned a non-OK status code or an empty body')
+        }
+        const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
+        const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
+        await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
+        const user = await UserModel.findByPk(loggedInUser.data.id)
+        await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
+      } catch (error) {
+        if (error instanceof RefusedTargetError) {
+          logger.warn(`Declined profile image URL ${url}: ${utils.getErrorMessage(error)}`)
+          res.status(400).send('imageUrl must be an http(s) URL for a host outside this deployment')
+          return
+        }
+        try {
+          const user = await UserModel.findByPk(loggedInUser.data.id)
+          await user?.update({ profileImage: url })
+          logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+        } catch (error) {
+          next(error)
+          return
+        }
       }
     }
     res.location(process.env.BASE_PATH + '/profile')
