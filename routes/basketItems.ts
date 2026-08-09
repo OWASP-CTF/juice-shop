@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -83,9 +84,12 @@ export function quantityCheckBeforeBasketItemUpdate () {
 }
 
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
-  const product = await QuantityModel.findOne({ where: { ProductId: id } })
+  // The stock row outlives the product it counts, because withdrawing a product only soft
+  // deletes it. Joining the two means a withdrawn product has no stock to draw on at all.
+  const product = await QuantityModel.findOne({ where: { ProductId: id }, include: [{ model: ProductModel, required: true }] })
   if (product == null) {
-    throw new Error('No such product found!')
+    res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })
+    return
   }
 
   // is product limited per user and order, except if user is deluxe?
