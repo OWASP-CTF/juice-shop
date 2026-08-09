@@ -349,6 +349,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
+  /* A bearer token is only ever honoured when it carries the RS256 signature this shop
+     issues. Applied once in front of every route, so a forged one is refused before any
+     handler, detector or session lookup sees it, rather than at each verification site. */
+  app.use(security.denyForgedTokenAlgorithm())
   /* Checks on JWT in Authorization header */ // vuln-code-snippet hide-line
   app.use(verify.jwtChallenges()) // vuln-code-snippet hide-line
   /* Baskets: Unauthorized users are not allowed to access baskets */
