@@ -86,13 +86,17 @@ export function profileImageUrlUpload () {
       if (loggedInUser) {
         try {
           const response = await fetchImageSafely(url)
+          // Only a request the server genuinely dispatched counts as having reached the
+          // target - recording it purely because of what the submitted URL looked like, before
+          // ever attempting the request, marked the server as abused even when nothing was
+          // ever sent. But once fetchImageSafely has returned, the request DID reach that
+          // target: what it answered with (a non-OK status, or no body at all) says something
+          // about the target, not about whether the request got there. Gating the bookkeeping
+          // on the response being "a valid-looking image" conflates two different questions.
+          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
-          // Only a request the server genuinely carried out counts as having reached an
-          // internal target. Recording it up front, purely because of what the submitted URL
-          // looked like, marked the server as abused even when the request was refused.
-          if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const ext =['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
           await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
