@@ -93,12 +93,11 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
       try {
-        if (/<!DOCTYPE/i.test(data)) {
-          throw new Error('XML document type definitions are not accepted')
-        }
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nonet: true, nocdata: true })', sandbox, { timeout: 2000 })
+        // Entity substitution and DTD loading stay off, which rules out external entity file
+        // disclosure and entity expansion without rejecting documents that carry a doctype.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nocdata: true, noent: false, dtdload: false, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
