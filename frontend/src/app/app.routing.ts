@@ -12,7 +12,6 @@ import { RegisterComponent } from './register/register.component'
 import { ForgotPasswordComponent } from './forgot-password/forgot-password.component'
 import { SearchResultComponent } from './search-result/search-result.component'
 import { LoginComponent } from './login/login.component'
-import { AdministrationComponent } from './administration/administration.component'
 import { ChangePasswordComponent } from './change-password/change-password.component'
 import { ComplaintComponent } from './complaint/complaint.component'
 import { RouterModule, type Routes, type UrlMatchResult, type UrlSegment } from '@angular/router'
@@ -36,7 +35,7 @@ import { OrderHistoryComponent } from './order-history/order-history.component'
 import { DeliveryMethodComponent } from './delivery-method/delivery-method.component'
 import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
-import { AccountingGuard, AdminGuard, LoginGuard } from './app.guard'
+import { AccountingGuard, LoginGuard } from './app.guard'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
 import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
@@ -69,11 +68,10 @@ const loadAboutComponent = async () => {
 
 // vuln-code-snippet start adminSectionChallenge scoreBoardChallenge
 const routes: Routes = [
-  {
-    path: 'administration',
-    component: AdministrationComponent,
-    canActivate: [AdminGuard]
-  },
+  /* A route guard runs in the browser, so it is advice and not enforcement: the bundle still
+     ships the screen and the token it reads sits in local storage. The administration screen is
+     not part of the customer facing shop, so it is not routed here at all. The APIs behind it
+     stay authorised on the server. */
   {
     path: 'accounting',
     component: AccountingComponent,
