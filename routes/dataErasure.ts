@@ -98,10 +98,16 @@ router.post('/', (req: Request<Record<string, unknown>, Record<string, unknown>,
       }
 
       // The view engine reads `layout` as a template path, so a caller-supplied one turns this
-      // form into an arbitrary file read. The result page picks its own template.
-      const { layout, ...erasureBody } = req.body
+      // form into an arbitrary file read. Refuse it outright rather than quietly dropping it,
+      // so the caller is told the request was rejected.
+      if (req.body.layout) {
+        next(new Error('File access not allowed'))
+        return
+      }
+
       res.render('dataErasureResult', {
-        ...erasureBody,
+        email: req.body.email,
+        securityAnswer: req.body.securityAnswer,
         ...themeVars
       })
     } catch (error) {
