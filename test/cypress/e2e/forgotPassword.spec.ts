@@ -68,17 +68,20 @@ describe('/#/forgot-password', () => {
     })
 
     describe('for his OWASP account', () => {
+      // The "Bjoern's Favorite Pet" challenge is patched: this account's security answer is no
+      // longer the publicly doxxed real-world pet name, so it can no longer be recovered by
+      // OSINT and the challenge is no longer solvable. Only the rotated high-entropy secret
+      // resets the password, which this test still covers to prove the flow itself works.
       it('should be able to reset password with his security answer', () => {
         cy.get('#email').type('bjoern@owasp.org')
         cy.wait('@securityQuestion')
-        cy.get('#securityAnswer').should('not.be.disabled').focus().type('Zaya')
+        cy.get('#securityAnswer').should('not.be.disabled').focus().type('K8v#pR2mQ!7wZtN4xLd$3bYhF9sJcE6a')
         // recordings to properly fix behavior during test
         cy.get('#newPassword').focus().type('kitten lesser pooch')
         cy.get('#newPasswordRepeat').focus().type('kitten lesser pooch')
         cy.get('#resetButton').click()
 
         cy.get('.confirmation').should('not.be.hidden')
-        cy.expectChallengeSolved({ challenge: "Bjoern's Favorite Pet" })
       })
     })
   })

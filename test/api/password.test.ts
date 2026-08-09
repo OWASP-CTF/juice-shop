@@ -146,13 +146,28 @@ void describe('/rest/user/reset-password', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('POST password reset for Bjoern\u00b4s OWASP account with correct answer to his security question', async () => {
+  void it('POST password reset for Bjoern\u00b4s OWASP account is rejected for the publicly doxxed answer to his security question', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
       .set({ 'content-type': 'application/json' })
       .send({
         email: 'bjoern@owasp.org',
         answer: 'Zaya',
+        new: 'kitten lesser pooch karate buffoon indoors',
+        repeat: 'kitten lesser pooch karate buffoon indoors'
+      })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.text.includes('Wrong answer to security question.'))
+  })
+
+  void it('POST password reset for Bjoern\u00b4s OWASP account with correct answer to his security question', async () => {
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'bjoern@owasp.org',
+        answer: 'K8v#pR2mQ!7wZtN4xLd$3bYhF9sJcE6a',
         new: 'kitten lesser pooch karate buffoon indoors',
         repeat: 'kitten lesser pooch karate buffoon indoors'
       })
