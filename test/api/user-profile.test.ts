@@ -51,4 +51,20 @@ void describe('/profile', () => {
 
     assert.equal(res.status, 302)
   })
+
+  void it('GET escapes executable usernames and enforces a restrictive CSP', async () => {
+    await request(app)
+      .post('/profile')
+      .set('Cookie', authHeader.Cookie)
+      .field('username', '#{7 * 7}')
+      .redirects(0)
+
+    const res = await request(app)
+      .get('/profile')
+      .set(authHeader)
+
+    assert.equal(res.status, 200)
+    assert.equal(res.headers['content-security-policy'], "default-src 'self'; img-src 'self' data: https:; script-src 'self'")
+    assert.ok(!res.text.includes('value="49"'))
+  })
 })
