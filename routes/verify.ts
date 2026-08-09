@@ -63,9 +63,14 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
+  /* Retrieving a static image is not evidence that anybody reached a restricted screen. The shop
+     inferred a visit to the contract sandbox and to the unannounced token sale from nothing more
+     than a request for a one-pixel spacer - an unauthenticated request, from anywhere, with no
+     session and no referer. That inference is the flaw: it reports on people who were never on
+     those screens, and it hands anyone who guesses an asset path the same standing as a genuine
+     visitor. The spacers are still served exactly as before and both screens are untouched; the
+     server simply stops drawing a conclusion from a request that supports none. */
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
