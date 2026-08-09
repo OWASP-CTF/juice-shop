@@ -55,9 +55,7 @@ export function getUserProfile () {
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
     if (username) {
-      // Spliced into the Pug source, so escape HTML and neutralize Pug's #{...} interpolation.
-      username = entities.encode(username).replace(/#/g, '&num;')
-      template = template.replace(/_username_/g, username)
+      username = entities.encode(username)
     }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
@@ -84,7 +82,10 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      // The name is data, not template source. Substituting it into the rendered page instead of
+      // into the Pug means no interpolation form - #{}, !{}, or any other - can reach the compiler.
+      const displayName = username
+      res.send(displayName ? fn(user).replace(/_username_/g, () => displayName) : fn(user))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
