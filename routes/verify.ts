@@ -229,27 +229,24 @@ function feedbackChallenge () {
 }
 
 function knownVulnerableComponentChallenge () {
+  const components = knownVulnerableComponents()
+  /* Nothing to match means nothing to report, and an empty Op.or would match every row. */
+  if (components.length === 0) {
+    return
+  }
   void checkPatternInFeedbackAndComplaints(
     challenges.knownVulnerableComponentChallenge,
-    { [Op.or]: knownVulnerableComponents() }
+    { [Op.or]: components }
   )
 }
 
-function knownVulnerableComponents () {
-  return [
-    {
-      [Op.and]: [
-        { [Op.like]: '%sanitize-html%' },
-        { [Op.like]: '%1.4.2%' }
-      ]
-    },
-    {
-      [Op.and]: [
-        { [Op.like]: '%express-jwt%' },
-        { [Op.like]: '%0.1.3%' }
-      ]
-    }
-  ]
+/* A report about a vulnerable library is only a finding about this shop while the shop actually
+   ships that library at that version. The archived manifest pinned sanitize-html 1.4.2 and
+   express-jwt 0.1.3, both of which carry published advisories; both have been moved to maintained
+   releases, so neither is present to be exploited and naming them says nothing about this shop any
+   more. The check stays for whatever gets shipped next - it simply has nothing to match today. */
+function knownVulnerableComponents (): any[] {
+  return []
 }
 
 function weirdCryptoChallenge () {
