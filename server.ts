@@ -602,7 +602,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/rest/basket/:id', utils.asyncHandler(retrieveBasket()))
   app.post('/rest/basket/:id/checkout', placeOrder())
   app.put('/rest/basket/:id/coupon/:coupon', utils.asyncHandler(applyCoupon()))
-  app.get('/rest/admin/application-version', utils.asyncHandler(retrieveAppVersion()))
+  /* The version endpoint reports the exact release the shop is running, and it lives under
+     /rest/admin/ - a path that reads like it is restricted but never checked anything. Sitting
+     somewhere that sounds administrative is not access control, so the administrator role is
+     required here for real. */
+  app.get('/rest/admin/application-version', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(retrieveAppVersion()))
   app.get('/rest/admin/application-configuration', utils.asyncHandler(retrieveAppConfiguration()))
   app.get('/rest/repeat-notification', utils.asyncHandler(repeatNotification()))
   app.get('/rest/continue-code', utils.asyncHandler(continueCode()))
