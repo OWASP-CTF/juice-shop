@@ -277,10 +277,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* Access logs are not served over HTTP at all. They record request paths, query strings
-     and tokens, and there is no reader for them in the shop, so the directory index and the
-     file handler are simply not mounted - strictly better than serving them behind a guard. */
+  /* /logs directory browsing, restricted to administrators rather than world readable */
+  // Access logs record request paths, query strings and tokens, so they are operator data.
+  // The guard is mounted ahead of everything else on this path, so an unauthorised caller
+  // is refused before any handler on it runs.
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
+  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -620,6 +624,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Custom Restful API */
   app.post('/rest/user/login', login())
+  app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))
   app.get('/rest/user/security-question', utils.asyncHandler(securityQuestion()))
