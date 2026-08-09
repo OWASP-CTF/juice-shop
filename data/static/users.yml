@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    answer: '28DupeorQF9tM0Nmyrffi38lS4TZGcle' # non-guessable secret; must NOT be derivable from public OSINT (OWASP Security Questions cheat sheet)
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    answer: 'viC53GuiySBhvT7k7SYplaV5-66OHoE-' # non-guessable secret; must NOT be derivable from public OSINT (OWASP Security Questions cheat sheet)
 -
   email: chris.pike
   password: 'uss enterprise'
