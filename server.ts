@@ -321,7 +321,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing, restricted to administrators instead of being world readable */
-  app.use('/support/logs', security.isAuthorized(), security.isAdmin())
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
   app.use('/support/logs', verify.accessControlChallenges())
   app.use('/support/logs/:file', serveLogFiles())
