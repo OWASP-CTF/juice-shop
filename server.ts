@@ -92,7 +92,6 @@ import { getUserProfile } from './routes/userProfile'
 import { serveAngularClient } from './routes/angular'
 import { resetPassword } from './routes/resetPassword'
 import { serveLogFiles } from './routes/logfileServer'
-import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
 import { countryMapping } from './routes/countryMapping'
@@ -109,7 +108,6 @@ import { updateUserProfile } from './routes/updateUserProfile'
 import { getVideo, promotionVideo } from './routes/videoHandler'
 import { likeProductReviews } from './routes/likeProductReviews'
 import { repeatNotification } from './routes/repeatNotification'
-import { serveQuarantineFiles } from './routes/quarantineServer'
 import { showProductReviews } from './routes/showProductReviews'
 import { nftMintListener, walletNFTVerify } from './routes/nftMint'
 import { createProductReviews } from './routes/createProductReviews'
@@ -265,10 +263,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
-  /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
-  app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
+  /* Public /ftp directory browsing and arbitrary file download were removed. Serving the ftp/
+     folder leaked forgotten developer files — most critically ftp/package.json.bak, which
+     exposed the supply-chain attack indicator (the malicious eslint-scope 3.7.2 dev dependency,
+     npm:eslint-scope:20180712 / eslint/eslint-scope#39). The allow-list on file types was
+     bypassable with a poison null byte (e.g. `package.json.bak%2500.md`), so the only durable
+     remediation is to stop serving that folder entirely. Legitimate static content and order
+     confirmation PDFs must be served from a dedicated, non-listed location instead. */
 
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
