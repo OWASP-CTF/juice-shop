@@ -425,9 +425,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
   app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    // Self-service registration never assigns a privileged role. This runs at the head of
-    // the registration chain so the role is already customer before finale mass-assigns
-    // the request body.
+    // finale mass-assigns whatever the body carries, so self-registration is confined to
+    // the attributes an ordinary customer may set. The role is pinned rather than merely
+    // deleted, and every other privileged column is dropped, at the head of the chain so
+    // nothing downstream sees an escalated payload.
+    if (req.body === Object(req.body)) {
+      for (const privileged of ['id', 'deluxeToken', 'isActive', 'totpSecret', 'lastLoginIp']) {
+        delete req.body[privileged]
+      }
+    }
     req.body.role = security.roles.customer
     if (req.body.email !== undefined && req.body.password !== undefined && req.body.passwordRepeat !== undefined) {
       if (req.body.email.length !== 0 && req.body.password.length !== 0) {
