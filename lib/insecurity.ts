@@ -143,10 +143,7 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    if (!token || !verify(utils.unquote(token))) {
-      return undefined
-    }
-    return this.tokenMap[utils.unquote(token)]
+    return token ? this.tokenMap[utils.unquote(token)] : undefined
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
