@@ -416,6 +416,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* Prevent mass assignment of privileged/internal attributes (e.g. role) during self-registration.
+     Only an explicit allowlist of fields may be supplied by the (unauthenticated) caller of this
+     public registration endpoint; the account role always defaults to 'customer' server-side. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    const allowedRegistrationFields = ['email', 'password', 'passwordRepeat', 'username', 'securityQuestion', 'securityAnswer']
+    for (const field of Object.keys(req.body)) {
+      if (!allowedRegistrationFields.includes(field)) {
+        delete req.body[field]
+      }
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
