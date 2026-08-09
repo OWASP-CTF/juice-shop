@@ -72,7 +72,9 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
      URL - which this middleware also sees for /assets/i18n and the image folders - proves
      nothing and is no longer treated as a visit. */
   const authorizedFor = (allowed: (role: string) => boolean) => {
-    const token = utils.jwtFrom(req)
+    // The beacons are fetched by the browser as page assets, so the session arrives on the
+    // cookie and not as a bearer header.
+    const token = security.sessionTokenFrom(req)
     if (!token || !security.verify(token)) {
       return false
     }

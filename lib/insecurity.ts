@@ -270,7 +270,8 @@ export const deluxeToken = (email: string) => {
 
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    const token = sessionTokenFrom(req)
+    const decodedToken = token && verify(token) && decode(token)
     if (decodedToken?.data?.role === roles.accounting) {
       next()
     } else {
@@ -282,9 +283,17 @@ export const isAccounting = () => {
 // The administration screen is guarded in the browser by AdminGuard, which decodes the
 // token without verifying it, so the role it reads is supplied by the caller. This
 // verifies the signature before the role claim is read.
+// A session arrives as a bearer token on XHR, but as the `token` cookie on the requests the
+// browser makes itself - page navigations and every asset fetch. Reading only the header meant
+// the role checks below refused a signed-in administrator the moment the request came from the
+// browser rather than from application code, which is exactly how the privileged pages and the
+// log browser are actually reached.
+export const sessionTokenFrom = (req: Request) => utils.jwtFrom(req) || req.cookies?.token
+
 export const isAdmin = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    const token = sessionTokenFrom(req)
+    const decodedToken = token && verify(token) && decode(token)
     if (decodedToken?.data?.role === roles.admin) {
       next()
     } else {
@@ -316,12 +325,14 @@ export const sameOriginOnly = () => {
 }
 
 export const isDeluxe = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+  const token = sessionTokenFrom(req)
+  const decodedToken = token && verify(token) && decode(token)
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
 }
 
 export const isCustomer = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+  const token = sessionTokenFrom(req)
+  const decodedToken = token && verify(token) && decode(token)
   return decodedToken?.data?.role === roles.customer
 }
 
