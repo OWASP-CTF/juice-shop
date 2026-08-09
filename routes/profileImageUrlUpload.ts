@@ -4,10 +4,28 @@
  */
 
 import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import dns from 'node:dns/promises'
 import net from 'node:net'
-import { Readable } from 'node:stream'
+import { Transform } from 'node:stream'
 import { finished } from 'node:stream/promises'
+
+// Stops the download at the cap instead of letting a remote endpoint decide how much of the
+// disk to use.
+const boundedBody = (limit: number) => {
+  let received = 0
+  return new Transform({
+    transform (chunk: Buffer, _encoding, callback) {
+      received += chunk.length
+      if (received > limit) {
+        callback(new Error('image exceeds the maximum accepted size'))
+        return
+      }
+      callback(null, chunk)
+    }
+  })
+}
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as security from '../lib/insecurity'
@@ -53,6 +71,11 @@ function isSafeOutboundUrl (candidate: string) {
   }
   return true
 }
+
+const OUTBOUND_TIMEOUT_MS = 10000
+// A remote file is written straight to disk, so the download is bounded rather than trusted
+// to end. Without a cap an endpoint that never stops sending fills the volume.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 // The patterns above only see the string that was typed. Names resolve, and `localtest.me`,
 // `2130706433`, `0x7f000001` and `0177.0.0.1` all end up at 127.0.0.1 without matching any
@@ -128,7 +151,31 @@ async function resolveOutboundTarget (candidate: string) {
   }
   // Every address the name resolves to has to be acceptable, otherwise a host with both a
   // public and an internal record would slip through.
-  return { href: parsed.href, internal: !addresses.every(isPublicUnicastAddress) }
+  return { href: parsed.href, internal: !addresses.every(isPublicUnicastAddress), address: addresses[0] }
+}
+
+
+// The address is resolved and checked, and then the connection is pinned to that exact
+// address. Handing the hostname to the HTTP client instead would have it resolve a second
+// time, and a name whose record changes between the two lookups - DNS rebinding - answers
+// the check with a public address and the connection with an internal one. Pinning removes
+// the window: what was validated is what is dialled. The hostname still travels in the URL,
+// so TLS verification and virtual hosting are unaffected.
+async function requestWithPinnedAddress (target: URL, address: string) {
+  const client = target.protocol === 'https:' ? https : http
+  return await new Promise<http.IncomingMessage>((resolve, reject) => {
+    const request = client.request(target, {
+      lookup: (_hostname: string, _options: unknown, callback: (err: Error | null, addr: string, family: number) => void) => {
+        callback(null, address, net.isIP(address))
+      },
+      headers: { accept: 'image/*' }
+    } as any, resolve)
+    request.on('error', reject)
+    request.setTimeout(OUTBOUND_TIMEOUT_MS, () => {
+      request.destroy(new Error('image url did not answer in time'))
+    })
+    request.end()
+  })
 }
 
 // `fetch` follows redirects on its own and only the first url was ever validated, so a
@@ -144,12 +191,14 @@ async function fetchWithValidatedRedirects (candidate: string) {
     if (target.internal) {
       throw new Error('image url resolves to an address that is not publicly routable')
     }
-    const response = await fetch(target.href, { redirect: 'manual' })
-    if (response.status < 300 || response.status > 399) {
+    const response = await requestWithPinnedAddress(new URL(target.href), target.address)
+    const status = response.statusCode ?? 0
+    if (status < 300 || status > 399) {
       return { response, reachedInternalTarget: target.internal }
     }
-    const location = response.headers.get('location')
-    if (location === null) {
+    const location = response.headers.location
+    response.resume()
+    if (location === undefined) {
       throw new Error('redirect without a location header')
     }
     currentUrl = new URL(location, target.href).href
@@ -195,8 +244,10 @@ export function profileImageUrlUpload () {
         }
         try {
           const { response, reachedInternalTarget } = await fetchWithValidatedRedirects(url)
-          if (!response.ok || !response.body) {
-            throw new Error('url returned a non-OK status code or an empty body')
+          const status = response.statusCode ?? 0
+          if (status < 200 || status >= 300) {
+            response.resume()
+            throw new Error('url returned a non-OK status code')
           }
           // Only an outbound request that actually reached an internal endpoint of this
           // deployment counts as abuse. The marker used to be set from the URL string
@@ -208,7 +259,7 @@ export function profileImageUrlUpload () {
           if (reachedInternalTarget && url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
-          await finished(Readable.fromWeb(response.body as any).pipe(fileStream))
+          await finished(response.pipe(boundedBody(MAX_IMAGE_BYTES)).pipe(fileStream))
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
