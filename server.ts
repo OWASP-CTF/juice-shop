@@ -406,6 +406,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Feedback ownership and rating are server decisions, not client-controlled attributes. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const user = security.authenticatedUsers.from(req)
+      req.body.UserId = user?.data?.id ?? null
+      const rating = Number(req.body.rating)
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
+        return
+      }
+      req.body.rating = rating
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
