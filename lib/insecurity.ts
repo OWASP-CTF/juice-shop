@@ -51,10 +51,51 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+/* The shop signs its session tokens with RS256, so RS256 is the only signature it accepts. The
+   verifying key of an RSA signature is public - this one is published under /encryptionkeys - and
+   a library that reads the algorithm out of the token itself will happily take that public key as
+   an HMAC secret. The attacker then has both the algorithm and the key, and can mint any token
+   they like. Pinning the algorithm is what makes the asymmetric signature mean anything. */
+export const jwtAlgorithm = 'RS256'
+
+export const hasExpectedAlgorithm = (token?: string) => {
+  if (!token) {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
+    return header?.alg === jwtAlgorithm
+  } catch (error: unknown) {
+    return false
+  }
+}
+
+/* Drops a token whose header names any other algorithm before anything downstream looks at it.
+   The request then simply counts as unauthenticated - which is what a signature the shop never
+   issued is worth - and endpoints that require a session answer 401 exactly as they always do. */
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const bearer = utils.jwtFrom(req)
+    if (bearer && !hasExpectedAlgorithm(bearer)) {
+      delete req.headers.authorization
+    }
+    if (req.cookies?.token && !hasExpectedAlgorithm(req.cookies.token)) {
+      delete req.cookies.token
+    }
+    next()
+  }
+}
+
+export const isAuthorized = () => {
+  const dropForgedAlgorithm = denyForgedTokenAlgorithm()
+  const authorizeToken = expressJwt(({ secret: publicKey, algorithms: [jwtAlgorithm] }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
+export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -77,7 +118,15 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    const cleaned = utils.unquote(token)
+    /* A token that does not carry a signature this shop issued identifies nobody */
+    if (!verify(cleaned)) {
+      return undefined
+    }
+    return this.tokenMap[cleaned]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -187,7 +236,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
