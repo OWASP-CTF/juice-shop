@@ -127,6 +127,29 @@ import { orderHistory, allOrders, toggleDeliveryStatus } from './routes/orderHis
 import { continueCode, continueCodeFindIt, continueCodeFixIt } from './routes/continueCode'
 import { ensureFileIsPassed, handleZipFileUpload, checkUploadSize, checkFileType, handleXmlUpload, handleYamlUpload } from './routes/fileUpload'
 
+/* The spacer images are part of the restricted screens that load them, so they are served to
+   the callers those screens are for. Left world-readable, anyone could fetch one and claim to
+   have been on a page they were never able to open. The session is read out of the Cookie
+   header directly because these are plain asset requests, which the browser makes without an
+   Authorization header and which are served before cookie parsing runs. */
+const beaconSession = (req: Request) => {
+  const bearer = utils.jwtFrom(req)
+  if (bearer) return bearer
+  const raw = req.headers.cookie ?? ''
+  const match = raw.match(/(?:^|;\s*)token=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+const restrictedBeacon = (allowed: (role: string) => boolean) => (req: Request, res: Response, next: NextFunction) => {
+  const token = beaconSession(req)
+  const payload: any = token && security.verify(token) ? security.decode(token) : null
+  const role = payload?.data?.role
+  if (typeof role !== 'string' || !allowed(role)) {
+    res.status(403).json({ error: 'Forbidden' })
+    return
+  }
+  next()
+}
+
 const app = express()
 const server = new http.Server(app)
 
@@ -229,6 +252,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  app.use('/assets/public/images/padding/19px.png', restrictedBeacon((role) => role === security.roles.admin))
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
