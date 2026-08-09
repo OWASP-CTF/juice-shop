@@ -174,6 +174,22 @@ export const isCustomer = (req: Request) => {
   return decodedToken?.data?.role === roles.customer
 }
 
+export const isAdmin = (req: Request) => {
+  const token = utils.jwtFrom(req)
+  if (!token) {
+    return false
+  }
+  try {
+    if (jws.decode(token)?.header?.alg !== 'RS256') {
+      return false
+    }
+    const decodedToken = verify(token) && decode(token)
+    return decodedToken?.data?.role === roles.admin
+  } catch {
+    return false
+  }
+}
+
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
