@@ -17,6 +17,14 @@ export function retrieveBasket () {
     try {
       const id = req.params.id
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+      // The basket id travels in the path and the client can edit it, so only the basket
+      // owned by the authenticated session may be read. The refusal is issued before any
+      // further handling so a caller never reaches somebody else's basket contents.
+      const requester = security.authenticatedUsers.from(req)
+      if (basket == null || requester?.data?.id !== basket.UserId) {
+        res.status(403).json({ error: 'Malicious activity detected' })
+        return
+      }
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
         const user = security.authenticatedUsers.from(req)

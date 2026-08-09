@@ -34,6 +34,7 @@ interface IAuthenticatedUsers {
   tokenMap: Record<string, ResponseWithUser>
   idMap: Record<string, string>
   put: (token: string, user: ResponseWithUser) => void
+  remove: (token?: string) => void
   get: (token?: string) => ResponseWithUser | undefined
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
@@ -111,6 +112,15 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   put: function (token: string, user: ResponseWithUser) {
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
+  },
+  remove: function (token?: string) {
+    if (!token) return
+    const normalizedToken = utils.unquote(token)
+    const user = this.tokenMap[normalizedToken]
+    if (user && this.idMap[user.data.id] === normalizedToken) {
+      delete this.idMap[user.data.id]
+    }
+    delete this.tokenMap[normalizedToken]
   },
   get: function (token?: string) {
     return token ? this.tokenMap[utils.unquote(token)] : undefined
@@ -222,6 +232,28 @@ export const isAdmin = () => {
   }
 }
 
+// The profile and avatar endpoints act on the session cookie alone, so a page on another
+// site could post to them on a logged-in visitor's behalf. A request that declares an
+// origin has to declare this one; a request with no origin at all (a direct API call) is
+// left to the ordinary authorisation checks.
+export const sameOriginOnly = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const source = req.headers.origin ?? req.headers.referer
+    if (source !== undefined) {
+      try {
+        if (new URL(source).host !== req.headers.host) {
+          res.status(403).json({ error: 'Cross-origin request blocked' })
+          return
+        }
+      } catch {
+        res.status(403).json({ error: 'Invalid request origin' })
+        return
+      }
+    }
+    next()
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
@@ -248,11 +280,17 @@ export const updateAuthenticatedUsers = () => (req: Request, res: Response, next
   // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
   // would be admitted to the session map here even though the guards reject it elsewhere.
   if (token && hasAcceptedAlgorithm(token)) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+    // The accepted algorithm is pinned here as well as in the header check above, so the
+    // verifier can never be talked into treating the public key as an HMAC secret.
+    jwt.verify(token, publicKey, { algorithms: ['RS256'] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
-          res.cookie('token', token)
+          // SameSite=Strict keeps the session cookie off cross-site requests, so a page on
+          // another origin cannot ride it. HttpOnly is deliberately not set: the client
+          // clears this cookie from script on logout, and a cookie it could no longer
+          // remove would keep the server-side session alive after sign-out.
+          res.cookie('token', token, { sameSite: 'strict', secure: req.secure })
         }
       }
     })
