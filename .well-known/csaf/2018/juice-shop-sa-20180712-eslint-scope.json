@@ -1,0 +1,107 @@
+{
+  "document": {
+    "acknowledgments": [
+      {
+        "organization": "OWASP Juice Shop",
+        "summary": "Reported through the shop's customer feedback channel"
+      }
+    ],
+    "aggregate_severity": {
+      "text": "Critical"
+    },
+    "category": "csaf_security_advisory",
+    "csaf_version": "2.0",
+    "lang": "en",
+    "notes": [
+      {
+        "category": "legal_disclaimer",
+        "text": "The Juice Shop contains vulnerabilities. Only use it in an isolated. ONLY run the Juice Shop in a training environment.",
+        "title": "Isolated Env."
+      }
+    ],
+    "publisher": {
+      "category": "vendor",
+      "contact_details": "timo.pagel@owasp.org",
+      "issuing_authority": "OWASP Juice Shop",
+      "name": "OWASP Juice Shop Core Team",
+      "namespace": "https://github.com/juice-shop/juice-shop"
+    },
+    "title": "juice-shop-sa-20180712-eslint-scope",
+    "tracking": {
+      "current_release_date": "2024-03-03T11:00:00.000Z",
+      "generator": {
+        "date": "2024-03-03T19:30:53.428Z",
+        "engine": {
+          "name": "Secvisogram",
+          "version": "2.5.0"
+        }
+      },
+      "id": "juice-shop-sa-20180712-eslint-scope",
+      "initial_release_date": "2024-03-03T11:00:00.000Z",
+      "revision_history": [
+        {
+          "date": "2024-03-03T11:00:00.000Z",
+          "number": "1.0.0",
+          "summary": "Initial public release."
+        }
+      ],
+      "status": "final",
+      "version": "1.0.0"
+    }
+  },
+  "product_tree": {
+    "branches": [
+      {
+        "category": "product_version_range",
+        "name": ">=v6.0.0",
+        "product": {
+          "name": "OWASP Juice Shop",
+          "product_id": "juice-shop/juice-shop",
+          "product_identification_helper": {
+            "purl": "pkg:npm/eslint-scope@3.7.2"
+          }
+        }
+      }
+    ]
+  },
+  "vulnerabilities": [
+    {
+      "notes": [
+        {
+          "category": "details",
+          "text": "The build toolchain briefly resolved eslint-scope 3.7.2, a release published from a compromised maintainer account that exfiltrated npm credentials from the machines that installed it. No customer of the shop is affected; the exposure is to the development team's own registry credentials. The affected release is no longer resolvable by this project and the credentials it could have reached have been rotated.",
+          "title": "Compromised eslint-scope release harvested developer npm credentials"
+        }
+      ],
+      "product_status": {
+        "known_affected": [
+          "juice-shop/juice-shop"
+        ]
+      },
+      "remediations": [
+        {
+          "category": "vendor_fix",
+          "date": "2018-07-12T10:00:00.000Z",
+          "details": "Move off the compromised release to eslint-scope 3.7.3 or later and rotate every npm token the build machines held.",
+          "product_ids": [
+            "juice-shop/juice-shop"
+          ],
+          "url": "https://github.com/eslint/eslint-scope/issues/39"
+        }
+      ],
+      "references": [
+        {
+          "category": "external",
+          "summary": "Original report",
+          "url": "https://github.com/eslint/eslint-scope/issues/39"
+        },
+        {
+          "category": "external",
+          "summary": "Snyk advisory npm:eslint-scope:20180712",
+          "url": "https://security.snyk.io/vuln/npm:eslint-scope:20180712"
+        }
+      ],
+      "title": "npm:eslint-scope:20180712"
+    }
+  ]
+}
