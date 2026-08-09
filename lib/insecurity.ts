@@ -51,10 +51,70 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+/* All session tokens are issued as RS256. The matching public key is published (and has to be, for
+   clients to verify it), so it must never be usable as a verification secret for any other
+   algorithm: an attacker could otherwise HMAC-sign a token with the public key (alg: HS256) or drop
+   the signature entirely (alg: none). Every verification path therefore pins the algorithm to this
+   single value and does so BEFORE any signature check is performed. */
+const jwtSigningAlgorithm = 'RS256'
+
+const jwtHeaderOf = (token: unknown) => {
+  if (typeof token !== 'string') {
+    return undefined
+  }
+  const encodedHeader = token.split('.')[0]
+  if (!encodedHeader) {
+    return undefined
+  }
+  try {
+    const header: unknown = JSON.parse(Buffer.from(encodedHeader, 'base64').toString('utf8'))
+    if (header === null || typeof header !== 'object') {
+      return undefined
+    }
+    return header as { alg?: string }
+  } catch {
+    return undefined
+  }
+}
+
+export const hasExpectedJwtAlgorithm = (token: unknown) => jwtHeaderOf(token)?.alg === jwtSigningAlgorithm
+
+/* Rejects any request presenting a token which declares a signing algorithm outside the allow-list,
+   before the token reaches any middleware that would try to verify or decode it. */
+export const enforceJwtAlgorithm = () => (req: Request, res: Response, next: NextFunction) => {
+  for (const token of [req.cookies?.token, utils.jwtFrom(req)]) {
+    const header = jwtHeaderOf(token)
+    if (header !== undefined && header.alg !== jwtSigningAlgorithm) {
+      res.status(401).json({ error: 'Unsupported JWT signing algorithm' })
+      return
+    }
+  }
+  next()
+}
+
+export const isAuthorized = () => {
+  const requireValidToken = expressJwt(({ secret: publicKey, algorithms: [jwtSigningAlgorithm] }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (token && !hasExpectedJwtAlgorithm(token)) {
+      res.status(401).json({ error: 'Unsupported JWT signing algorithm' })
+      return
+    }
+    requireValidToken(req, res, next)
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!hasExpectedJwtAlgorithm(token)) {
+    return false
+  }
+  try {
+    return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -187,7 +247,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
