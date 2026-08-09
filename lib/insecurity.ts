@@ -73,6 +73,10 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   tokenMap: {},
   idMap: {},
   put: function (token: string, user: ResponseWithUser) {
+    const previousToken = this.idMap[user.data.id]
+    if (previousToken) {
+      delete this.tokenMap[previousToken]
+    }
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
   },
