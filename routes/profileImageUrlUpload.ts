@@ -4,6 +4,7 @@
  */
 
 import fs from 'node:fs'
+import dns from 'node:dns'
 import { Readable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { type Request, type Response, type NextFunction } from 'express'
@@ -41,14 +42,40 @@ function trailingIPv4OfMappedAddress (v6: string): [number, number] | null {
   return [(high >> 8) & 0xff, high & 0xff]
 }
 
+// Classifies a single already-resolved address literal (IPv4 dotted-quad, plain
+// IPv6, or an IPv4-mapped IPv6 form) as one that must never be reached on a remote
+// user's behalf. This is the one place the range logic above is applied, so both the
+// literal-hostname path and the DNS-resolution path below funnel through it.
+function isDisallowedAddress (address: string): boolean {
+  const a = address.toLowerCase()
+
+  const v4 = a.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+  if (v4 !== null) return isDisallowedIPv4(Number(v4[1]), Number(v4[2]))
+
+  if (a === '::1' || a === '::') return true
+  if (a.startsWith('fe80') || a.startsWith('fc') || a.startsWith('fd')) return true
+
+  // IPv4-mapped IPv6, either the dotted tail (::ffff:127.0.0.1) or the hex tail
+  // (::ffff:7f00:1) - reuse the IPv4 range check on the embedded address.
+  if (a.includes('ffff')) {
+    const dotted = a.match(/(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
+    if (dotted !== null) return isDisallowedIPv4(Number(dotted[1]), Number(dotted[2]))
+    const mapped = trailingIPv4OfMappedAddress(a)
+    if (mapped !== null) return isDisallowedIPv4(mapped[0], mapped[1])
+  }
+
+  return false
+}
+
 // The imageUrl feature has this server fetch a URL on a logged-in user's behalf.
 // Without a check here, a hostname or IP literal that actually points back at this
-// very deployment turns "grab my avatar" into the server attacking itself. This
-// looks only at the literal address the caller supplied (no DNS lookups, no probing
-// of our own network interfaces) and rejects anything that could resolve to
-// ourselves or to infrastructure that should only ever be reachable from inside the
-// deployment. See the OWASP SSRF Prevention Cheat Sheet linked from this challenge.
-function isSelfOrInternalTarget (rawUrl: string): boolean {
+// very deployment turns "grab my avatar" into the server attacking itself. Beyond the
+// obvious IP-literal and internal-name cases, this resolves any real hostname through
+// the OS resolver and rejects it if it points at loopback, "this" network, RFC 1918
+// private space, link-local/metadata space, or multicast/reserved space - so a plain
+// service name like "app" that DNS maps to the container's own address cannot slip
+// through. See the OWASP SSRF Prevention Cheat Sheet linked from this challenge.
+async function isSelfOrInternalTarget (rawUrl: string): Promise<boolean> {
   let target: URL
   try {
     target = new URL(rawUrl)
@@ -60,26 +87,41 @@ function isSelfOrInternalTarget (rawUrl: string): boolean {
     return true // e.g. file:, data:, gopher: - never a legitimate avatar source
   }
 
+  // URL.hostname keeps the square brackets around an IPv6 literal; strip them so the
+  // address classifier and the resolver both see a bare host.
   const host = target.hostname.toLowerCase()
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host
 
-  if (host === 'localhost' || host.endsWith('.localhost')) return true
-  if (host === 'metadata' || host === 'metadata.google.internal') return true
+  // Obvious internal names, refused before we spend a DNS lookup on them.
+  if (bare === 'localhost' || bare.endsWith('.localhost')) return true
+  if (bare === 'metadata' || bare === 'metadata.google.internal') return true
 
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/)
-  if (ipv4 !== null) {
-    return isDisallowedIPv4(Number(ipv4[1]), Number(ipv4[2]))
+  // Already an IP literal (dotted IPv4, or an IPv6 literal that arrived in brackets)?
+  // Classify it directly - no name to resolve.
+  if (host.startsWith('[') || /^(\d{1,3}\.){3}\d{1,3}$/.test(bare)) {
+    return isDisallowedAddress(bare)
   }
 
-  if (host.startsWith('[') && host.endsWith(']')) {
-    const v6 = host.slice(1, -1)
-    if (v6 === '::1' || v6 === '::') return true
-    if (v6.startsWith('fe80:') || v6.startsWith('fc') || v6.startsWith('fd')) return true
-    const mapped = trailingIPv4OfMappedAddress(v6)
-    if (mapped !== null) return isDisallowedIPv4(mapped[0], mapped[1])
-    return false
-  }
+  // A single-label hostname (no dot at all) is never a legitimate public avatar
+  // source: it is either an internal service alias handed out by the container /
+  // orchestrator DNS - e.g. the very "app" name this deployment answers to on
+  // app:3000 - or a bare integer/octal/hex encoding of a loopback address such as
+  // http://2130706433/ (== 127.0.0.1). Refuse the whole class without a lookup.
+  if (!bare.includes('.')) return true
 
-  return false
+  // The part every earlier attempt missed: an ordinary-looking domain name can still
+  // point at an internal address. Checking only the literal string lets "app" (and
+  // any DNS-rebinding host) sail through, because fetch() then resolves it via DNS to
+  // the container's own private address and completes the self-attack. So resolve the
+  // name the same way fetch() will - through the OS resolver - and refuse if ANY of
+  // the returned addresses is internal. A resolution failure is treated as "do not
+  // fetch" rather than waved through.
+  try {
+    const records = await dns.promises.lookup(bare, { all: true })
+    return records.some((record) => isDisallowedAddress(record.address))
+  } catch {
+    return true
+  }
 }
 
 export function profileImageUrlUpload () {
@@ -90,7 +132,7 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
-          if (isSelfOrInternalTarget(url)) {
+          if (await isSelfOrInternalTarget(url)) {
             throw new Error('refusing to fetch a URL that targets this deployment or its internal network')
           }
           const response = await fetch(url)
