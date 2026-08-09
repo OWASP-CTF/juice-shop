@@ -32,10 +32,16 @@ interface Product {
 export function placeOrder () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = req.params.id
-    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+    /* Products that were taken out of the assortment are only flagged as deleted. Including them
+       here regardless is what makes a discontinued offer orderable, so the soft delete is honoured. */
+    BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: true, as: 'Products' }] })
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
+          if (basket.UserId !== customer?.data.id) {
+            res.status(403).json({ error: 'Malicious activity detected.' })
+            return
+          }
           const email = customer ? customer.data ? customer.data.email : '' : ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
@@ -138,6 +144,13 @@ export function placeOrder () {
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
+          if (totalPrice < 0) {
+            /* A basket that totals below zero is a request the shop declines, not a server fault.
+               Raising here reported a fault for something the caller sent and abandoned the
+               response mid-checkout. */
+            res.status(400).json({ error: 'Invalid order total' })
+            return
+          }
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
