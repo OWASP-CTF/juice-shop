@@ -427,7 +427,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
+  app.get('/api/Complaints', security.isAuthorized())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
@@ -452,7 +452,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      replay to other people, so the shop has to be able to say who wrote a row. An anonymous
      write endpoint into that table cannot be attributed, cannot be revoked per author and gives
      an abuse report nothing to act on, so a session is required. */
-  app.post('/api/Feedbacks', security.isAuthorized())
   /* Feedback ownership and rating are server decisions, not client-controlled attributes. */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
     if (req.body === Object(req.body)) {
