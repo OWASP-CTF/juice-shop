@@ -21,11 +21,11 @@ export function saveLoginIp () {
       }
       if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
         challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
       }
-      if (lastLoginIp === undefined) {
+      if (lastLoginIp === undefined || lastLoginIp === '') {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
+      } else {
+        lastLoginIp = security.sanitizeSecure(lastLoginIp)
       }
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
