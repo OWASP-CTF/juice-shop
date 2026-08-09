@@ -229,6 +229,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The administration console is the only page that asks for this spacer, so the role that may
+     open the console is the role that may fetch it. */
+  app.use('/assets/public/images/padding/19px.png', security.isAdmin())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
