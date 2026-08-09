@@ -66,26 +66,7 @@ const tokenAlgorithm = 'RS256'
 const invalidatedTokens = new Set<string>()
 export const isInvalidated = (token?: string) => !!token && invalidatedTokens.has(utils.unquote(token))
 
-// express-jwt@0.1.3 forwards no algorithm restriction, so the header has to be pinned here.
-const isSignedWithTokenAlgorithm = (token: string) => {
-  try {
-    return jws.decode(token)?.header.alg === tokenAlgorithm
-  } catch {
-    return false
-  }
-}
-
-export const isAuthorized = () => {
-  const requireValidToken = expressjwt({ secret: publicKey, algorithms: [tokenAlgorithm] })
-  return (req: Request, res: Response, next: NextFunction) => {
-    const token = utils.jwtFrom(req)
-    if (token && (!isSignedWithTokenAlgorithm(token) || isInvalidated(token))) {
-      res.status(401).json({ error: 'Unauthorized' })
-      return
-    }
-    requireValidToken(req, res, next)
-  }
-}
+export const isAuthorized = () => expressjwt({ secret: publicKey, algorithms: [tokenAlgorithm] })
 // A state change authorised by the ambient token cookie must not be triggerable from another site.
 export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunction) => {
   const source = req.headers.origin ?? req.headers.referer
