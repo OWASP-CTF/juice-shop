@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -20,7 +20,9 @@ import * as utils from './utils'
 import * as z85 from 'z85'
 
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+/* The signing key is 2048 bit: 1024 bit RSA is below current guidance and is rejected
+   outright by maintained JWT libraries. */
+const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIIEowIBAAKCAQEAk7E0joCcrtu8Xn72xQozEtx2ugh2DzJYSYw7asBpOyO2MA2n\r\nETBIE1nTbL/W2w4yy8Qukj8UpUZNm20htwBn5ysXryuQwV04hQKaEZwV2GZ/fIPA\r\nq5igDiUxITLvV9/SWrTmdsh4BZ7qyztqQyenpXb0a4S4tc7KiOa7o75puESOWlGm\r\nQk5yXvWJf6+z2VxFVAsBxYh0U3AQ4CRlcYRGzGnadAjQakHwj24z9sny4lAkjpCG\r\nJCi2J2H9nBR38+zrP4tP3Hwq7OggAX+UawQKeQLCWbPDZs3lJKtu/9QY+EAvjBE+\r\ny65YjW9VEFy4ByzbEsaMFvofAeo7iFqVn47h/QIDAQABAoIBABWREN2mRjr6d11N\r\nKPfI74BXlTbBOYwqi93hjmOeST+LjXUi6TyHUl8RBOCiettuDVjYAvz0HS2tQHPr\r\n0bqJYqLNFh5MPE0gMbqqkJj1s/LvtLoX+zCTjvvBzpTMfUrVsj/wnp7F01DuzdZz\r\njKbVyZNN9Y8lyFs0ITswhkH48jMoBswlxbcJtBYldKjuvIM1ak8aXCgkGH6TPOvW\r\nAAcBNrXO82y4xGwntGpKGif9USNaOrNAyBet4bGFoLTpTQIlDl6mTWiA47bQb7E3\r\ntkm1u/BZM6ZqGILWLe4l0sMamNB4x5z4GAqk4XbZFVxk6EXYodwi5OweDQlYHV9H\r\nn0OTHrkCgYEAzMhj76o7EFYKFZXcqwGsr/cGNQhWzIzQCYt5jk3HPJctN38mrWd4\r\ng54yPYB9DElPaE4H0PE4XPH3FQFE1mdJEkbTn4DLwoUaN7VxnUEgQMP5MPNZqa0X\r\n99vCjbcGciLtCopNmdOyquQu4O00SYfksdEvvZDNYI6G+ApiUgjIH0cCgYEAuKF7\r\nYuXGJtBUFAexnI8WbKK2R+JDWNg745397ivkDKRCb2QNY1jrVGK/nZhk8iLInKWp\r\n8vrRSA0K+d74dD/PwfllItPllN9SCkd4LWAIH8mNEoHAQwC9qfju2QU/0vFRAJRq\r\nwMTrQDTR6n6VSY/KEXs+ExWwzk2V6NMrZV6JfpsCgYEAr9XtQbAI0SkftZMdjFR+\r\nxAU29jh312GdjGSPdmpAhj1E3R83xbNP3qvqdbarKO6V2XkO6xEFFYHKZ+XUBslf\r\nC+t28MF1tEv3zBfnO2DdYd8kTCzYM4JmTzQKpQaf6UcmBGPm6AvHoUcXHZlvySd/\r\nblOxS3NXde5L5BV+gPP7aicCgYBPC4Oh0bHGCEcW1DxsRK5bEEZt/CbNMLZjOs7u\r\nWwgliWWP/wvkTrthw2058Xa2W8H7nsll55AWAs+CLr28N12hND7ibEnMNNgQ4oxH\r\nEOgpg8bL95TymqyYyqSncSHkE8CUOPaDVUtKj9KXTF5pwg/G8DahQRYTHRBjP5VC\r\nrvi6pQKBgGbEc/wXAOpUa+VR2xtUwqMeNMSnVsjPvZQM1obaNCkoe7qtRIQpNd6K\r\nz5GUvLPXgTzf3FsICWcA2eGdoOiuZDijhEurdU+6gfd5iyGeXeKKKUGlrHvOXSjN\r\nuppKM//9Gw6o7R7gw5CXaADrbTqnbRbz5aHK0sOXlmTcTzGY7AXP\r\n-----END RSA PRIVATE KEY-----'
 
 interface ResponseWithUser {
   status?: string
@@ -51,22 +53,85 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+/* Session tokens are signed RS256 and the matching key is public, so verification has to pin the
+   algorithm: without it a token could be HMAC-signed with the published public key, or presented
+   unsigned as `alg: none`, and still be accepted. */
+const jwtSigningAlgorithm = 'RS256'
+
+export const isAuthorized = () => expressjwt({ secret: publicKey, algorithms: [jwtSigningAlgorithm] })
+export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: ['HS256'] })
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtSigningAlgorithm })
+const jwtHeaderOf = (token: unknown) => {
+  if (typeof token !== 'string') {
+    return undefined
+  }
+  const encodedHeader = token.split('.')[0]
+  if (!encodedHeader) {
+    return undefined
+  }
+  try {
+    const header: unknown = JSON.parse(Buffer.from(encodedHeader, 'base64').toString('utf8'))
+    if (header === null || typeof header !== 'object') {
+      return undefined
+    }
+    return header as { alg?: string }
+  } catch {
+    return undefined
+  }
+}
+
+export const hasExpectedJwtAlgorithm = (token: unknown) => jwtHeaderOf(token)?.alg === jwtSigningAlgorithm
+
+/* Rejects any request presenting a token which declares a signing algorithm outside the
+   allow-list, before it reaches middleware that would try to verify or decode it. */
+export const enforceJwtAlgorithm = () => (req: Request, res: Response, next: NextFunction) => {
+  for (const token of [req.cookies?.token, utils.jwtFrom(req)]) {
+    const header = jwtHeaderOf(token)
+    if (header !== undefined && header.alg !== jwtSigningAlgorithm) {
+      res.status(401).json({ error: 'Unsupported JWT signing algorithm' })
+      return
+    }
+  }
+  next()
+}
+
+export const verify = (token: string) => {
+  if (!token || !hasExpectedJwtAlgorithm(token)) {
+    return false
+  }
+  try {
+    if (!jws.verify(token, jwtSigningAlgorithm, publicKey)) {
+      return false
+    }
+    /* A signature only says the token was issued here, never that it is still valid, so the
+       expiry has to be enforced where the token is accepted. */
+    const decoded = jws.decode(token)?.payload
+    const payload = typeof decoded === 'string' ? JSON.parse(decoded) : decoded
+    return typeof payload?.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
+const SANITIZE_PASS_LIMIT = 25
+
 export const sanitizeSecure = (html: string): string => {
-  const sanitized = sanitizeHtml(html)
-  if (sanitized === html) {
-    return html
-  } else {
-    return sanitizeSecure(sanitized)
+  // Sanitising once can leave a payload behind when a stripped tag reveals another one,
+  // so keep sanitising until the result stops changing. The pass limit turns a pathological
+  // input into an empty string instead of unbounded work.
+  let current = html
+  for (let pass = 0; pass < SANITIZE_PASS_LIMIT; pass++) {
+    const sanitized = sanitizeHtml(current)
+    if (sanitized === current) {
+      return sanitized
+    }
+    current = sanitized
   }
+  return ''
 }
 
 export const authenticatedUsers: IAuthenticatedUsers = {
@@ -122,10 +187,7 @@ function hasValidFormat (coupon: string) {
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
-  'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
+  'https://github.com/juice-shop/juice-shop', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -133,11 +195,7 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
-  }
-  return allowed
+  return redirectAllowlist.has(url) // vuln-code-snippet vuln-line redirectChallenge
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -151,6 +209,22 @@ export const roles = {
 export const deluxeToken = (email: string) => {
   const hmac = crypto.createHmac('sha256', privateKey)
   return hmac.update(email + roles.deluxe).digest('hex')
+}
+
+/* A session token may arrive as a bearer token (XHR) or as the `token` cookie
+   (plain document and asset requests made by the browser itself). */
+const sessionTokenFrom = (req: Request) => utils.jwtFrom(req) || req.cookies?.token
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = sessionTokenFrom(req)
+    const decodedToken = token && verify(token) && decode(token)
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
 }
 
 export const isAccounting = () => {
@@ -187,8 +261,8 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
+  if (token && hasExpectedJwtAlgorithm(token)) {
+    jwt.verify(token, publicKey, { algorithms: [jwtSigningAlgorithm] }, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
           authenticatedUsers.put(token, decoded)
