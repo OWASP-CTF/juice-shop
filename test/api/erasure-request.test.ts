@@ -27,7 +27,7 @@ void describe('/dataerasure', () => {
 
     assert.equal(res.status, 200)
     assert.ok(res.text.includes('bjoern@owasp.org'))
-    assert.ok(res.text.includes('Name of your favorite pet?'))
+    assert.ok(res.text.includes('Number of one of your customer or ID cards?'))
   })
 
   void it('GET erasure form rendering fails for users without assigned security answer', async () => {
