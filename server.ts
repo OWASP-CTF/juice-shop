@@ -199,9 +199,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
-  /* Remove duplicate slashes from URL which allowed bypassing subsequent filters */
+  /* Canonicalise the request path before any filter or authorisation decision looks at it.
+     Duplicate slashes and '.' / '..' segments let the very same resource be addressed by a
+     spelling that a path based check does not recognise. */
   app.use((req: Request, res: Response, next: NextFunction) => {
-    req.url = req.url.replace(/[/]+/g, '/')
+    const queryStart = req.url.indexOf('?')
+    const rawPath = queryStart === -1 ? req.url : req.url.substring(0, queryStart)
+    const query = queryStart === -1 ? '' : req.url.substring(queryStart)
+    const normalizedPath = path.posix.normalize(rawPath.replace(/[/]+/g, '/'))
+    req.url = (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath) + query
     next()
   })
 
@@ -235,11 +241,20 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Assets that only exist as part of a privileged area are subject to the same
      authorisation as the area itself - an anonymous client has no business fetching
      them, whether it navigated there or requested them directly. */
-  app.use([
-    '/assets/public/images/padding/19px.png', // administration
-    '/assets/public/images/padding/56px.png', // token sale
-    '/assets/public/images/padding/11px.png' // web3 sandbox
-  ], security.isAdmin())
+  const privilegedAreaAsset = /\/(19|56|11)px\.png$/i // administration, token sale, web3 sandbox
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(req.path)
+    } catch {
+      // Malformed percent-encoding: fall back to the raw path for the decision below.
+    }
+    if (privilegedAreaAsset.test(path.posix.normalize(requestedPath))) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
