@@ -277,8 +277,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  /* /logs directory browsing, restricted to administrators rather than world readable */
+  // Access logs record request paths, query strings and tokens, so they are operator data.
+  // The guard is mounted ahead of everything else on this path, so an unauthorised caller
+  // is refused before any handler on it runs.
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
+  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet neutral-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -398,6 +404,23 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti-automation on top of the CAPTCHA. Solving one puzzle proves a puzzle was solved,
+     not that submissions are human-paced - the expression is arithmetic a script can just
+     evaluate. Accepted submissions are therefore throttled over a sliding window, so a
+     loop that answers CAPTCHAs correctly still cannot bulk-load the shop. */
+  const recentFeedbackSubmissions: number[] = []
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+      recentFeedbackSubmissions.shift()
+    }
+    if (recentFeedbackSubmissions.length >= 8) {
+      res.status(429).json({ error: res.__('Too many feedback submissions. Please try again shortly.') })
+      return
+    }
+    recentFeedbackSubmissions.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
