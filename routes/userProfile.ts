@@ -49,16 +49,13 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
+    // The username never reaches the template engine: it is HTML-encoded and placed into the
+    // already rendered markup, so it can be read neither as Pug nor as markup.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      // Spliced into the Pug source, so escape HTML and neutralize Pug's #{...} interpolation.
-      username = entities.encode(username).replace(/#/g, '&num;')
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -72,9 +69,16 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      // A CSP source expression ends at whitespace or ';', so only those can inject a second directive.
-      const profileImageSrc = (user?.profileImage ?? '').replace(/[;\s]+/g, '')
-      const CSP = `img-src 'self' ${profileImageSrc}; script-src 'self'`
+      // Only the origin of a well-formed http(s) image is named in the policy, so nothing a
+      // customer types can become part of the header.
+      let imageSource = ''
+      try {
+        const profileImage = new URL(user?.profileImage ?? '')
+        imageSource = profileImage.protocol === 'http:' || profileImage.protocol === 'https:' ? ` ${profileImage.origin}` : ''
+      } catch {
+        imageSource = ''
+      }
+      const CSP = `img-src 'self'${imageSource}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && Boolean(user?.profileImage?.match(/;[ ]*script-src(.)*'unsafe-inline'/g)) && utils.contains(username, '<script>alert(`xss`)</script>')
@@ -84,7 +88,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
