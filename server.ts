@@ -208,18 +208,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
-  /* The spacer image belonged to the web3 sandbox screen, which is gone, so the asset is gone
-     with it. It has to be refused by name rather than by folder: four asset prefixes share the
-     same middleware and that middleware sees the path with its mount point stripped, so a
-     request for this file name under any of them was still read as a visit to the removed
-     screen even though the file only ever existed under one of them. */
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.endsWith('/11px.png')) {
-      res.status(404).send()
-      return
-    }
-    next()
-  })
+  /* The contract sandbox is a privileged development screen, so the assets that mark a visit
+     to it are served only to an administrator rather than merely being hard to guess. */
+  app.use('/assets/public/images/padding/11px.png', security.isAuthorized(), security.isAdmin())
 
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
