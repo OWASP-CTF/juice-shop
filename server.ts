@@ -277,7 +277,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
-  /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  /* /logs directory browsing: server access logs are an operational artefact and are
+     only available to authenticated administrators */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
+  app.use('/support/logs', security.isAdmin()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
   app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
@@ -413,6 +415,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
       }
+    }
+    next()
+  })
+  /* Self-registration may only ever create an ordinary customer: attributes that decide
+     privileges or identity are server-owned and are dropped from the request body. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    for (const privilegedAttribute of ['id', 'role', 'deluxeToken', 'isActive', 'totpSecret', 'createdAt', 'updatedAt', 'deletedAt']) {
+      delete req.body[privilegedAttribute]
     }
     next()
   })
