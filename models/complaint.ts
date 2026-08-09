@@ -13,7 +13,6 @@ import {
   type CreationOptional,
   type Sequelize
 } from 'sequelize'
-import * as security from '../lib/insecurity'
 
 class Complaint extends Model<
 InferAttributes<Complaint>,
@@ -36,12 +35,7 @@ const ComplaintModelInit = (sequelize: Sequelize) => {
         primaryKey: true,
         autoIncrement: true
       },
-      message: {
-        type: DataTypes.STRING,
-        set (message: string) {
-          this.setDataValue('message', security.stripExternalReferences(message))
-        }
-      },
+      message: DataTypes.STRING,
       file: DataTypes.STRING
     },
     {

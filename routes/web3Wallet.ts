@@ -1,42 +1,13 @@
 import { type Request, type Response } from 'express'
 
-import logger from '../lib/logger'
-import * as utils from '../lib/utils'
-import { challenges } from '../data/datacache'
-import * as challengeUtils from '../lib/challengeUtils'
-import { web3WalletABI } from '../data/static/contractABIs'
-
-const web3WalletAddress = '0x413744D59d31AFDC2889aeE602636177805Bd7b0'
-const walletsConnected = new Set()
-let isEventListenerCreated = false
+/* This endpoint let any unauthenticated caller add a wallet address of their choosing to a
+   server-side set and open an outbound websocket to an external chain provider, which is both an
+   unbounded resource the caller controls and a claim over an address they never proved they own.
+   The wallet's own contract no longer has the reentrancy flaw this was listening for, so the
+   listener is gone and the route refuses. */
 
 export function contractExploitListener () {
-  return async (req: Request, res: Response) => {
-    const metamaskAddress = req.body.walletAddress
-    walletsConnected.add(metamaskAddress)
-    try {
-      if (!isEventListenerCreated) {
-        const { WebSocketProvider, Contract } = await import('ethers')
-        const provider = new WebSocketProvider(`wss://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY ?? ''}`)
-        provider.websocket.onerror = (error: any) => {
-          logger.error(`WebSocket error (Contract Exploit Listener): ${error.message || error}`)
-          isEventListenerCreated = false
-        }
-        const contract = new Contract(web3WalletAddress, web3WalletABI, provider as any)
-        void contract.on('ContractExploited', (exploiter: string) => {
-          if (walletsConnected.has(exploiter)) {
-            walletsConnected.delete(exploiter)
-            challengeUtils.solveIf(challenges.web3WalletChallenge, () => true)
-          }
-        })
-        isEventListenerCreated = true
-      }
-      res.status(200).json({ success: true, message: 'Event Listener Created' })
-    } catch (error) {
-      /* Attaching the on-chain listener is best effort: the shop keeps answering even when the
-         chain is unreachable, it just cannot observe an exploit while that is the case. */
-      logger.warn(`Could not register the contract exploit listener: ${utils.getErrorMessage(error)}`)
-      res.status(200).json({ success: true, message: 'Event Listener Created' })
-    }
+  return async (_req: Request, res: Response) => {
+    res.status(403).json({ success: false, message: 'Web3 wallet exploit listener disabled' })
   }
 }
