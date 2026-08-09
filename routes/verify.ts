@@ -116,7 +116,15 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    /* The shop only ever issues RS256, so only an RS256 signature may be believed here. Handing a
+       token to the verifier without saying which algorithm is acceptable lets it take the word of
+       the token's own header: an attacker signs with HMAC using the RSA public key, which is
+       published under /encryptionkeys and is no secret, and the signature checks out. Both the
+       header and the verifier are pinned, so a token the shop did not issue is rejected. */
+    if (!security.hasExpectedAlgorithm(token)) {
+      return
+    }
+    jwt.verify(token, security.publicKey, { algorithms: [security.jwtAlgorithm] } as any, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
