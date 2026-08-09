@@ -25,11 +25,12 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm when this URL is passed as "to" parameter', async () => {
+  void it('GET rejected for the stale https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm crypto-currency address removed from the allowlist', async () => {
     const res = await request(app)
       .get('/redirect?to=https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
+    assert.ok(res.text.includes('Unrecognized target URL for redirect'))
   })
 
   void it('GET redirected to http://shop.spreadshirt.com/juiceshop when this URL is passed as "to" parameter', async () => {
@@ -53,18 +54,20 @@ void describe('/redirect', () => {
     assert.equal(res.status, 302)
   })
 
-  void it('GET redirected to https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW when this URL is passed as "to" parameter', async () => {
+  void it('GET rejected for the stale https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW crypto-currency address removed from the allowlist', async () => {
     const res = await request(app)
       .get('/redirect?to=https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
+    assert.ok(res.text.includes('Unrecognized target URL for redirect'))
   })
 
-  void it('GET redirected to https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 when this URL is passed as "to" parameter', async () => {
+  void it('GET rejected for the stale https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6 crypto-currency address removed from the allowlist', async () => {
     const res = await request(app)
       .get('/redirect?to=https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6')
       .redirects(0)
-    assert.equal(res.status, 302)
+    assert.equal(res.status, 406)
+    assert.ok(res.text.includes('Unrecognized target URL for redirect'))
   })
 
   void it('GET error message with information leakage when calling /redirect without query parameter', async () => {
