@@ -99,18 +99,13 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
-          try {
-            // Falling back to the submitted link is only acceptable for something that is
-            // actually a well-formed http(s) URL. Persisting arbitrary text here is what put
-            // header-injection payloads into the profile in the first place.
-            const isPlainHttpUrl = /^https?:\/\/[\w.-]+(?::\d+)?(?:\/[\w\-./:?=&%~+]*)?$/.test(String(url))
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: isPlainHttpUrl ? url : '/assets/public/images/uploads/default.svg' })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
-          }
+          // Do not fall back to persisting the submitted value as the profile image on
+          // failure. That used to store the raw, unvalidated URL (or worse, a string that
+          // was never really a URL at all) - the resulting <img src> would either re-issue
+          // the very request this guard just refused, or inject content into contexts that
+          // interpolate the stored value, such as the CSP header built from it. Leaving the
+          // previous image in place has no such risk.
+          logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; keeping the previous profile image`)
         }
       } else {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
