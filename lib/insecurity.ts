@@ -40,6 +40,31 @@ interface IAuthenticatedUsers {
   updateFrom: (req: Request, user: ResponseWithUser) => any
 }
 
+// A TOTP secret is a bearer credential: whoever reads it can mint the second factor at will.
+// Held as plaintext in the row it protects nothing, so it is sealed with a key that lives only in
+// this process and never alongside the data.
+const totpSealingKey = crypto.randomBytes(32)
+
+export const sealTotpSecret = (secret: string) => {
+  if (!secret) return ''
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', totpSealingKey, iv)
+  const sealed = Buffer.concat([cipher.update(secret, 'utf8'), cipher.final()])
+  return [iv, cipher.getAuthTag(), sealed].map((part) => part.toString('base64')).join('.')
+}
+
+export const unsealTotpSecret = (sealed: string) => {
+  const [iv, tag, payload] = (sealed ?? '').split('.')
+  if (!iv || !tag || !payload) return ''
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', totpSealingKey, Buffer.from(iv, 'base64'))
+    decipher.setAuthTag(Buffer.from(tag, 'base64'))
+    return Buffer.concat([decipher.update(Buffer.from(payload, 'base64')), decipher.final()]).toString('utf8')
+  } catch {
+    return ''
+  }
+}
+
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
