@@ -51,26 +51,11 @@ export function getUserProfile () {
 
     let username = user.username
 
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
-      username = '\\' + username
-    }
-
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
     if (username) {
-      template = template.replace(/_username_/g, username)
+      username = entities.encode(username)
     }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
@@ -85,17 +70,29 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      // Only the origin of a well-formed http(s) image is named in the policy, so nothing a
+      // customer types can become part of the header.
+      let imageSource = ''
+      try {
+        const profileImage = new URL(user?.profileImage ?? '')
+        imageSource = profileImage.protocol === 'http:' || profileImage.protocol === 'https:' ? ` ${profileImage.origin}` : ''
+      } catch {
+        imageSource = ''
+      }
+      const CSP = `img-src 'self'${imageSource}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
+        return username && Boolean(user?.profileImage?.match(/;[ ]*script-src(.)*'unsafe-inline'/g)) && utils.contains(username, '<script>alert(`xss`)</script>')
       })
 
       res.set({
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      // The name is data, not template source. Substituting it into the rendered page instead of
+      // into the Pug means no interpolation form - #{}, !{}, or any other - can reach the compiler.
+      const displayName = username
+      res.send(displayName ? fn(user).replace(/_username_/g, () => displayName) : fn(user))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

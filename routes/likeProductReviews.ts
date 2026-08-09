@@ -13,6 +13,9 @@ import * as db from '../data/mongodb'
 
 const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
 
+// Likes still in flight, so that concurrent requests cannot race past the "already liked" check
+const pendingLikes = new Set<string>()
+
 export function likeProductReviews () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const id = req.body.id
@@ -20,6 +23,15 @@ export function likeProductReviews () {
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    if (typeof id !== 'string') {
+      return res.status(400).json({ error: 'Wrong Params' })
+    }
+
+    const pendingLike = `${id}:${user.data.email}`
+    if (pendingLikes.has(pendingLike)) {
+      return res.status(403).json({ error: 'Not allowed' })
+    }
+    pendingLikes.add(pendingLike)
 
     try {
       const review = await db.reviewsCollection.findOne({ _id: id })
@@ -57,6 +69,8 @@ export function likeProductReviews () {
       }
     } catch (err) {
       res.status(400).json({ error: 'Wrong Params' })
+    } finally {
+      pendingLikes.delete(pendingLike)
     }
   }
 }
