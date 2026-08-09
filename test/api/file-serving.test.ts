@@ -11,6 +11,7 @@ import config from 'config'
 import { createTestApp } from './helpers/setup'
 import type { Product as ProductConfig } from '../../lib/config.types'
 import * as utils from '../../lib/utils'
+import * as security from '../../lib/insecurity'
 
 let app: Express
 
@@ -109,9 +110,27 @@ void describe('/public/images/padding', () => {
     assert.equal(res.headers['content-type'], 'image/png')
   })
 
-  void it('GET tracking image for "Administration" page access challenge', async () => {
+  void it('GET tracking image for "Administration" page is refused without the admin role', async () => {
     const res = await request(app)
       .get('/assets/public/images/padding/19px.png')
+    assert.equal(res.status, 403)
+  })
+
+  void it('GET tracking image for "Administration" page is refused for a signed-in customer', async () => {
+    const customerToken = security.authorize({ data: { email: 'jim@juice-sh.op', role: 'customer' } })
+
+    const res = await request(app)
+      .get('/assets/public/images/padding/19px.png')
+      .set('Authorization', `Bearer ${customerToken}`)
+    assert.equal(res.status, 403)
+  })
+
+  void it('GET tracking image for "Administration" page is served to an admin via the session cookie', async () => {
+    const adminToken = security.authorize({ data: { email: 'admin@juice-sh.op', role: 'admin' } })
+
+    const res = await request(app)
+      .get('/assets/public/images/padding/19px.png')
+      .set('Cookie', `token=${adminToken}`)
     assert.equal(res.status, 200)
     assert.equal(res.headers['content-type'], 'image/png')
   })
