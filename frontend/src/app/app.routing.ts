@@ -38,6 +38,7 @@ import { DeliveryMethodComponent } from './delivery-method/delivery-method.compo
 import { PhotoWallComponent } from './photo-wall/photo-wall.component'
 import { DeluxeUserComponent } from './deluxe-user/deluxe-user.component'
 import { AccountingGuard, AdminGuard, LoginGuard } from './app.guard'
+import { environment } from '../environments/environment'
 import { NFTUnlockComponent } from './nft-unlock/nft-unlock.component'
 import { ScoreBoardComponent } from './score-board/score-board.component'
 import { ChatbotComponent } from './chatbot/chatbot.component'
@@ -236,8 +237,12 @@ const routes: Routes = [
     loadChildren: async () => await loadWeb3WalletModule()
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox is a development tool that was shipped by accident. It stays in the source
+    // and stays usable where it belongs - it is simply not routed in a production build, and
+    // an administrator role is required where it is.
+    path: environment.production ? 'web3-sandbox-disabled' : 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [AdminGuard]
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
