@@ -932,7 +932,10 @@
 	},
 	"registerAdminChallenge_1.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			37,
+			39
+		]
 	},
 	"registerAdminChallenge_2.ts": {
 		"added": [
@@ -940,9 +943,9 @@
 			28,
 			29,
 			30,
-			33,
-			34,
-			35
+			37,
+			38,
+			39
 		],
 		"removed": [
 			28
@@ -957,7 +960,8 @@
 			5
 		],
 		"removed": [
-			5
+			5,
+			39
 		]
 	},
 	"resetPasswordBenderChallenge_1.yml": {

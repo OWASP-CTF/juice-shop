@@ -29,11 +29,14 @@
 
     // create a wallet when a new user is registered using API
     if (name === 'User') {
+      resource.create.write.before((req: Request, res: Response, context: { attributes: { role?: string }, continue: any }) => {
+        context.attributes.role = 'customer'
+        return context.continue
+      })
       resource.create.send.before((req: Request, res: Response, context: { instance: { id: any }, continue: any }) => {
         WalletModel.create({ UserId: context.instance.id }).catch((err: unknown) => {
           console.log(err)
         })
-        context.instance.role = 'customer'
         return context.continue
       })
     }
