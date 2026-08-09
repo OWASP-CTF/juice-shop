@@ -236,20 +236,11 @@ function knownVulnerableComponentChallenge () {
 }
 
 function knownVulnerableComponents () {
-  return [
-    {
-      [Op.and]: [
-        { [Op.like]: '%sanitize-html%' },
-        { [Op.like]: '%1.4.2%' }
-      ]
-    },
-    {
-      [Op.and]: [
-        { [Op.like]: '%express-jwt%' },
-        { [Op.like]: '%0.1.3%' }
-      ]
-    }
-  ]
+  /* The shop no longer depends on either release named here, so nothing a customer writes about
+     them describes this application any more. Reporting a version the build does not use is not
+     a disclosure, and the list is kept empty rather than deleted so a future vulnerable pin can
+     be added back alongside the dependency that introduced it. */
+  return [] as Array<Record<symbol, unknown>>
 }
 
 function weirdCryptoChallenge () {
