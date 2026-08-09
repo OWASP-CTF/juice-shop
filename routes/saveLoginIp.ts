@@ -19,18 +19,19 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
-        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      } else {
-        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      }
-      if (lastLoginIp === undefined) {
+      // Always sanitize: this header is caller-controlled and the value is rendered
+      // back to the user later.
+      lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
+      // Judge the address that is actually stored and shown, not the raw header.
+      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      if (!lastLoginIp) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json(updatedUser)
+        // The caller needs the stored address back, not the account's secrets.
+        res.json(security.publicUserView(updatedUser))
       } catch (error) {
         next(error)
       }

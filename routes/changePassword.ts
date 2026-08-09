@@ -24,6 +24,14 @@ export function changePassword () {
       return
     }
 
+    // Same policy as registration, from the same source, so a weak password cannot be
+    // introduced through the back door of a password change.
+    const violation = security.validatePasswordPolicy(newPasswordInString)
+    if (violation) {
+      res.status(401).send(violation)
+      return
+    }
+
     const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
     if (token === null) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
@@ -36,7 +44,7 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }
@@ -53,7 +61,8 @@ export function changePassword () {
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      // Returning the model here handed back the freshly written password hash.
+      res.json({ user: security.publicUserView(user) })
     } catch (error) {
       next(error)
     }
