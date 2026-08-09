@@ -15,6 +15,7 @@ import { type NextFunction, type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
+import logger from '../lib/logger'
 
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
   if (file != null) {
@@ -38,11 +39,25 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
             fs.createReadStream(tempFile)
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
-                const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
+                const destinationDir = path.resolve('uploads/complaints')
+                /* Archive entries are attacker-controlled, so strip any traversal before resolving */
+                const fileName = path.normalize(entry.path).replace(/^(\.\.(\/|\\|$))+/, '')
+                const absolutePath = path.resolve(destinationDir, fileName)
                 challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                if (absolutePath.startsWith(destinationDir + path.sep)) {
+                  try {
+                    /* Entries below a subdirectory need it created before their write stream opens */
+                    const isDirectory = entry.type === 'Directory'
+                    fs.mkdirSync(isDirectory ? absolutePath : path.dirname(absolutePath), { recursive: true })
+                    if (isDirectory) {
+                      entry.autodrain()
+                    } else {
+                      entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
+                    }
+                  } catch (err) {
+                    logger.warn(`Skipping archive entry ${entry.path}: ${utils.getErrorMessage(err)}`)
+                    entry.autodrain()
+                  }
                 } else {
                   entry.autodrain()
                 }
@@ -78,9 +93,12 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) { // XXE attacks in Docker/Heroku containers regularly cause "segfault" crashes
       const data = file.buffer.toString()
       try {
+        if (/<!DOCTYPE/i.test(data)) {
+          throw new Error('XML document type definitions are not accepted')
+        }
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nonet: true, nocdata: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
@@ -112,9 +130,12 @@ function handleYamlUpload ({ file }: Request, res: Response, next: NextFunction)
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) {
       const data = file.buffer.toString()
       try {
+        if (/(^|[\s[{,])[*&][^\s*&]/.test(data)) {
+          throw new Error('YAML anchors and aliases are not accepted')
+        }
         const sandbox = { yaml, data }
         vm.createContext(sandbox)
-        const yamlString = vm.runInContext('JSON.stringify(yaml.load(data))', sandbox, { timeout: 2000 })
+        const yamlString = vm.runInContext('JSON.stringify(yaml.safeLoad(data))', sandbox, { timeout: 2000 })
         res.status(410)
         next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: ' + utils.trunc(yamlString, 400) + ' (' + file.originalname + ')'))
       } catch (err: unknown) {
