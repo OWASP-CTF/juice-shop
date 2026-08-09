@@ -673,24 +673,12 @@
 		"removed": []
 	},
 	"dbSchemaChallenge_2_correct.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			6,
-			7,
-			8
-		]
+		"added": [],
+		"removed": []
 	},
 	"dbSchemaChallenge_3.ts": {
 		"added": [],
-		"removed": [
-			1,
-			2,
-			6,
-			7,
-			8
-		]
+		"removed": []
 	},
 	"directoryListingChallenge_1_correct.ts": {
 		"added": [
@@ -715,11 +703,7 @@
 		"removed": []
 	},
 	"exposedMetricsChallenge_2.ts": {
-		"added": [
-			2,
-			17,
-			38
-		],
+		"added": [],
 		"removed": []
 	},
 	"exposedMetricsChallenge_3_correct.ts": {
@@ -727,25 +711,16 @@
 		"removed": []
 	},
 	"forgedReviewChallenge_1.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"forgedReviewChallenge_2_correct.ts": {
 		"added": [],
 		"removed": []
 	},
 	"forgedReviewChallenge_3.ts": {
-		"added": [
-			6,
-			7
-		],
-		"removed": [
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"localXssChallenge_1.ts": {
 		"added": [],
@@ -853,48 +828,39 @@
 		"removed": []
 	},
 	"noSqlReviewsChallenge_1.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			4,
-			6,
-			8,
-			9,
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"noSqlReviewsChallenge_2.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"noSqlReviewsChallenge_3_correct.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			4,
-			6,
-			8,
-			9,
-			6
-		]
+		"added": [],
+		"removed": []
 	},
 	"redirectChallenge_1.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectChallenge_3.ts": {
-		"added": [],
+		"added": [
+			15
+		],
 		"removed": [
+			15,
 			18,
 			19,
 			20,
@@ -915,20 +881,36 @@
 		"removed": []
 	},
 	"redirectCryptoCurrencyChallenge_1.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectCryptoCurrencyChallenge_2.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"redirectCryptoCurrencyChallenge_3_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			13
+		]
 	},
 	"redirectCryptoCurrencyChallenge_4.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			15
+		],
+		"removed": [
+			15
+		]
 	},
 	"registerAdminChallenge_1.ts": {
 		"added": [],
@@ -1270,23 +1252,12 @@
 		"removed": []
 	},
 	"unionSqlInjectionChallenge_2_correct.ts": {
-		"added": [
-			6
-		],
-		"removed": [
-			6,
-			7,
-			8
-		]
+		"added": [],
+		"removed": []
 	},
 	"unionSqlInjectionChallenge_3.ts": {
 		"added": [],
-		"removed": [
-			6,
-			7,
-			8,
-			9
-		]
+		"removed": []
 	},
 	"weakPasswordChallenge_1_correct.ts": {
 		"added": [],

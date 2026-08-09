@@ -9,19 +9,35 @@ import request from 'supertest'
 import type { Express } from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
+import config from 'config'
 import { createTestApp } from './helpers/setup'
+import { login } from './helpers/auth'
 
 let app: Express
+let adminAuthHeader: { Authorization: string }
 
 before(async () => {
   const result = await createTestApp()
   app = result.app
+
+  const { token } = await login(app, {
+    email: `admin@${config.get<string>('application.domain')}`,
+    password: 'admin123'
+  })
+  adminAuthHeader = { Authorization: `Bearer ${token}` }
 }, { timeout: 60000 })
 
 void describe('/metrics', () => {
-  void it('GET metrics via public API that are available instantaneously', { skip: 'FIXME Flaky on CI/CD on at least Windows' }, async () => {
+  void it('GET metrics is rejected for unauthenticated requests', async () => {
+    await request(app)
+      .get('/metrics')
+      .expect(403)
+  })
+
+  void it('GET metrics via API requires an authenticated admin', { skip: 'FIXME Flaky on CI/CD on at least Windows' }, async () => {
     const res = await request(app)
       .get('/metrics')
+      .set(adminAuthHeader)
       .expect(200)
 
     assert.ok(res.headers['content-type']?.includes('text/plain'))
@@ -50,6 +66,7 @@ void describe('/metrics', () => {
 
     const res = await request(app)
       .get('/metrics')
+      .set(adminAuthHeader)
       .expect(200)
 
     assert.ok(res.headers['content-type']?.includes('text/plain'))
@@ -66,6 +83,7 @@ void describe('/metrics', () => {
 
     const res = await request(app)
       .get('/metrics')
+      .set(adminAuthHeader)
       .expect(200)
 
     assert.ok(res.headers['content-type']?.includes('text/plain'))
