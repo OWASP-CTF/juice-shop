@@ -70,9 +70,16 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      // A CSP source expression ends at whitespace or ';', so only those can inject a second directive.
-      const profileImageSrc = (user?.profileImage ?? '').replace(/[;\s]+/g, '')
-      const CSP = `img-src 'self' ${profileImageSrc}; script-src 'self'`
+      // Only the origin of a well-formed http(s) image is named in the policy, so nothing a
+      // customer types can become part of the header.
+      let imageSource = ''
+      try {
+        const profileImage = new URL(user?.profileImage ?? '')
+        imageSource = profileImage.protocol === 'http:' || profileImage.protocol === 'https:' ? ` ${profileImage.origin}` : ''
+      } catch {
+        imageSource = ''
+      }
+      const CSP = `img-src 'self'${imageSource}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && Boolean(user?.profileImage?.match(/;[ ]*script-src(.)*'unsafe-inline'/g)) && utils.contains(username, '<script>alert(`xss`)</script>')

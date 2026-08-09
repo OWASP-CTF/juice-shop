@@ -31,7 +31,9 @@ export function saveLoginIp () {
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json(updatedUser)
+        // The whole model carries the password hash and the TOTP secret; the caller asked only
+        // where it last signed in from.
+        res.json(updatedUser && { id: updatedUser.id, email: updatedUser.email, lastLoginIp: updatedUser.lastLoginIp, profileImage: updatedUser.profileImage })
       } catch (error) {
         next(error)
       }
