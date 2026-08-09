@@ -236,8 +236,11 @@ const routes: Routes = [
     loadChildren: async () => await loadWeb3WalletModule()
   },
   { // vuln-code-snippet neutral-line web3SandboxChallenge
+    // The sandbox is an internal development tool. It stays routed so the feature still
+    // exists, but reaching it now requires the admin role instead of knowing the path.
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
+    loadChildren: async () => await loadWeb3SandboxModule(), // vuln-code-snippet neutral-line web3SandboxChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line web3SandboxChallenge
   }, // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
@@ -258,8 +261,11 @@ const routes: Routes = [
     component: OAuthComponent
   },
   { // vuln-code-snippet neutral-line tokenSaleChallenge
+    // The sale page stays reachable so the feature is not lost, but an unreleased
+    // internal page is now access-controlled rather than merely hard to guess.
     matcher: tokenMatcher, // vuln-code-snippet vuln-line tokenSaleChallenge
-    component: TokenSaleComponent // vuln-code-snippet neutral-line tokenSaleChallenge
+    component: TokenSaleComponent, // vuln-code-snippet neutral-line tokenSaleChallenge
+    canActivate: [AdminGuard] // vuln-code-snippet neutral-line tokenSaleChallenge
   }, // vuln-code-snippet neutral-line tokenSaleChallenge
   {
     path: 'coding-challenge/:challengeKey',

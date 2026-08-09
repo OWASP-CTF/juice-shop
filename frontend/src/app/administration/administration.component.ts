@@ -25,6 +25,15 @@ import { MatCardModule } from '@angular/material/card'
 
 library.add(faUser, faEye, faHome, faArchive, faTrashAlt)
 
+function escapeHtml (value: string) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 @Component({
   selector: 'app-administration',
   templateUrl: './administration.component.html',
@@ -70,7 +79,9 @@ export class AdministrationComponent implements OnInit {
         this.userDataSource = users
         this.userDataSourceHidden = users
         for (const user of this.userDataSource) {
-          user.email = this.sanitizer.bypassSecurityTrustHtml(`<span class="${this.doesUserHaveAnActiveSession(user) ? 'confirmation' : 'error'}">${user.email}</span>`)
+          // Only the surrounding span is ours. The address is user input, so it is
+          // escaped before it is spliced in and the trust applies to our own markup.
+          user.email = this.sanitizer.bypassSecurityTrustHtml(`<span class="${this.doesUserHaveAnActiveSession(user) ? 'confirmation' : 'error'}">${escapeHtml(user.email)}</span>`)
         }
         this.userDataSource = new MatTableDataSource(this.userDataSource)
         this.userDataSource.paginator = this.paginatorUsers
@@ -87,9 +98,8 @@ export class AdministrationComponent implements OnInit {
     this.feedbackService.find().subscribe({
       next: (feedbacks) => {
         this.feedbackDataSource = feedbacks
-        for (const feedback of this.feedbackDataSource) {
-          feedback.comment = this.sanitizer.bypassSecurityTrustHtml(feedback.comment)
-        }
+        // Comments are customer input and stay plain strings, so the template binding
+        // escapes them instead of rendering whatever markup they happen to contain.
         this.feedbackDataSource = new MatTableDataSource(this.feedbackDataSource)
         this.feedbackDataSource.paginator = this.paginatorFeedb
         this.resultsLengthFeedback = feedbacks.length

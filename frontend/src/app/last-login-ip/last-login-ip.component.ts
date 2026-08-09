@@ -35,8 +35,9 @@ export class LastLoginIpComponent implements OnInit {
     if (token) {
       payload = jwtDecode(token)
       if (payload.data.lastLoginIp) {
-
-        this.lastLoginIp = this.sanitizer.bypassSecurityTrustHtml(`<small>${payload.data.lastLoginIp}</small>`)
+        // The address arrives from a request header and is rendered as text, so it is
+        // held as a plain string and Angular escapes it at the binding.
+        this.lastLoginIp = payload.data.lastLoginIp
       }
     }
   }
