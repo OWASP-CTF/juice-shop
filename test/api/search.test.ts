@@ -39,43 +39,39 @@ void describe('/rest/products/search', () => {
     assert.equal(res.body.data.length, 1)
   })
 
-  void it('GET product search fails with error message that exposes ins SQL Injection vulnerability', async () => {
+  void it('GET product search treats a lone quote as a literal search term instead of breaking the query', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=';")
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('SQLITE_ERROR: near &quot;;&quot;: syntax error'))
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search SQL Injection fails from two missing closing parenthesis', async () => {
+  void it('GET product search does not execute a UNION SELECT payload against the users table', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=' union select id,email,password from users--")
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('SQLITE_ERROR: near &quot;union&quot;: syntax error'))
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search SQL Injection fails from one missing closing parenthesis', async () => {
+  void it('GET product search does not execute a UNION SELECT payload with a single missing closing parenthesis', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=') union select id,email,password from users--")
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('SQLITE_ERROR: near &quot;union&quot;: syntax error'))
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search SQL Injection fails for SELECT * FROM attack due to wrong number of returned columns', async () => {
+  void it('GET product search does not execute a UNION SELECT * FROM payload', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=')) union select * from users--")
-    assert.equal(res.status, 500)
-    assert.ok(res.headers['content-type']?.includes('text/html'))
-    assert.ok(res.text.includes(`<h1>${config.get<string>('application.name')} (Express`))
-    assert.ok(res.text.includes('SQLITE_ERROR: SELECTs to the left and right of UNION do not have the same number of result columns'))
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search can create UNION SELECT with Users table and fixed columns', async () => {
+  void it('GET product search cannot leak Users table rows via a UNION SELECT with fixed columns', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=')) union select '1','2','3','4','5','6','7','8','9' from users--")
     assert.equal(res.status, 200)
@@ -85,61 +81,36 @@ void describe('/rest/products/search', () => {
       item.price === '4' && item.deluxePrice === '5' && item.image === '6' &&
       item.createdAt === '7' && item.updatedAt === '8'
     )
-    assert.ok(match, 'Expected to find a row with fixed column values from UNION SELECT')
+    assert.ok(!match, 'Did not expect a row with fixed column values from a UNION SELECT payload')
   })
 
-  void it('GET product search can create UNION SELECT with Users table and required columns', async () => {
+  void it('GET product search cannot leak Users table credentials via a UNION SELECT with required columns', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=')) union select id,'2','3',email,password,'6','7','8','9' from users--")
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
 
     const adminMatch = res.body.data.find((item: any) =>
-      item.id === 1 && item.price === `admin@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('admin123')
+      item.price === `admin@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('admin123')
     )
-    assert.ok(adminMatch, 'Expected admin user in UNION SELECT results')
+    assert.ok(!adminMatch, 'Did not expect admin user to leak via UNION SELECT')
 
     const jimMatch = res.body.data.find((item: any) =>
-      item.id === 2 && item.price === `jim@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('ncc-1701')
+      item.price === `jim@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('ncc-1701')
     )
-    assert.ok(jimMatch, 'Expected jim user in UNION SELECT results')
-
-    const benderMatch = res.body.data.find((item: any) =>
-      item.id === 3 && item.price === `bender@${config.get<string>('application.domain')}`
-    )
-    assert.ok(benderMatch, 'Expected bender user in UNION SELECT results')
-
-    const bjoernMatch = res.body.data.find((item: any) =>
-      item.id === 4 && item.price === 'bjoern.kimminich@gmail.com' && item.deluxePrice === security.hash('bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI=')
-    )
-    assert.ok(bjoernMatch, 'Expected bjoern user in UNION SELECT results')
-
-    const cisoMatch = res.body.data.find((item: any) =>
-      item.id === 5 && item.price === `ciso@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('mDLx?94T~1CfVfZMzw@sJ9f?s3L6lbMqE70FfI8^54jbNikY5fymx7c!YbJb')
-    )
-    assert.ok(cisoMatch, 'Expected ciso user in UNION SELECT results')
-
-    const supportMatch = res.body.data.find((item: any) =>
-      item.id === 6 && item.price === `support@${config.get<string>('application.domain')}` && item.deluxePrice === security.hash('J6aVjTgOpRs@?5l!Zkq2AYnCE@RF$P')
-    )
-    assert.ok(supportMatch, 'Expected support user in UNION SELECT results')
+    assert.ok(!jimMatch, 'Did not expect jim user to leak via UNION SELECT')
   })
 
-  void it('GET product search can create UNION SELECT with sqlite_master table and required column', async () => {
+  void it('GET product search cannot leak the sqlite_master schema via a UNION SELECT', async () => {
     const res = await request(app)
       .get("/rest/products/search?q=')) union select sql,'2','3','4','5','6','7','8','9' from sqlite_master--")
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
 
     const basketItemsMatch = res.body.data.find((item: any) =>
-      item.id === 'CREATE TABLE `BasketItems` (`ProductId` INTEGER REFERENCES `Products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE, `BasketId` INTEGER REFERENCES `Baskets` (`id`) ON DELETE CASCADE ON UPDATE CASCADE, `id` INTEGER PRIMARY KEY AUTOINCREMENT, `quantity` INTEGER, `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, UNIQUE (`ProductId`, `BasketId`))'
+      typeof item.id === 'string' && item.id.startsWith('CREATE TABLE')
     )
-    assert.ok(basketItemsMatch, 'Expected BasketItems CREATE TABLE in UNION SELECT results')
-
-    const sqliteSequenceMatch = res.body.data.find((item: any) =>
-      item.id === 'CREATE TABLE sqlite_sequence(name,seq)'
-    )
-    assert.ok(sqliteSequenceMatch, 'Expected sqlite_sequence CREATE TABLE in UNION SELECT results')
+    assert.ok(!basketItemsMatch, 'Did not expect any CREATE TABLE schema to leak via UNION SELECT')
   })
 
   void it('GET product search cannot select logically deleted christmas special by default', async () => {
@@ -158,22 +129,20 @@ void describe('/rest/products/search', () => {
     assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search can select logically deleted christmas special by forcibly commenting out the remainder of where clause', async () => {
+  void it('GET product search cannot select logically deleted christmas special by forcibly commenting out the remainder of where clause', async () => {
     const res = await request(app)
       .get(`/rest/products/search?q=${christmasProduct.name}'))--`)
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.length, 1)
-    assert.equal(res.body.data[0].name, christmasProduct.name)
+    assert.equal(res.body.data.length, 0)
   })
 
-  void it('GET product search can select logically deleted unsafe product by forcibly commenting out the remainder of where clause', async () => {
+  void it('GET product search cannot select logically deleted unsafe product by forcibly commenting out the remainder of where clause', async () => {
     const res = await request(app)
       .get(`/rest/products/search?q=${pastebinLeakProduct.name}'))--`)
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.data.length, 1)
-    assert.equal(res.body.data[0].name, pastebinLeakProduct.name)
+    assert.equal(res.body.data.length, 0)
   })
 
   void it('GET product search with empty search parameter returns all products', async () => {
