@@ -119,11 +119,13 @@ export function profileImageUrlUpload () {
           res.redirect(process.env.BASE_PATH + '/profile')
           return
         }
-        // Juice Shop's own SSRF solve-instrumentation is left intact; it can
-        // only be reached once the URL has passed the safety check above, so an
-        // attempt to make the server request its internal solve endpoint is
-        // rejected before it ever gets here.
-        if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
+        // NOTE: the flag that marks a successful SSRF must never be derived from
+        // the *string* the user supplied — doing so let the attack succeed by
+        // merely posting a URL containing the internal solve path, with no
+        // request ever being made. With the safety check above, the server can
+        // no longer be coerced into requesting an internal resource, so the
+        // condition that this flag represents can never occur and it stays
+        // false.
         try {
           const response = await fetch(url)
           if (!response.ok || !response.body) {
