@@ -34,6 +34,7 @@ interface IAuthenticatedUsers {
   tokenMap: Record<string, ResponseWithUser>
   idMap: Record<string, string>
   put: (token: string, user: ResponseWithUser) => void
+  remove: (token?: string) => void
   get: (token?: string) => ResponseWithUser | undefined
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
@@ -108,6 +109,15 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   put: function (token: string, user: ResponseWithUser) {
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
+  },
+  remove: function (token?: string) {
+    if (!token) return
+    const normalizedToken = utils.unquote(token)
+    const user = this.tokenMap[normalizedToken]
+    if (user && this.idMap[user.data.id] === normalizedToken) {
+      delete this.idMap[user.data.id]
+    }
+    delete this.tokenMap[normalizedToken]
   },
   get: function (token?: string) {
     return token ? this.tokenMap[utils.unquote(token)] : undefined
