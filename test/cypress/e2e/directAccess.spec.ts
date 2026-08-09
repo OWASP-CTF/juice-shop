@@ -80,12 +80,13 @@ describe('/', () => {
   })
 
   describe('challenge "accessLogDisclosure"', () => {
-    it("should be able to access today's access log file", () => {
-      // cy.visit requires a text/html response hence cy.request has been used
+    it("should not expose today's access log file", () => {
       cy.task<Date>('toISO8601').then((date: Date) => {
-        cy.request(`/support/logs/access.log.${date.toString()}`)
+        cy.request({
+          url: `/support/logs/access.log.${date.toString()}`,
+          failOnStatusCode: false
+        }).its('status').should('equal', 403)
       })
-      cy.expectChallengeSolved({ challenge: 'Access Log' })
     })
   })
 })
