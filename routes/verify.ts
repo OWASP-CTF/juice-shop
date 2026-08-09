@@ -63,7 +63,6 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
@@ -116,7 +115,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
