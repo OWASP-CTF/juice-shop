@@ -8,6 +8,7 @@ import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
 import { UserModel } from '../models/user'
 import * as security from '../lib/insecurity'
+import { passwordPolicyViolation } from '../lib/passwordPolicy'
 
 export function changePassword () {
   return async ({ query, headers, connection }: Request, res: Response, next: NextFunction) => {
@@ -38,6 +39,13 @@ export function changePassword () {
 
     if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
+      return
+    }
+
+    /* A chosen password is checked before it is accepted, not after it has been breached */
+    const violation = passwordPolicyViolation(newPasswordInString, loggedInUser.data.email)
+    if (violation) {
+      res.status(401).send(violation)
       return
     }
 
