@@ -19,21 +19,18 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      // The header is attacker controlled and gets rendered back to the user, so it is always sanitized
-      lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
-      if (!lastLoginIp) {
+      if (utils.isChallengeEnabled(challenges.httpHeaderXssChallenge)) {
+        challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
+      } else {
+        lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
+      }
+      if (lastLoginIp === undefined) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
       }
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json({
-          id: updatedUser?.id,
-          email: updatedUser?.email,
-          lastLoginIp: updatedUser?.lastLoginIp,
-          profileImage: updatedUser?.profileImage
-        })
+        res.json(updatedUser)
       } catch (error) {
         next(error)
       }
