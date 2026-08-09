@@ -249,6 +249,20 @@ void describe('/rest/user/whoami', () => {
     assert.equal(res.body.user.email, 'bjoern.kimminich@gmail.com')
   })
 
+  void it('GET who-am-i ignores a JSONP callback for an authenticated user', async () => {
+    const { token } = await login(app, {
+      email: 'bjoern.kimminich@gmail.com',
+      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+    })
+    const res = await request(app)
+      .get('/rest/user/whoami?callback=leak')
+      .set({ Cookie: `token=${token}` })
+    assert.equal(res.status, 200)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.user.email, 'bjoern.kimminich@gmail.com')
+    assert.ok(!res.text.startsWith('leak('))
+  })
+
   void it('GET who-am-i request returns nothing on missing auth token', async () => {
     const res = await request(app).get('/rest/user/whoami')
     assert.equal(res.status, 200)
