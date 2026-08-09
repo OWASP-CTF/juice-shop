@@ -86,5 +86,17 @@
   },
   "overrides": {
     "lru-cache@^11": "~11.2.7"
+  },
+  "allowScripts": {
+    "@fortawesome/fontawesome-common-types@0.2.36": true,
+    "@fortawesome/fontawesome-svg-core@1.2.36": true,
+    "@fortawesome/free-brands-svg-icons@5.15.4": true,
+    "@fortawesome/free-regular-svg-icons@5.15.4": true,
+    "@fortawesome/free-solid-svg-icons@5.15.4": true,
+    "@parcel/watcher@2.6.0": true,
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true,
+    "lmdb@3.5.1": true,
+    "msgpackr-extract@3.0.4": true
   }
 }
