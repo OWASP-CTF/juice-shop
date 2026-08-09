@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -86,6 +87,13 @@ async function quantityCheck (req: Request, res: Response, next: NextFunction, i
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
     throw new Error('No such product found!')
+  }
+
+  // ProductModel is paranoid, so a withdrawn product resolves to null. Refusing the request is
+  // the answer here - raising instead reports a server fault for something the caller asked for.
+  if (await ProductModel.findByPk(id) == null) {
+    res.status(400).json({ error: res.__('We are out of stock! Sorry for the inconvenience.') })
+    return
   }
 
   // is product limited per user and order, except if user is deluxe?
