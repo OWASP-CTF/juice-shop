@@ -389,10 +389,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
-  app.get('/api/Recycles', recycles.blockRecycleItems())
-  app.post('/api/Recycles', security.isAuthorized())
+  app.get('/api/Recycles', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItems()))
+  app.post('/api/Recycles', security.isAuthorized(), security.appendUserId(), utils.asyncHandler(recycles.prepareRecycleItem()))
   /* Challenge evaluation before finale takes over */
-  app.get('/api/Recycles/:id', recycles.getRecycleItem())
+  app.get('/api/Recycles/:id', security.appendUserId(), utils.asyncHandler(recycles.getRecycleItem()))
   app.put('/api/Recycles/:id', security.denyAll())
   app.delete('/api/Recycles/:id', security.denyAll())
   /* SecurityQuestions: Only GET list of questions allowed. */
@@ -481,7 +481,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   app.post('/api/Addresss', security.appendUserId())
   app.get('/api/Addresss', security.appendUserId(), utils.asyncHandler(address.getAddress()))
-  app.put('/api/Addresss/:id', security.appendUserId())
+  app.put('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.enforceAddressOwnership()))
   app.delete('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.delAddressById()))
   app.get('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.getAddressById()))
   app.get('/api/Deliverys', utils.asyncHandler(delivery.getDeliveryMethods()))
