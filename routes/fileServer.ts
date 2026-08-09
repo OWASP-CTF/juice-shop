@@ -25,6 +25,7 @@ export function servePublicFiles () {
   function verify (file: string, res: Response, next: NextFunction) {
     if (file &&
       !/%00|\0/i.test(file) &&
+      isPublicDocument(file) &&
       endsWithAllowlistedFileType(file)) {
 
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
@@ -47,6 +48,18 @@ export function servePublicFiles () {
       return challenges.easterEggLevelOneChallenge.solved || challenges.forgottenDevBackupChallenge.solved || challenges.forgottenBackupChallenge.solved ||
         challenges.misplacedSignatureFileChallenge.solved || file.toLowerCase() === 'encrypt.pyc'
     })
+  }
+
+  /* An extension is not a classification. Everything under ftp/ reached this route because it
+     ends in .md or .pdf, which is why a confidential acquisitions memo, an encrypted
+     announcement and several forgotten working files were all being handed to anonymous
+     callers. What may be published is a property of the document, so the documents that may be
+     published are named here and nothing else is served -- a file added to the folder later is
+     private until somebody says otherwise, rather than public until somebody notices. */
+  const PUBLIC_DOCUMENTS = new Set(['legal.md'])
+
+  function isPublicDocument (param: string) {
+    return PUBLIC_DOCUMENTS.has(param.toLowerCase())
   }
 
   function endsWithAllowlistedFileType (param: string) {
