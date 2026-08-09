@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -85,7 +85,7 @@ export const denyForgedTokenAlgorithm = () => {
 
 export const isAuthorized = () => {
   const dropForgedAlgorithm = denyForgedTokenAlgorithm()
-  const authorizeToken = expressJwt(({ secret: publicKey, algorithms: [jwtAlgorithm] }) as any)
+  const authorizeToken = expressjwt({ secret: publicKey, algorithms: [jwtAlgorithm] })
   return (req: Request, res: Response, next: NextFunction) => {
     dropForgedAlgorithm(req, res, () => { authorizeToken(req, res, next) })
   }
@@ -107,7 +107,7 @@ export const sameOriginOnly = () => (req: Request, res: Response, next: NextFunc
   }
   next()
 }
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: [jwtAlgorithm] })
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
 export const verify = (token: string) => hasExpectedAlgorithm(token) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
