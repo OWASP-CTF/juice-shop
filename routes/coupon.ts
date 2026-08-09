@@ -8,9 +8,15 @@ import { BasketModel } from '../models/basket'
 import * as security from '../lib/insecurity'
 
 export function applyCoupon () {
-  return async ({ params }: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const { params } = req
       const id = params.id
+      const user = security.authenticatedUsers.from(req)
+      if (!user?.bid || Number(user.bid) !== Number(id)) {
+        res.status(403).json({ error: 'Access denied' })
+        return
+      }
       let coupon: string | undefined | null = params.coupon ? decodeURIComponent(params.coupon) : undefined
       const discount = security.discountFromCoupon(coupon)
       coupon = discount ? coupon : null
