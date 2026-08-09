@@ -14,10 +14,20 @@ import * as db from '../data/mongodb'
 export function updateProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = security.authenticatedUsers.from(req) // vuln-code-snippet vuln-line forgedReviewChallenge
+    if (!user?.data?.email) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    // A review id is an opaque string: reject query operator objects outright so the
+    // selector can never be widened by the request body.
+    if (typeof req.body.id !== 'string' || req.body.id.length === 0) {
+      res.status(400).json({ error: 'Wrong Params' })
+      return
+    }
     db.reviewsCollection.update( // vuln-code-snippet neutral-line forgedReviewChallenge
-      { _id: req.body.id }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
-      { $set: { message: req.body.message } },
-      { multi: true } // vuln-code-snippet vuln-line noSqlReviewsChallenge
+      { _id: req.body.id, author: user.data.email }, // vuln-code-snippet vuln-line noSqlReviewsChallenge forgedReviewChallenge
+      { $set: { message: String(req.body.message ?? '') } },
+      { multi: false } // vuln-code-snippet vuln-line noSqlReviewsChallenge
     ).then(
       (result: { modified: number, original: Array<{ author: any }> }) => {
         challengeUtils.solveIf(challenges.noSqlReviewsChallenge, () => { return result.modified > 1 }) // vuln-code-snippet hide-line
