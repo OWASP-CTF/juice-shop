@@ -22,8 +22,19 @@ export function orderHistory () {
   }
 }
 
+function accountant (req: Request) {
+  const user = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
+  return user?.data?.role === 'accounting' ? user : undefined
+}
+
 export function allOrders () {
   return async (req: Request, res: Response, next: NextFunction) => {
+    /* This hands out every order in the shop, so it re-checks the caller's role itself rather
+       than trusting whatever guard happens to be mounted in front of it. */
+    if (accountant(req) === undefined) {
+      next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+      return
+    }
     const order = await ordersCollection.find()
     res.status(200).json({ status: 'success', data: order.reverse() })
   }
@@ -31,6 +42,10 @@ export function allOrders () {
 
 export function toggleDeliveryStatus () {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (accountant(req) === undefined) {
+      next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
+      return
+    }
     const deliveryStatus = !req.body.deliveryStatus
     const eta = deliveryStatus ? '0' : '1'
     await ordersCollection.update({ _id: req.params.id }, { $set: { delivered: deliveryStatus, eta } })
