@@ -766,7 +766,23 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Error Handling */
   app.use(verify.errorHandlingChallenge())
-  app.use(errorhandler())
+  /* errorhandler prints the stack, the absolute paths inside the container and the framework
+     version straight back to whoever triggered the fault - an anonymous caller learns the layout
+     of the deployment from a single malformed request. It stays for local development, where that
+     output is the point; anywhere else the fault is logged and the caller is told only that one
+     occurred. */
+  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') {
+    app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+      logger.error(`Unhandled error on ${req.method} ${req.path}: ${utils.getErrorMessage(error)}`)
+      if (res.headersSent) {
+        next(error)
+        return
+      }
+      res.status(500).json({ error: 'Internal Server Error' })
+    })
+  } else {
+    app.use(errorhandler())
+  }
 }
 
 // Function called first to ensure that all the i18n files are reloaded successfully before other linked operations.

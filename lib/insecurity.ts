@@ -19,8 +19,34 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+/* The RSA private key that signs every session token was a literal in this file, so it shipped in
+   the repository, in every image built from it and in every fork - and the matching public half is
+   served from /encryptionkeys. Anyone who read the source could mint a token for any account,
+   including an administrator, without ever touching a password. A key is configuration, not code:
+   the pair is taken from the environment, and when nothing is configured the shop generates one at
+   boot. The public half is written where it has always been published, so verification, the
+   /encryptionkeys listing and the JWT detectors all behave exactly as before. */
+const jwtKeyPair = (() => {
+  const configuredPrivate = process.env.JWT_PRIVATE_KEY
+  const configuredPublic = process.env.JWT_PUBLIC_KEY
+  if (configuredPrivate && configuredPublic) {
+    return { privateKey: configuredPrivate, publicKey: configuredPublic }
+  }
+  const generated = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs1', format: 'pem' } // matches the PKCS#1 the signer has always been given
+  })
+  if (fs) {
+    try {
+      fs.writeFileSync('encryptionkeys/jwt.pub', generated.publicKey)
+    } catch { /* the published copy is best-effort; verification uses the in-memory key */ }
+  }
+  return generated
+})()
+
+export const publicKey = jwtKeyPair.publicKey
+const privateKey = jwtKeyPair.privateKey
 
 interface ResponseWithUser {
   status?: string
@@ -271,8 +297,10 @@ export const roles = {
   admin: 'admin'
 }
 
+/* Keying this on the signing key meant the entitlement was forgeable by anyone who had the key,
+   and tied a membership check to a value whose whole job is signing. It uses the configured secret. */
 export const deluxeToken = (email: string) => {
-  const hmac = crypto.createHmac('sha256', privateKey)
+  const hmac = crypto.createHmac('sha256', hmacKey)
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
