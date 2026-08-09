@@ -51,10 +51,37 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+const expressJwtMiddleware = expressJwt(({ secret: publicKey }) as any)
+export const isAuthorized = () => (req: Request, res: Response, next: NextFunction) => {
+  // A token that is present must carry an RS256 signature made by our own key.
+  // Anything else (alg:none, HMAC-with-the-public-key) is rejected before it
+  // reaches the algorithm-agnostic JWT middleware. Missing or malformed
+  // Authorization headers keep their original handling below.
+  const token = utils.jwtFrom(req)
+  if (token && !verify(token)) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  expressJwtMiddleware(req, res, next)
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!token) return false
+  try {
+    const [headerB64, payloadB64, signatureB64] = token.split('.')
+    if (!headerB64 || !payloadB64 || !signatureB64) return false
+    const header = JSON.parse(Buffer.from(headerB64, 'base64').toString('utf8'))
+    // Pin the algorithm: only the asymmetric signature we issue ourselves is accepted,
+    // which rules out "alg: none" and HMAC-with-the-public-key forgeries.
+    if (header?.alg !== 'RS256') return false
+    const verifier = crypto.createVerify('RSA-SHA256')
+    verifier.update(`${headerB64}.${payloadB64}`)
+    return verifier.verify(publicKey, Buffer.from(signatureB64, 'base64url'))
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)

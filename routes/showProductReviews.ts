@@ -29,14 +29,15 @@ export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) {
-      res.status(400).json({ error: 'Wrong Params' })
+      // Anything that is not a product id simply has no reviews - never evaluated as code.
+      res.json(utils.queryResultToJson([]))
       return
     }
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ product: id }).then((reviews: Review[]) => {
+    db.reviewsCollection.find({ product: { $in: [id, String(id)] } }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)
