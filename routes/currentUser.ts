@@ -8,6 +8,12 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+// Only non-sensitive fields may ever be returned by this endpoint. This
+// explicit allow-list prevents clients from using the `fields` query
+// parameter to exfiltrate sensitive attributes (e.g. password hash,
+// TOTP secret) that also live on the same in-memory user record.
+const ALLOWED_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -20,12 +26,15 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        const requestedFields = fieldsParam
+          ? fieldsParam.split(',').map(f => f.trim()).filter(f => ALLOWED_FIELDS.includes(f))
+          : []
 
         let baseUser: any = {}
 
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only those fields (restricted
+          // to the allow-list above)
           for (const field of requestedFields) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
