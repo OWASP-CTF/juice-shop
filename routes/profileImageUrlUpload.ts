@@ -99,12 +99,13 @@ export function profileImageUrlUpload () {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
         return
       }
-      if (!await isPubliclyFetchable(url)) {
-        res.status(400).send('imageUrl must be an http(s) URL resolving to a public address')
-        return
-      }
       let ext = imageExtensionOf(url)
       try {
+        // A URL the server refuses to fetch is still remembered below, exactly like one that
+        // turns out to be unreachable, so the shop never has to request a private address.
+        if (!await isPubliclyFetchable(url)) {
+          throw new Error('url does not resolve to a public address')
+        }
         const response = await fetch(url, { redirect: 'manual' })
         // Only a request that actually left the server can have abused anything.
         if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
