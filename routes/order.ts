@@ -145,7 +145,10 @@ export function placeOrder () {
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
           if (totalPrice < 0) {
-            next(new Error('Invalid order total'))
+            /* A basket that totals below zero is a request the shop declines, not a server fault.
+               Raising here reported a fault for something the caller sent and abandoned the
+               response mid-checkout. */
+            res.status(400).json({ error: 'Invalid order total' })
             return
           }
 
