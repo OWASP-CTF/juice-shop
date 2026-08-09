@@ -3,14 +3,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-/* eslint-disable @typescript-eslint/prefer-for-of */
 import { ActivatedRoute, Router } from '@angular/router'
 import { ProductService } from '../Services/product.service'
 import { type AfterViewInit, Component, NgZone, type OnDestroy, ViewChild, ChangeDetectorRef, ElementRef, inject } from '@angular/core'
 import { MatPaginator } from '@angular/material/paginator'
 import { BehaviorSubject, forkJoin, type Subscription } from 'rxjs'
 import { MatTableDataSource } from '@angular/material/table'
-import { DomSanitizer, type SafeHtml } from '@angular/platform-browser'
 import { TranslateModule } from '@ngx-translate/core'
 import { SocketIoService } from '../Services/socket-io.service'
 
@@ -38,7 +36,6 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
   private readonly quantityService = inject(QuantityService)
   private readonly router = inject(Router)
   private readonly route = inject(ActivatedRoute)
-  private readonly sanitizer = inject(DomSanitizer)
   private readonly ngZone = inject(NgZone)
   private readonly io = inject(SocketIoService)
   private readonly cdRef = inject(ChangeDetectorRef)
@@ -48,7 +45,7 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
   public pageSizeOptions: number[] = []
   public dataSource!: MatTableDataSource<ProductTableEntry>
   public gridDataSource!: BehaviorSubject<ProductTableEntry[]>
-  public searchValue?: SafeHtml
+  public searchValue?: string
   public resultsLength = 0
   public currentPageSize = 15
   @ViewChild(MatPaginator, { static: true }) paginator!: MatPaginator
@@ -65,7 +62,6 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
       next: ([quantities, products]) => {
         const dataTable: ProductTableEntry[] = []
         this.tableData = products
-        this.trustProductDescription(products) // vuln-code-snippet neutral-line restfulXssChallenge
         for (const product of products) {
           dataTable.push({
             name: product.name,
@@ -105,12 +101,6 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
     })
   }
 
-  trustProductDescription (tableData: any[]) { // vuln-code-snippet neutral-line restfulXssChallenge
-    for (let i = 0; i < tableData.length; i++) { // vuln-code-snippet neutral-line restfulXssChallenge
-      tableData[i].description = this.sanitizer.bypassSecurityTrustHtml(tableData[i].description) // vuln-code-snippet vuln-line restfulXssChallenge
-    } // vuln-code-snippet neutral-line restfulXssChallenge
-  } // vuln-code-snippet neutral-line restfulXssChallenge
-
   // vuln-code-snippet end restfulXssChallenge
 
   ngOnDestroy () {
@@ -140,7 +130,7 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
         this.io.socket().emit('verifyLocalXssChallenge', queryParam)
       }) // vuln-code-snippet hide-end
       this.dataSource.filter = queryParam.toLowerCase()
-      this.searchValue = this.sanitizer.bypassSecurityTrustHtml(queryParam) // vuln-code-snippet vuln-line localXssChallenge xssBonusChallenge
+      this.searchValue = queryParam // vuln-code-snippet vuln-line localXssChallenge xssBonusChallenge
       if (this.gridDataSourceSubscription) {
         this.gridDataSourceSubscription.unsubscribe()
       }
