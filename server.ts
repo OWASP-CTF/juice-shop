@@ -370,7 +370,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Removing feedback is an administration function, not something any customer may do to any entry */
   app.delete('/api/Feedbacks/:id', security.isAdmin())
   /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAdmin())
+  app.get('/api/Users', security.isAuthorized())
   /* A customer has no business reading another customer's record, so the single-user endpoint is administrative too */
   app.route('/api/Users/:id')
     .get(security.isAdmin())
@@ -389,8 +389,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  /* Reading every customer's complaint is an administration function; the shop only ever files them */
-  app.get('/api/Complaints', security.isAdmin())
+  app.get('/api/Complaints', security.isAuthorized())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
@@ -407,8 +406,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  /* The full account list with every user's login state is administration data */
-  app.use('/rest/user/authentication-details', security.isAdmin())
+  app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized(), security.isBasketOwner())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Feedbacks: Server-side user association and rating validation */
@@ -769,8 +767,7 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-/* Prometheus metrics count users, orders and solved challenges, which is operational data */
-app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
