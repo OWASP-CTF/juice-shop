@@ -74,3 +74,36 @@ void describe('/api/Feedbacks rate limiting', () => {
     assert.equal(res.headers['x-ratelimit-limit'], '100')
   })
 })
+
+void describe('/api/Feedbacks CAPTCHA replay protection', () => {
+  void it('POST rejects reusing an already-solved captchaId/answer pair for a second submission', async () => {
+    const captchaRes = await request(app)
+      .get('/rest/captcha')
+    assert.equal(captchaRes.status, 200)
+
+    const firstRes = await request(app)
+      .post('/api/Feedbacks')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        comment: 'First use of this captcha',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(firstRes.status, 201)
+
+    // Replaying the exact same captchaId/answer pair must no longer succeed,
+    // so a single solved CAPTCHA cannot be reused to submit multiple
+    // feedbacks without solving a fresh one each time.
+    const replayRes = await request(app)
+      .post('/api/Feedbacks')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        comment: 'Replayed captcha answer',
+        rating: 1,
+        captchaId: captchaRes.body.captchaId,
+        captcha: captchaRes.body.answer
+      })
+    assert.equal(replayRes.status, 401)
+  })
+})
