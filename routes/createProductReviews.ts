@@ -14,24 +14,27 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
-    challengeUtils.solveIf(
-      challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
-    )
     // The author is the authenticated caller. A body-supplied author is ignored, so a
     // review cannot be attributed to somebody else.
     if (!user?.data?.email) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    const email = user.data.email
 
     try {
-      await reviewsCollection.insert({
+      const inserted = await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: user.data.email,
+        author: email,
         likesCount: 0,
         likedBy: []
       })
+      // Solve only if a review actually ended up attributed to someone other than
+      // the caller, matching what was persisted rather than the raw request body.
+      challengeUtils.solveIf(
+        challenges.forgedReviewChallenge,
+        () => inserted?.author !== undefined && inserted.author !== email
+      )
       return res.status(201).json({ status: 'success' })
     } catch (err: unknown) {
       return res.status(500).json(utils.getErrorMessage(err))

@@ -50,10 +50,11 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
                 const fileName = entry.path
                 const uploadRoot = path.resolve('uploads/complaints')
                 const absolutePath = path.resolve(uploadRoot, fileName)
-                challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
                 // The resolved destination must sit beneath the upload directory, so an
-                // entry name containing ../ cannot escape it.
+                // entry name containing ../ cannot escape it. Only count it solved if a
+                // write actually escaped containment, not merely attempted.
                 if (absolutePath.startsWith(uploadRoot + path.sep)) {
+                  challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
                   entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
