@@ -199,14 +199,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
-  /* Remove duplicate slashes from URL which allowed bypassing subsequent filters */
+  /* Canonicalise the request path before any filter or authorisation decision looks at it.
+     Duplicate slashes and '.' / '..' segments let the very same resource be addressed by a
+     spelling that a path based check does not recognise. */
   app.use((req: Request, res: Response, next: NextFunction) => {
-    req.url = req.url.replace(/[/]+/g, '/')
+    const queryStart = req.url.indexOf('?')
+    const rawPath = queryStart === -1 ? req.url : req.url.substring(0, queryStart)
+    const query = queryStart === -1 ? '' : req.url.substring(queryStart)
+    const normalizedPath = path.posix.normalize(rawPath.replace(/[/]+/g, '/'))
+    req.url = (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath) + query
     next()
   })
 
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
+
+  /* Parse cookies early so that authorisation decisions can be made for plain browser
+     requests (documents, images) that carry no Authorization header */
+  app.use(cookieParser('kekse'))
 
   /* Security Policy */
   const securityTxtExpiration = new Date()
@@ -227,6 +237,24 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
+
+  /* Assets that only exist as part of a privileged area are subject to the same
+     authorisation as the area itself - an anonymous client has no business fetching
+     them, whether it navigated there or requested them directly. */
+  const privilegedAreaAsset = /\/(19|56|11)px\.png$/i // administration, token sale, web3 sandbox
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(req.path)
+    } catch {
+      // Malformed percent-encoding: fall back to the raw path for the decision below.
+    }
+    if (privilegedAreaAsset.test(path.posix.normalize(requestedPath))) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
@@ -286,7 +314,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
   /* Serve vendor dependencies locally instead of from CDN */
@@ -358,8 +385,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Users: Only POST is allowed in order to register a new user. Listing every user
+     account is an administration function and is authorised as such. */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
@@ -428,8 +456,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.delete('/api/Quantitys/:id', security.denyAll())
   app.post('/api/Quantitys', security.denyAll())
   app.use('/api/Quantitys/:id', security.isAccounting(), IpFilter(['123.456.789'], { mode: 'allow' }))
-  /* Feedbacks: Do not allow changes of existing feedback */
+  /* Feedbacks: Do not allow changes of existing feedback, deletion is an administration function */
   app.put('/api/Feedbacks/:id', security.denyAll())
+  app.delete('/api/Feedbacks/:id', security.isAdmin())
   /* PrivacyRequests: Only allowed for authenticated users */
   app.use('/api/PrivacyRequests', security.isAuthorized())
   app.use('/api/PrivacyRequests/:id', security.isAuthorized())
