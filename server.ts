@@ -270,7 +270,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      administrative view. Individual downloads stay open, because placeOrder writes every
      invoice to ftp/order_<id>.pdf and the shop links customers straight at it - a blanket
      gate here would refuse people their own order confirmation. */
-  app.use('/ftp', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  app.use('/ftp', security.isAdmin(), serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
   /* The artefacts that were never meant to be handed out are named explicitly and require
      the same administrative role, rather than relying on nobody guessing the filename. */
   const confidentialFtpArtefacts = /(\.bak|\.kdbx|\.pyc|acquisitions\.md|eastere\.gg|suspicious_errors\.yml)$/i
@@ -282,10 +282,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
       /* A name that is not valid percent encoding is judged exactly as it arrived. */
     }
     if (confidentialFtpArtefacts.test(requested)) {
-      security.isAuthorized()(req, res, (err?: any) => {
-        if (err) { next(err); return }
-        security.isAdmin()(req, res, next)
-      })
+      security.isAdmin()(req, res, next)
       return
     }
     next()
@@ -304,9 +301,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Support staff keep their log browser. The directory and the files behind it are now
      an administrator-only resource instead of an unauthenticated one - access.log records
      full request lines, so this was never material fit for anonymous readers. */
-  app.use('/support/logs', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* isAdmin verifies the token itself and reads it from the header or the cookie, so it is
+     used alone here: stacking expressjwt in front refused the browser, which sends the session
+     as a cookie on page and asset requests, before the role check could ever run. */
+  app.use('/support/logs', security.isAdmin(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', security.isAuthorized(), security.isAdmin(), serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAdmin(), serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -808,7 +808,7 @@ let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
 /* Process and business metrics are operational data, not something every signed-in
    customer may read. */
-app.get('/metrics', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
