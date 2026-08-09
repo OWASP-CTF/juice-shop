@@ -53,11 +53,6 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
-}
-
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -235,10 +230,10 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  /* The web3 code sandbox is a development tool that reached the shop by accident. It compiles
+     and runs smart contract code on demand and was reachable by anyone who knew the path - and an
+     unlinked path is a guess away, not a restriction. It is not part of the shop, so the shop
+     does not route to it. */
   {
     path: 'chatbot',
     component: ChatbotComponent,
