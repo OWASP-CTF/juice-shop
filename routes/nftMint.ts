@@ -4,36 +4,21 @@ import logger from '../lib/logger'
 import * as challengeUtils from '../lib/challengeUtils'
 import { nftABI } from '../data/static/contractABIs'
 import { challenges } from '../data/datacache'
+import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
-
-// Addresses observed minting the honey pot on-chain. Two things guard this set now:
-// nothing that is not a well-formed Ethereum address can get in or be looked up (the verify
-// route is unauthenticated, so it used to take any JSON value straight from the wire), and the
-// set is bounded so a stream of chain events cannot grow it without limit.
 const addressesMinted = new Set<string>()
-const MAX_TRACKED_MINTERS = 1000
 let isEventListenerCreated = false
 
-const ETH_ADDRESS = /^0x[0-9a-fA-F]{40}$/
+/* A wallet address arriving in a request body is a claim, not a proof. Anything the server is
+   willing to act on has to be checked here, on the server: that it is a well-formed address,
+   that the caller is a logged-in customer, and that the mint it refers to was actually observed
+   on chain for that exact address. */
+const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/
 
-function asWalletAddress (value: unknown): string | null {
-  return (typeof value === 'string' && ETH_ADDRESS.test(value)) ? value : null
-}
-
-function rememberMinter (minter: unknown) {
-  const address = asWalletAddress(minter)
-  if (address === null || addressesMinted.has(address)) {
-    return
-  }
-  if (addressesMinted.size >= MAX_TRACKED_MINTERS) {
-    const oldest: string | undefined = addressesMinted.values().next().value
-    if (oldest !== undefined) {
-      addressesMinted.delete(oldest)
-    }
-  }
-  addressesMinted.add(address)
+const normalizedAddress = (value: unknown) => {
+  return typeof value === 'string' && ADDRESS_PATTERN.test(value) ? value.toLowerCase() : undefined
 }
 
 export function nftMintListener () {
@@ -47,13 +32,11 @@ export function nftMintListener () {
           isEventListenerCreated = false
         }
         const contract = new Contract(nftAddress, nftABI, provider as any)
-        // The subscription is asynchronous: without a rejection handler an unreachable node
-        // turns into an unhandled rejection, which takes the whole process down on Node >= 15.
         void contract.on('NFTMinted', (minter: string) => {
-          rememberMinter(minter)
-        }).catch((error: any) => {
-          logger.error(`Failed to subscribe to NFTMinted events: ${error?.message || error}`)
-          isEventListenerCreated = false
+          const minted = normalizedAddress(minter)
+          if (minted && !addressesMinted.has(minted)) {
+            addressesMinted.add(minted)
+          }
         })
         isEventListenerCreated = true
       }
@@ -67,19 +50,23 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      // Same 200 / success:false shape the caller already handles for an unknown wallet, so a
-      // malformed address is answered rather than turned into a client-side error.
-      const metamaskAddress = asWalletAddress(req.body?.walletAddress)
-      if (metamaskAddress === null) {
-        res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })
+      /* Minting is credited to an account, so there has to be an account. Without this the
+         endpoint hands out a reward to anyone who can name an address. */
+      const user = security.authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ success: false, message: 'You have to be logged in to verify a mint.' })
         return
       }
-      // The proof is the on-chain mint, so it is the predicate the challenge is scored on as
-      // well as the gate on the response - the route must never confirm a mint it did not see.
-      const mintedByThisWallet = addressesMinted.has(metamaskAddress)
-      challengeUtils.solveIf(challenges.nftMintChallenge, () => mintedByThisWallet)
-      if (mintedByThisWallet) {
+
+      const metamaskAddress = normalizedAddress(req.body?.walletAddress)
+      if (!metamaskAddress) {
+        res.status(400).json({ success: false, message: 'A valid wallet address is required.' })
+        return
+      }
+
+      if (addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
+        challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })
       } else {
         res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })

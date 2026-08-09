@@ -12,35 +12,28 @@ import { type Review } from 'data/types'
 import * as db from '../data/mongodb'
 import * as utils from '../lib/utils'
 
-// Sleep helper as in native MongoDB, kept defined so that any code which still refers to
-// it resolves instead of throwing - but it no longer blocks.
+// Blocking sleep function as in native MongoDB
 // @ts-expect-error FIXME Type safety broken for global object
 global.sleep = (time: number) => {
   // Ensure that users don't accidentally dos their servers for too long
   if (time > 2000) {
     time = 2000
   }
-  // Node runs the whole application on a single thread, so busy-waiting here stalls every
-  // other in-flight request for the requested duration. That is a denial of service
-  // primitive reachable from anything that can get a string into a query expression, and
-  // nothing in the application ever calls this helper legitimately, so the wait is not
-  // performed. The clamp above is deliberately left in place.
-  void time
+  const stop = new Date().getTime()
+  while (new Date().getTime() < stop + time) {
+    ;
+  }
 }
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    const parsedId = Number(req.params.id)
-    const id = Number.isFinite(parsedId) ? parsedId : -1
+    // Coerce the id to a number so no attacker-controlled code can end up in the query
+    const id = Number(req.params.id)
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    // An equality selector, not a $where clause. Coercing the id to a number made the old
-    // clause inert, but it still built a string that the database engine evaluates as
-    // JavaScript, so the lookup was one careless edit away from being injectable again.
-    // This selector expresses the same query and there is nothing in it to execute.
-    db.reviewsCollection.find({ product: id }).then((reviews: Review[]) => {
+    db.reviewsCollection.find({ $where: 'this.product == ' + id }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)

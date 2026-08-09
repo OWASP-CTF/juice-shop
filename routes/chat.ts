@@ -39,20 +39,9 @@ function summarizeLlmError (error: unknown): string {
 const botName = config.get<string>('application.chatBot.name')
 const appName = config.get<string>('application.name')
 
-// A malformed or truncated token makes the underlying jws verifier throw rather than
-// return false, and an exception here would surface as a server error instead of an
-// unauthenticated caller. A throw is treated as a failed verification.
-function safeVerify (token: string): boolean {
-  try {
-    return security.verify(token)
-  } catch {
-    return false
-  }
-}
-
 async function getUserId (req: Request): Promise<number | undefined> {
   const token = utils.jwtFrom(req)
-  if (!token || !safeVerify(token)) return undefined
+  if (!token) return undefined
   const decoded = security.decode(token) as { data?: { id?: number } } | undefined
   return decoded?.data?.id
 }
@@ -155,14 +144,7 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          // An equality selector rather than a $where clause. The argument reaching this
-          // tool is chosen by a language model, so it is untrusted input like any other,
-          // and it has no business being concatenated into a string the database engine
-          // evaluates as JavaScript.
-          if (!Number.isFinite(productId)) {
-            return [] as Review[]
-          }
-          return await db.reviewsCollection.find({ product: productId }) as Review[]
+          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
         }
       }),
 
@@ -192,7 +174,7 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          discount: z.number().max(10).describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
         execute: async ({ discount }) => {
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line
@@ -236,9 +218,7 @@ export function chat () {
           case 'tool-call':
             challengeUtils.solveIf(challenges.aiDebuggingChallenge, () => {
               const token = utils.jwtFrom(req)
-              const decoded = token && safeVerify(token)
-                ? security.decode(token) as { data?: { role?: string } }
-                : undefined
+              const decoded = token ? security.decode(token) as { data?: { role?: string } } : undefined
               const role = decoded?.data?.role
               return req.cookies.show_tool_calls === 'true' && role !== roles.admin
             })

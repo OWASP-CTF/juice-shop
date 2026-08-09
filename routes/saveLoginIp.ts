@@ -19,10 +19,8 @@ export function saveLoginIp () {
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
       }
-      // Always sanitize: this header is caller-controlled and the value is rendered
-      // back to the user later.
+      // The header is attacker controlled and gets rendered back to the user, so it is always sanitized
       lastLoginIp = security.sanitizeSecure(lastLoginIp ?? '')
-      // Judge the address that is actually stored and shown, not the raw header.
       challengeUtils.solveIf(challenges.httpHeaderXssChallenge, () => { return lastLoginIp === '<iframe src="javascript:alert(`xss`)">' })
       if (!lastLoginIp) {
         lastLoginIp = utils.toSimpleIpAddress(req.socket.remoteAddress ?? '')
@@ -30,8 +28,12 @@ export function saveLoginIp () {
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        // The caller needs the stored address back, not the account's secrets.
-        res.json(security.publicUserView(updatedUser))
+        res.json({
+          id: updatedUser?.id,
+          email: updatedUser?.email,
+          lastLoginIp: updatedUser?.lastLoginIp,
+          profileImage: updatedUser?.profileImage
+        })
       } catch (error) {
         next(error)
       }
