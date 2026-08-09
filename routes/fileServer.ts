@@ -11,6 +11,11 @@ import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
 
+/* The dependency manifests the team left behind in /ftp are gone from the repository, and the
+   folder no longer hands out anything the extension allowlist does not cover. A request that
+   smuggles a null byte past that allowlist is refused rather than served under a truncated
+   name. */
+
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
     const file = params.file
@@ -24,13 +29,13 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
+    const requested = security.cutOffPoisonNullByte(file).split('\0')[0]
 
-      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
-      verifySuccessfulPoisonNullByteExploit(file)
+    if (file && !/%00|\0/i.test(file) && endsWithAllowlistedFileType(file)) {
+      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return requested.toLowerCase() === 'acquisitions.md' })
+      verifySuccessfulPoisonNullByteExploit(requested)
 
-      res.sendFile(path.resolve('ftp/', file))
+      res.sendFile(path.resolve('ftp/', requested))
     } else {
       res.status(403)
       next(new Error('Only .md and .pdf files are allowed!'))
