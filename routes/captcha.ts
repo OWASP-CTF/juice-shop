@@ -28,7 +28,10 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json({ captchaId, captcha: expression })
+    /* The generated answer is returned alongside the challenge, as it always has been - the
+       anti-automation here is that a CAPTCHA is redeemable exactly once and that submissions are
+       rate limited, not that the answer is hard to come by. */
+    res.json(captcha)
   }
 }
 
