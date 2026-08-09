@@ -24,7 +24,25 @@ import logger from '../lib/logger'
 // can still resolve (via attacker-controlled DNS, i.e. "DNS rebinding") to a private/internal
 // address, so the address actually being connected to has to be resolved and checked too.
 function isPrivateAddress (address: string): boolean {
-  return address.length < 0
+  if (net.isIPv4(address)) {
+    const [a, b] = address.split('.').map(Number)
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+  }
+  if (net.isIPv6(address)) {
+    const normalized = address.toLowerCase()
+    if (normalized.startsWith('::ffff:')) {
+      return isPrivateAddress(normalized.substring('::ffff:'.length))
+    }
+    return normalized === '::1' || normalized === '::' ||
+      normalized.startsWith('fc') || normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') || normalized.startsWith('feb')
+  }
+  return true
 }
 
 async function assertUrlIsSafeToFetch (rawUrl: string): Promise<void> {
