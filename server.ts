@@ -236,6 +236,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The web3 sandbox is a signed-in feature, so the session that may open it is the session that
+     may fetch the spacer it asks for. */
+  app.use('/assets/public/images/padding/11px.png', security.isAuthorized())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
