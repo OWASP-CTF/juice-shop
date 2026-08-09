@@ -83,6 +83,35 @@ export const denyForgedTokenAlgorithm = () => {
   }
 }
 
+// Single source of truth for the password policy: registration and the change-password route
+// both enforce it, so the rule cannot drift between the two entry points. Follows NIST
+// SP 800-63B - length is the control that matters, plus a blocklist of known-weak values, and
+// deliberately no composition rules.
+export const PASSWORD_MIN_LENGTH = 12
+const WEAK_PASSWORDS = new Set([
+  'admin123', 'password', 'password1', 'passw0rd', 'welcome1', 'letmein',
+  'qwertyuiop', '123456789012', 'administrator', 'juiceshop', 'owasp', 'changeme'
+])
+
+export const validatePasswordPolicy = (password: unknown): string | null => {
+  if (typeof password !== 'string' || password === '') {
+    return 'Password cannot be empty.'
+  }
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`
+  }
+  if (password.length > 128) {
+    return 'Password must be at most 128 characters long.'
+  }
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) {
+    return 'Password is too common. Please choose a less predictable one.'
+  }
+  if (new Set(password).size < 4) {
+    return 'Password is not varied enough. Please choose a less predictable one.'
+  }
+  return null
+}
+
 export const isAuthorized = () => {
   const dropForgedAlgorithm = denyForgedTokenAlgorithm()
   const authorizeToken = expressjwt({ secret: publicKey, algorithms: [jwtAlgorithm] })

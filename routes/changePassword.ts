@@ -24,6 +24,14 @@ export function changePassword () {
       return
     }
 
+    // Same policy as registration, from the same definition, so a weak password cannot be
+    // introduced through the back door of a password change.
+    const violation = security.validatePasswordPolicy(newPassword?.toString())
+    if (violation) {
+      res.status(401).send(violation)
+      return
+    }
+
     const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
     if (token === null) {
       next(new Error('Blocked illegal activity by ' + connection.remoteAddress))
