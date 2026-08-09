@@ -254,7 +254,7 @@
   role: 'deluxe'
   securityQuestion:
     id: 10
-    answer: "Used Ship Emporium" # https://monkeyisland.fandom.com/wiki/Stan_S._Stanman
+    answer: "6f0f2f49-9d3c-4e6a-a70f-6b4a4b7f0f3e"
 -
   email: ethereum
   username: evmrox

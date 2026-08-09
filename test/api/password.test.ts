@@ -104,6 +104,35 @@ void describe('/rest/user/change-password', () => {
 })
 
 void describe('/rest/user/reset-password', () => {
+  void it('POST password reset for Stan rejects the publicly disclosed answer', async () => {
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'stan@' + config.get<string>('application.domain'),
+        answer: 'Used Ship Emporium',
+        new: 'a-new-password',
+        repeat: 'a-new-password'
+      })
+
+    assert.equal(res.status, 401)
+    assert.ok(res.text.includes('Wrong answer to security question.'))
+  })
+
+  void it('POST password reset for Stan accepts the private seeded answer', async () => {
+    const res = await request(app)
+      .post('/rest/user/reset-password')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'stan@' + config.get<string>('application.domain'),
+        answer: '6f0f2f49-9d3c-4e6a-a70f-6b4a4b7f0f3e',
+        new: 'a-new-password',
+        repeat: 'a-new-password'
+      })
+
+    assert.equal(res.status, 200)
+  })
+
   void it('POST password reset for Jim with correct answer to his security question', async () => {
     const res = await request(app)
       .post('/rest/user/reset-password')
