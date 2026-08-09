@@ -45,6 +45,7 @@ interface IAuthenticatedUsers {
   from: (req: Request) => ResponseWithUser | undefined
   updateFrom: (req: Request, user: ResponseWithUser) => any
   invalidate: (token: string) => void
+  invalidateAllFor: (userId: number, exceptToken?: string) => void
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
@@ -164,6 +165,14 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     }
     delete this.tokenMap[key]
     invalidatedTokens.add(key)
+  },
+  invalidateAllFor: function (userId: number, exceptToken?: string) {
+    const kept = exceptToken ? utils.unquote(exceptToken) : undefined
+    for (const [token, session] of Object.entries(this.tokenMap)) {
+      if (session.data.id === userId && token !== kept) {
+        this.invalidate(token)
+      }
+    }
   }
 }
 

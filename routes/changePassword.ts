@@ -49,6 +49,10 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
+      // The session caches the credential it was issued against, so both the caller's copy and
+      // every other session of this user have to follow the password rather than outlive it.
+      loggedInUser.data.password = user.password
+      security.authenticatedUsers.invalidateAllFor(loggedInUser.data.id, token)
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
