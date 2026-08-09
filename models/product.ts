@@ -43,7 +43,7 @@ const ProductModelInit = (sequelize: Sequelize) => {
       description: {
         type: DataTypes.STRING,
         set (description: string) {
-          description = security.sanitizeSecure(description)
+          description = security.encodeHtml(description)
           if (utils.isChallengeEnabled(challenges.restfulXssChallenge)) {
             challengeUtils.solveIf(challenges.restfulXssChallenge, () => {
               return utils.contains(

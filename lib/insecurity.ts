@@ -126,6 +126,18 @@ export const decode = (token: string) => { return jws.decode(token)?.payload }
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
+// Markup that reaches a page as data is encoded, not deleted. Stripping it neutralises the attack
+// but destroys the value with it, and a name or a description the customer typed has to survive.
+export const encodeHtml = (input: string): string => {
+  if (typeof input !== 'string') return input
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 export const sanitizeSecure = (html: string): string => {
   const sanitized = sanitizeHtml(html)
   if (sanitized === html) {

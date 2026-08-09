@@ -46,14 +46,14 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          this.setDataValue('username', security.sanitizeSecure(username))
+          this.setDataValue('username', security.encodeHtml(username))
         }
       },
       email: {
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
-          email = security.sanitizeSecure(email)
+          email = security.encodeHtml(email)
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
             challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
               return utils.contains(
