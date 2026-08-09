@@ -15,6 +15,7 @@ export function saveLoginIp () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const loggedInUser = security.authenticatedUsers.from(req)
     if (loggedInUser !== undefined) {
+      const token = utils.jwtFrom(req)
       let lastLoginIp = req.headers['true-client-ip']
       if (Array.isArray(lastLoginIp)) {
         lastLoginIp = lastLoginIp[0]
@@ -43,6 +44,10 @@ export function saveLoginIp () {
         })
       } catch (error) {
         next(error)
+      } finally {
+        /* The frontend calls this endpoint as its final logout action. Session
+           revocation must not depend on successfully storing an audit field. */
+        security.authenticatedUsers.remove(token)
       }
     } else {
       res.sendStatus(401)

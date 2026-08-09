@@ -256,8 +256,8 @@ export const deluxeToken = (email: string) => {
 
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-    if (decodedToken?.data?.role === roles.accounting) {
+    const user = authenticatedUsers.from(req)
+    if (user?.data?.role === roles.accounting) {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
@@ -277,13 +277,12 @@ export const isAdmin = () => {
 }
 
 export const isDeluxe = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
+  const user = authenticatedUsers.from(req)
+  return user?.data?.role === roles.deluxe && user.data.deluxeToken && user.data.deluxeToken === deluxeToken(user.data.email)
 }
 
 export const isCustomer = (req: Request) => {
-  const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
-  return decodedToken?.data?.role === roles.customer
+  return authenticatedUsers.from(req)?.data?.role === roles.customer
 }
 
 export const appendUserId = () => {
@@ -299,12 +298,11 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token && verify(token) && authenticatedUsers.get(token) === undefined) {
-    const decodedToken = decode(token)
-    if (typeof decodedToken === 'object' && decodedToken?.data?.id) {
-      authenticatedUsers.put(token, decodedToken)
-      res.cookie('token', token, { httpOnly: true, sameSite: 'strict' })
-    }
+  /* A signed JWT is not enough to recreate a server-side session. Tokens are
+     removed from authenticatedUsers on password changes and newer logins; adding
+     them back here made revocation ineffective. */
+  if (token && authenticatedUsers.get(token) !== undefined) {
+    res.cookie('token', token, { httpOnly: true, sameSite: 'strict' })
   }
   next()
 }
