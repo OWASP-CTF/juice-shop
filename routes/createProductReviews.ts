@@ -22,7 +22,11 @@ export function createProductReviews () {
 
     try {
       await reviewsCollection.insert({
-        product: req.params.id,
+        // Stored as a number so it matches how the seeded reviews record it. It used to go
+        // in as the raw string from the path, and only the loose comparison in the old
+        // $where lookup hid the mismatch; an equality selector would not have matched
+        // these reviews at all.
+        product: Number(req.params.id),
         message: req.body.message,
         author: user.data.email,
         likesCount: 0,

@@ -155,7 +155,14 @@ export function chat () {
         }),
         execute: async ({ id }) => {
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          // An equality selector rather than a $where clause. The argument reaching this
+          // tool is chosen by a language model, so it is untrusted input like any other,
+          // and it has no business being concatenated into a string the database engine
+          // evaluates as JavaScript.
+          if (!Number.isFinite(productId)) {
+            return [] as Review[]
+          }
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 

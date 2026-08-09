@@ -30,14 +30,17 @@ global.sleep = (time: number) => {
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Only a number ever reaches the $where clause, so there is no syntax to inject.
     const parsedId = Number(req.params.id)
     const id = Number.isFinite(parsedId) ? parsedId : -1
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
-    db.reviewsCollection.find({ $where: 'this.product == ' + id }).then((reviews: Review[]) => {
+    // An equality selector, not a $where clause. Coercing the id to a number made the old
+    // clause inert, but it still built a string that the database engine evaluates as
+    // JavaScript, so the lookup was one careless edit away from being injectable again.
+    // This selector expresses the same query and there is nothing in it to execute.
+    db.reviewsCollection.find({ product: id }).then((reviews: Review[]) => {
       const t1 = new Date().getTime()
       challengeUtils.solveIf(challenges.noSqlCommandChallenge, () => { return (t1 - t0) > 2000 })
       const user = security.authenticatedUsers.from(req)
