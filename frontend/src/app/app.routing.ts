@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -254,6 +255,11 @@ const routes: Routes = [
     matcher: oauthMatcher,
     data: { params: (window.location.href).substr(window.location.href.indexOf('#')) },
     component: OAuthComponent
+  },
+  {
+    path: 'tokensale-ico-ea',
+    component: TokenSaleComponent,
+    canActivate: [AdminGuard]
   },
   {
     path: 'coding-challenge/:challengeKey',
