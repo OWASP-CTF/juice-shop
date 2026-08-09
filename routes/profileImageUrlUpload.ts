@@ -39,15 +39,25 @@ const isPrivateAddress = (address: string) => {
 
 /* Only public http(s) targets may be retrieved, so the shop cannot be abused as a proxy into
    its own network or into cloud metadata services. Every redirect hop is checked as well. */
+class BlockedTargetError extends Error {}
+
 const assertUrlIsSafeToFetch = async (rawUrl: string) => {
   const url = new URL(rawUrl)
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Only http and https image URLs are supported')
+    throw new BlockedTargetError('Only http and https image URLs are supported')
   }
   const hostname = url.hostname.replace(/^\[|]$/g, '')
-  const { address } = net.isIP(hostname) ? { address: hostname } : await dns.lookup(hostname)
-  if (isPrivateAddress(address)) {
-    throw new Error('Image URLs must point to a publicly reachable host')
+  /* Every address the name answers with has to be acceptable, not just the first one. A name is
+     free to carry several A records, and the resolver hands back whichever it likes; checking
+     one of them and then letting the request pick another is not a check. */
+  const addresses = net.isIP(hostname)
+    ? [hostname]
+    : (await dns.lookup(hostname, { all: true })).map(entry => entry.address)
+  if (addresses.length === 0) {
+    throw new BlockedTargetError('Image URL host does not resolve')
+  }
+  if (addresses.some(isPrivateAddress)) {
+    throw new BlockedTargetError('Image URLs must point to a publicly reachable host')
   }
 }
 
@@ -59,7 +69,7 @@ const fetchImage = async (rawUrl: string) => {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location')
       if (!location) {
-        throw new Error('url responded with a redirect without a target')
+        throw new BlockedTargetError('url responded with a redirect without a target')
       }
       currentUrl = new URL(location, currentUrl).toString()
       continue
@@ -87,6 +97,14 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
+          /* A target that was refused stays refused. Storing the URL after the guard turned it
+             down put the rejected address back on the profile page, where it is requested
+             again every time the page is rendered -- so the fetch the guard prevented happens
+             anyway, just from the browser and on a schedule the attacker chooses. */
+          if (error instanceof BlockedTargetError) {
+            next(error)
+            return
+          }
           try {
             const user = await UserModel.findByPk(loggedInUser.data.id)
             await user?.update({ profileImage: url })
