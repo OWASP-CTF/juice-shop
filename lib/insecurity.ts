@@ -7,7 +7,6 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -79,15 +78,27 @@ export const denyForgedTokenAlgorithm = () => {
   }
 }
 
+// express-jwt 0.1.3 is a 2013 release with published advisories and no maintained upgrade
+// path that keeps this application's behaviour, so the dependency is gone rather than
+// bumped. What it did here was small and is done directly: take the bearer token, insist on
+// the RS256 signature this shop issues, reject anything expired, and hand the claims to the
+// handler. Verification is no longer delegated to a library that decides which algorithm to
+// trust by reading the token's own header.
 export const isAuthorized = () => {
-  const requireValidToken = expressJwt(({ secret: publicKey }) as any)
   return (req: Request, res: Response, next: NextFunction) => {
     const token = utils.jwtFrom(req)
-    if (token && !hasAcceptedAlgorithm(token)) {
+    if (!token || !verify(token)) {
       res.status(401).json({ error: 'Unauthorized' })
       return
     }
-    requireValidToken(req, res, next)
+    const claims = decode(token) as { exp?: number } | undefined
+    if (!claims || (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now())) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    const authenticated = req as Request & { user?: unknown }
+    authenticated.user = claims
+    next()
   }
 }
 // These routes have no authorised caller at all, so this denies unconditionally rather
