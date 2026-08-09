@@ -43,7 +43,27 @@
           <div>
             <mat-card-title class="sbt-title">{{ 'TITLE_SBT' | translate }}</mat-card-title>
           </div>
-          <p>{{ 'NFT_SBT_BOX_TEXT' | translate: i18nParams }}</p>
+          <form (ngSubmit)="submitForm()">
+            <div class="form-group">
+              <mat-form-field color="tertiary" appearance="outline" class="responsive-field">
+                <mat-label>{{ 'LABEL_PRIVATE_KEY' | translate }}</mat-label>
+                <input
+                  matInput
+                  [(ngModel)]="privateKey"
+                  id="privateKey"
+                  name="privateKey"
+                  required
+                  type="text"
+                  [attr.aria-label]="'LABEL_PRIVATE_KEY' | translate"
+                  class="text-ellipsis"
+                  />
+              </mat-form-field>
+              <h5 class="error">{{ errorMessage }}</h5>
+            </div>
+            <button type="submit" class="btn btn-primary" mat-raised-button color="tertiary">
+              {{ 'BTN_AUTHENTICATE' | translate }}
+            </button>
+          </form>
         </div>
       }
     </div>
