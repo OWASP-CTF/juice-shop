@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Request, type Response } from 'express'
+import { type Request, type Response, type NextFunction } from 'express'
 
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
@@ -23,7 +23,10 @@ import * as utils from '../lib/utils'
 const MAX_ORDER_LINES_DATA_LENGTH = 100_000
 
 export function b2bOrder () {
-  return ({ body }: Request, res: Response) => {
+  // `next` is accepted but unused: this handler now resolves every path itself (there is no
+  // interpreter left to throw), and keeping the standard three-argument Express signature is
+  // what existing callers and the route's own tests type-check against.
+  return ({ body }: Request, res: Response, next?: NextFunction) => {
     if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
       const orderLinesData = body.orderLinesData || ''
       if (typeof orderLinesData !== 'string' || orderLinesData.length > MAX_ORDER_LINES_DATA_LENGTH) {
