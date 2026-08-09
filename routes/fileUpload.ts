@@ -16,6 +16,15 @@ import * as challengeUtils from '../lib/challengeUtils'
 import { challenges } from '../data/datacache'
 import * as utils from '../lib/utils'
 
+// A YAML document referencing this many anchors is an expansion bomb, not a
+// legitimate complaint. Generous enough that ordinary anchor reuse is unaffected.
+const MAX_YAML_ALIASES = 50
+
+function hasExcessiveAliases (data: string) {
+  const aliases = data.match(new RegExp('[*][0-9a-zA-Z_-]+', 'g'))
+  return aliases !== null && aliases.length > MAX_YAML_ALIASES
+}
+
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
   if (file != null) {
     next()
@@ -39,10 +48,13 @@ function handleZipFileUpload ({ file }: Request, res: Response, next: NextFuncti
               .pipe(unzipper.Parse())
               .on('entry', function (entry: any) {
                 const fileName = entry.path
-                const absolutePath = path.resolve('uploads/complaints/' + fileName)
+                const uploadRoot = path.resolve('uploads/complaints')
+                const absolutePath = path.resolve(uploadRoot, fileName)
                 challengeUtils.solveIf(challenges.fileWriteChallenge, () => { return absolutePath === path.resolve('ftp/legal.md') })
-                if (absolutePath.includes(path.resolve('.'))) {
-                  entry.pipe(fs.createWriteStream('uploads/complaints/' + fileName).on('error', function (err) { next(err) }))
+                // The resolved destination must sit beneath the upload directory, so an
+                // entry name containing ../ cannot escape it.
+                if (absolutePath.startsWith(uploadRoot + path.sep)) {
+                  entry.pipe(fs.createWriteStream(absolutePath).on('error', function (err) { next(err) }))
                 } else {
                   entry.autodrain()
                 }
@@ -80,7 +92,8 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        // noent: false leaves external entities unresolved; nonet: true refuses network fetches.
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: false, nocdata: true, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
@@ -111,6 +124,11 @@ function handleYamlUpload ({ file }: Request, res: Response, next: NextFunction)
     challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) {
       const data = file.buffer.toString()
+      if (hasExcessiveAliases(data)) {
+        res.status(410)
+        next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: too many aliases (' + file.originalname + ')'))
+        return
+      }
       try {
         const sandbox = { yaml, data }
         vm.createContext(sandbox)
