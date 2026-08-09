@@ -249,8 +249,9 @@ export const deluxeToken = (email: string) => {
 // Browser-driven pages (e.g. /support/logs) send the session as a cookie, not an Authorization header.
 const tokenFrom = (req: Request) => req.cookies?.token || utils.jwtFrom(req)
 
-// 'secure' is omitted on purpose: the shop is also served over plain HTTP.
-export const sessionCookieOptions = { httpOnly: true, sameSite: 'strict' } as const
+// The single page app reads the session token from document.cookie, so this cookie cannot be
+// httpOnly. 'secure' is omitted on purpose: the shop is also served over plain HTTP.
+export const sessionCookieOptions = { sameSite: 'strict' } as const
 
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
