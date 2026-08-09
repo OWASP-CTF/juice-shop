@@ -103,7 +103,19 @@ export const verify = (token: string) => {
 }
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
-export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
+export const sanitizeHtml = (html: string) => {
+  // A single pass is escapable by nesting a stripped tag inside the one you
+  // want to survive: "<<script>x</script>iframe src=javascript:...>" leaves a
+  // live iframe behind once the inner script tag is removed. Sanitizing to a
+  // fixed point removes anything that only becomes a tag after an earlier pass.
+  let sanitized = sanitizeHtmlLib(html)
+  let previous
+  do {
+    previous = sanitized
+    sanitized = sanitizeHtmlLib(previous)
+  } while (sanitized !== previous)
+  return sanitized
+}
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
 export const sanitizeSecure = (html: string): string => {

@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'admin123'
+  password: 'MuUcSBeGqjxvBHC0jST5MINl!bhXR~6z-XYeq-7b'
   key: admin
   role: 'admin'
   securityQuestion:
@@ -85,7 +85,7 @@
 -
   email: bjoern.kimminich@gmail.com
   username: bkimminich
-  password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
+  password: '1?xyJ1Or6Anr#5!l0rwLz6_V.rJ%p%vABBgfIc0C'
   customDomain: true
   key: bjoernGoogle
   role: 'admin'
@@ -129,7 +129,7 @@
     answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
 -
   email: mc.safesearch
-  password: 'Mr. N00dles'
+  password: 'oL7H68OIXlb!.~DCcAKf_M4KKr*3dahDSU^jwM2E'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'K1f.....................'
+  password: 'bp*0Fkka^i#gS-UcGFbX2voRtwdFkw!Hfdw#CLrq'
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -259,7 +259,7 @@
 -
   email: ethereum
   username: evmrox
-  password: 'private'
+  password: 'oHLnXT39TCD?5aSC1.L7T937anMADKSpUJL4.6R.'
   key: evm
   role: 'deluxe'
   feedback:
