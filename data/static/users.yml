@@ -248,7 +248,7 @@
 -
   email: stan
   username: SmilinStan
-  password: 'ship coffin krypt cross estate supply insurance asbestos souvenir'
+  password: 'RANDOM' # generated at startup: never ship a real credential in the repository
   key: stan
   profileImage: '20.jpg'
   role: 'deluxe'
