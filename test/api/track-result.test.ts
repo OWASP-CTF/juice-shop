@@ -23,10 +23,11 @@ void describe('/rest/track-order/:id', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('GET all orders by injecting into orderId', async () => {
+  void it('GET tracking rejects NoSQL expression injection in orderId', async () => {
     const res = await request(app)
       .get('/rest/track-order/%27%20%7C%7C%20true%20%7C%7C%20%27')
-    assert.equal(res.status, 200)
+    assert.equal(res.status, 400)
+    return
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.ok(Array.isArray(res.body.data))
     for (const item of res.body.data) {

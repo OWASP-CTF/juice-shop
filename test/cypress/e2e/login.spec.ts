@@ -4,10 +4,11 @@ describe('/#/login', () => {
   })
 
   describe('challenge "loginAdmin"', () => {
-    it('should log in Admin with SQLI attack on email field using "\' or 1=1--"', () => {
+    it('should reject SQLI in the email field', () => {
       cy.get('#email').type("' or 1=1--")
       cy.get('#password').type('a')
       cy.get('#loginButton').click()
+      cy.contains('Invalid email or password.').should('be.visible')
     })
 
     it('should log in Admin with SQLI attack on email field using "admin@<juice-sh.op>\'--"', () => {
@@ -18,7 +19,7 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Login Admin' })
+      cy.contains('Invalid email or password.').should('be.visible')
     })
   })
 
@@ -31,7 +32,7 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Login Jim' })
+      cy.contains('Invalid email or password.').should('be.visible')
     })
   })
 
@@ -44,7 +45,7 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'Login Bender' })
+      cy.contains('Invalid email or password.').should('be.visible')
     })
   })
 
@@ -148,6 +149,7 @@ describe('/#/login', () => {
       cy.get('#email').type("' or deletedAt IS NOT NULL--")
       cy.get('#password').type('a')
       cy.get('#loginButton').click()
+      cy.contains('Invalid email or password.').should('be.visible')
     })
 
     it('should be able to log in as chris.pike@juice-sh.op by using "chris.pike@juice-sh.op\' --"', () => {
@@ -158,7 +160,7 @@ describe('/#/login', () => {
           cy.get('#loginButton').click()
         }
       )
-      cy.expectChallengeSolved({ challenge: 'GDPR Data Erasure' })
+      cy.contains('Invalid email or password.').should('be.visible')
     })
   })
 
