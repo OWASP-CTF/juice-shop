@@ -153,6 +153,20 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
+const sessionTokenFrom = (req: Request) => utils.jwtFrom(req) || req.cookies?.token
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = sessionTokenFrom(req)
+    const decodedToken = token && verify(token) && decode(token)
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
