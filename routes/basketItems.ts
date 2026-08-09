@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -34,6 +35,18 @@ export function addBasketItem () {
     }
 
     const user = security.authenticatedUsers.from(req)
+    /* A product that has been withdrawn from sale is withdrawn. It is soft deleted, so it stays in
+       the table for the order history of customers who bought it while it was on sale - but a row
+       that is still readable is not a product that is still for sale, and nothing checked that
+       before. A caller who learned the id of a withdrawn product could put it in a basket and
+       order it at whatever price it carried when it was pulled. */
+    const requestedProduct = productIds[0] !== undefined
+      ? await ProductModel.findOne({ where: { id: productIds[0] } })
+      : null
+    if (productIds[0] !== undefined && requestedProduct === null) {
+      res.status(404).send('{\'error\' : \'Product no longer available\'}')
+      return
+    }
     if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
       res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
     } else {
