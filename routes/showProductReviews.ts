@@ -27,8 +27,17 @@ global.sleep = (time: number) => {
 
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Truncate id to avoid unintentional RCE
-    const id = !utils.isChallengeEnabled(challenges.noSqlCommandChallenge) ? Number(req.params.id) : utils.trunc(req.params.id, 40)
+    // Always coerce the id to a number before it is concatenated into the
+    // $where query below, regardless of challenge enablement / safety mode
+    // (that is a demo toggle, not a security control, and must not gate the
+    // sanitization). Number() can only ever stringify back to a finite
+    // numeric literal, "NaN", "Infinity" or "-Infinity" - none of which can
+    // break out of the numeric literal context in the $where expression.
+    // Passing the raw, untrusted request parameter through instead allowed
+    // arbitrary JavaScript (e.g. a call to sleep()) to be injected into and
+    // executed by the database, which is a classic NoSQL injection based
+    // Denial of Service vector.
+    const id = Number(req.params.id)
 
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
