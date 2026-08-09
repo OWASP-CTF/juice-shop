@@ -232,6 +232,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* measurement: the token sale spacer is part of the unannounced token sale screen, so an
+     anonymous caller may not fetch it. */
+  app.use('/assets/public/images/padding/56px.png', security.isAuthorized())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
