@@ -85,7 +85,7 @@ describe('/', () => {
         cy.request({
           url: `/support/logs/access.log.${date.toString()}`,
           failOnStatusCode: false
-        }).its('status').should('equal', 404)
+        }).its('status').should('equal', 403)
       })
     })
   })

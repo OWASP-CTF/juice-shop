@@ -283,7 +283,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
-  app.use('/support/logs', (_req: Request, res: Response) => { res.sendStatus(404) })
+  app.use('/support/logs', (_req: Request, res: Response, next: NextFunction) => {
+    res.status(403)
+    next(new Error('Access logs are not accessible from outside the server.'))
+  })
 
   /* Serve vendor dependencies locally instead of from CDN */
   app.use('/vendor/beercss', express.static(path.resolve('node_modules/beercss/dist/cdn')))
