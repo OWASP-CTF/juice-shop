@@ -60,7 +60,7 @@ export function restoreProgressFindIt () {
 }
 
 export function restoreProgressFixIt () {
-  const hashids = new Hashids('yet another salt for the fixIt challenges', 60, hashidsAlphabet)
+  const hashids = new Hashids(security.continueCodeFixItSalt, 60, hashidsAlphabet)
   return async ({ params }: Request, res: Response) => {
     const continueCodeFixIt = params.continueCode
     if (!hashidRegexp.test(continueCodeFixIt)) {

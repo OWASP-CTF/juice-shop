@@ -36,7 +36,7 @@ export function continueCodeFindIt () {
 }
 
 export function continueCodeFixIt () {
-  const hashids = new Hashids('yet another salt for the fixIt challenges', 60, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
+  const hashids = new Hashids(security.continueCodeFixItSalt, 60, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890')
   return async (req: Request, res: Response) => {
     const ids = []
     const challenges = await ChallengeModel.findAll({ where: { codingChallengeStatus: { [Op.gte]: 2 } } })
