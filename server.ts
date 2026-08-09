@@ -725,7 +725,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* File Serving */
   app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', serveEasterEgg())
   app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', servePremiumContent())
-  app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', servePrivacyPolicyProof())
+  /* The asset behind this route lives under assets/private and was reachable by anyone who knew
+     the path. A URL nobody has been told is not an access control: it is guessed, shared, logged
+     by proxies and left in browser history, and it grants the same access to everybody who ends
+     up holding it. The route asks who the caller is now. */
+  app.get('/we/may/also/instruct/you/to/refuse/all/reasonably/necessary/responsibility', security.isAuthorized(), servePrivacyPolicyProof())
 
   /* Route for dataerasure page */
   app.use('/dataerasure', dataErasure)
