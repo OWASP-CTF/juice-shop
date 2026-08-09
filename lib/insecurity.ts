@@ -203,7 +203,12 @@ const claimsFor = (user: any) => {
   if (!user || typeof user !== 'object' || !('data' in user)) {
     return user
   }
-  const { password, totpSecret, ...safeData } = (user as any).data ?? {}
+  /* data is a Sequelize instance on the login path, where the attributes live behind toJSON()
+     rather than on the object itself - spreading it directly drops role and id, which then
+     disappear from the token and every role check fails. */
+  const raw = (user as any).data
+  const plain = (raw && typeof raw.toJSON === 'function') ? raw.toJSON() : { ...(raw ?? {}) }
+  const { password, totpSecret, ...safeData } = plain
   return { ...(user as any), data: safeData }
 }
 export const authorize = (user = {}) => jwt.sign(claimsFor(user), privateKey, { expiresIn: '6h', algorithm: jwtAlgorithm })
