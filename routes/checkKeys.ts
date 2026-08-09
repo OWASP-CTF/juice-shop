@@ -3,24 +3,15 @@ import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
-interface ShopWallet { privateKey: string, publicKey: string, address: string }
-
-// A seed phrase in the source hands its private key to every reader of the source, so the shop
-// wallet is minted once per boot and never leaves memory.
-let shopWallet: Promise<ShopWallet> | undefined
-
-const walletOfTheShop = async (): Promise<ShopWallet> => {
-  shopWallet ??= import('ethers').then(({ Wallet }) => {
-    const { privateKey, publicKey, address } = Wallet.createRandom()
-    return { privateKey, publicKey, address }
-  })
-  return await shopWallet
-}
-
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { privateKey, publicKey, address } = await walletOfTheShop()
+      const { HDNodeWallet } = await import('ethers')
+      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
+      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
+      const privateKey = mnemonicWallet.privateKey
+      const publicKey = mnemonicWallet.publicKey
+      const address = mnemonicWallet.address
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })

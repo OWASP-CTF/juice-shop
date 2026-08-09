@@ -4,18 +4,11 @@ import logger from '../lib/logger'
 import * as challengeUtils from '../lib/challengeUtils'
 import { nftABI } from '../data/static/contractABIs'
 import { challenges } from '../data/datacache'
-import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
-const addressesMinted = new Set<string>()
+const addressesMinted = new Set()
 let isEventListenerCreated = false
-
-// An address in a request body is a claim about a wallet, never proof of one. Only a well-formed
-// address is recorded, and in one casing, so the mint event and the claim can be compared at all.
-const walletAddressFrom = (value: unknown) => {
-  return typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : undefined
-}
 
 export function nftMintListener () {
   return async (req: Request, res: Response) => {
@@ -29,9 +22,8 @@ export function nftMintListener () {
         }
         const contract = new Contract(nftAddress, nftABI, provider as any)
         void contract.on('NFTMinted', (minter: string) => {
-          const minted = walletAddressFrom(minter)
-          if (minted !== undefined) {
-            addressesMinted.add(minted)
+          if (!addressesMinted.has(minter)) {
+            addressesMinted.add(minter)
           }
         })
         isEventListenerCreated = true
@@ -46,15 +38,7 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      if (!security.authenticatedUsers.from(req)) {
-        res.status(401).json({ success: false, message: 'You have to be logged in to verify a mint.' })
-        return
-      }
-      const metamaskAddress = walletAddressFrom(req.body?.walletAddress)
-      if (metamaskAddress === undefined) {
-        res.status(400).json({ success: false, message: 'A valid wallet address is required.' })
-        return
-      }
+      const metamaskAddress = req.body.walletAddress
       if (addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
