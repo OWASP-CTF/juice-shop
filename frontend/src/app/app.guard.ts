@@ -7,6 +7,9 @@ import { type CanActivate, Router } from '@angular/router'
 import { jwtDecode } from 'jwt-decode'
 import { roles } from './roles'
 import { Injectable, NgZone, inject } from '@angular/core'
+import { UserService } from './Services/user.service'
+import { type Observable, of } from 'rxjs'
+import { catchError, map } from 'rxjs/operators'
 
 @Injectable()
 export class LoginGuard implements CanActivate {
@@ -44,35 +47,52 @@ export class LoginGuard implements CanActivate {
   }
 }
 
+// The role is asked of the server rather than read out of the token in local storage.
+// jwtDecode only base64-decodes the payload - it verifies no signature - so a user could
+// rewrite their own token to claim the admin role and walk straight into these routes.
+// /rest/user/whoami answers from the server-side session for a token the server has
+// verified, so the client cannot author the answer. A failed lookup denies.
 @Injectable()
 export class AdminGuard implements CanActivate {
   private readonly loginGuard = inject(LoginGuard)
+  private readonly userService = inject(UserService)
 
-
-  canActivate () {
-    const payload = this.loginGuard.tokenDecode()
-    if (payload?.data && payload.data.role === roles.admin) {
-      return true
-    } else {
-      this.loginGuard.forbidRoute()
-      return false
-    }
+  canActivate (): Observable<boolean> {
+    return this.userService.whoAmI().pipe(
+      map((user: any) => {
+        if (user?.role === roles.admin) {
+          return true
+        }
+        this.loginGuard.forbidRoute()
+        return false
+      }),
+      catchError(() => {
+        this.loginGuard.forbidRoute()
+        return of(false)
+      })
+    )
   }
 }
 
 @Injectable()
 export class AccountingGuard implements CanActivate {
   private readonly loginGuard = inject(LoginGuard)
+  private readonly userService = inject(UserService)
 
-
-  canActivate () {
-    const payload = this.loginGuard.tokenDecode()
-    if (payload?.data && payload.data.role === roles.accounting) {
-      return true
-    } else {
-      this.loginGuard.forbidRoute()
-      return false
-    }
+  canActivate (): Observable<boolean> {
+    return this.userService.whoAmI().pipe(
+      map((user: any) => {
+        if (user?.role === roles.accounting) {
+          return true
+        }
+        this.loginGuard.forbidRoute()
+        return false
+      }),
+      catchError(() => {
+        this.loginGuard.forbidRoute()
+        return of(false)
+      })
+    )
   }
 }
 
