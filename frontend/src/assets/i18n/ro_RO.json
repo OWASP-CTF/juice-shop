@@ -460,7 +460,6 @@
   "PLEASE_CONNECT_TO_SEPOLIA_NETWORK": "Te rog să te conectezi la rețeaua Sepolia.",
   "PLEASE_CONNECT_WEB3_WALLET": "Te rog să conectezi mai întâi portofelul tău Web3.",
   "TITLE_CONTRACT_EDITOR": "Editor de contracte",
-  "TITLE_WEB3_SANDBOX": "Sandbox de cod Web3",
   "EXPLANATION_SMART_CONTRACT_DEPLOYMENT": "Compilați/implementați și invocați ușor contracte inteligente de mai jos",
   "EXPLANATION_GWEI_VALUE_POST_COMPILATION": "Poți trimite ETH către contract atât în timpul invocării/implementării, cât și prin introducerea valorii GWEI după compilare.",
   "LABEL_SELECT_COMPILER_VERSION": "Selectează versiunea compilatorului",
