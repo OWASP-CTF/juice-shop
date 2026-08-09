@@ -42,9 +42,8 @@ export function resetPassword () {
         const user = await UserModel.findByPk(data.UserId)
         if (user) {
           const updatedUser = await user.update({ password: newPassword })
-          security.authenticatedUsers.invalidateAllFor(updatedUser.id)
           verifySecurityAnswerChallenges(updatedUser, answer)
-          res.json({ user: { id: updatedUser.id, email: updatedUser.email } })
+          res.json({ user: updatedUser })
         }
       } else {
         res.status(401).send(res.__('Wrong answer to security question.'))
