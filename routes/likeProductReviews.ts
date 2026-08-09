@@ -11,8 +11,6 @@ import * as security from '../lib/insecurity'
 import { type Review } from '../data/types'
 import * as db from '../data/mongodb'
 
-const sleep = async (ms: number) => await new Promise(resolve => setTimeout(resolve, ms))
-
 export function likeProductReviews () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const id = req.body.id
@@ -37,8 +35,9 @@ export function likeProductReviews () {
         { $inc: { likesCount: 1 } }
       )
 
-      // Artificial wait for timing attack challenge
-      await sleep(150)
+      // The check above and the write below have to be one logical step. The delay that
+      // used to sit here held the window open long enough for a second request to pass
+      // the same check before the first had recorded its like.
       try {
         const updatedReview: Review = await db.reviewsCollection.findOne({ _id: id })
         const updatedLikedBy = updatedReview.likedBy

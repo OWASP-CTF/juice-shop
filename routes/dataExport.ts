@@ -23,7 +23,9 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          // The export belongs to the signed-in account. Taking the id from the body let a
+          // caller name somebody else's user id and export their memories.
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return
