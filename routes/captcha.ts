@@ -28,8 +28,7 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    // The answer stays on the server side, otherwise the CAPTCHA is trivial to automate
-    res.json({ captchaId, captcha: expression })
+    res.json(captcha)
   }
 }
 
