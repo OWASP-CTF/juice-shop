@@ -671,6 +671,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/snippets/fixes/:key', utils.asyncHandler(serveCodeFixes()))
   app.post('/snippets/fixes', utils.asyncHandler(checkCorrectFix()))
 
+  /* Serve metrics */
+  app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics()))
+
   app.use(utils.asyncHandler(serveAngularClient()))
 
   /* Error Handling */
@@ -718,11 +721,8 @@ while (!expectedModels.every(model => Object.keys(sequelize.models).includes(mod
 }
 logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.toString())} of ${colors.bold(expectedModels.length.toString())} are initialized (${colors.green('SUCCESS')})`)
 
-// vuln-code-snippet start exposedMetricsChallenge
-/* Serve metrics */
 let metricsUpdateLoop: any
-const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+const Metrics = metrics.observeMetrics()
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {
