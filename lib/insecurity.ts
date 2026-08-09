@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -119,16 +119,21 @@ export const cutOffPoisonNullByte = (str: string) => {
 // would verify against this same key. The header is therefore pinned before the
 // signature is trusted, and express-jwt 0.1.3 forwards no algorithm restriction of its
 // own, so the same check runs in front of it.
+export const ACCEPTED_ALGORITHM = 'RS256'
+
 const hasAcceptedAlgorithm = (token: string) => {
   try {
-    return jws.decode(token)?.header?.alg === 'RS256'
+    return jws.decode(token)?.header?.alg === ACCEPTED_ALGORITHM
   } catch {
     return false
   }
 }
 
 export const isAuthorized = () => {
-  const requireValidToken = expressJwt(({ secret: publicKey }) as any)
+  // express-jwt 8 takes the accepted algorithms as a required option, so the verifier can no
+  // longer be talked into reading the algorithm out of the token it is checking. On 0.1.3 it
+  // could, which is why the header pre-check below had to carry the whole defence alone.
+  const requireValidToken = expressjwt({ secret: publicKey, algorithms: [ACCEPTED_ALGORITHM] })
   return (req: Request, res: Response, next: NextFunction) => {
     const token = utils.jwtFrom(req)
     if (token && !hasAcceptedAlgorithm(token)) {
