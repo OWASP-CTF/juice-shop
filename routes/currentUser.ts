@@ -8,8 +8,6 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
-const exposableFields = ['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive']
-
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -22,8 +20,7 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        // Only ever hand out fields that are safe to expose, no matter what was requested
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => exposableFields.includes(f)) : []
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
 
         let baseUser: any = {}
 
