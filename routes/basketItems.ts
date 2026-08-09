@@ -93,7 +93,8 @@ async function quantityCheck (req: Request, res: Response, next: NextFunction, i
 
   // ProductModel is paranoid, so a discontinued product resolves to null and must not be orderable.
   if (await ProductModel.findByPk(id) == null) {
-    throw new Error('No such product found!')
+    res.status(400).json({ error: 'This product is no longer available.' })
+    return
   }
 
   // is product limited per user and order, except if user is deluxe?
