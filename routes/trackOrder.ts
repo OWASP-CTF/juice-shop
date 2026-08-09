@@ -11,8 +11,15 @@ import { challenges } from '../data/datacache'
 
 export function trackOrder () {
   return (req: Request, res: Response) => {
-    // Restrict the order id to harmless characters so it can never be reflected as markup
-    const id = String(req.params.id).replace(/[^\w-]+/g, '')
+    /* An order id has a fixed shape. Quietly stripping the characters that do not belong still
+       accepts the request and answers it, so a lookup built from something that was never an
+       order id continues on a value the caller chose. Anything that is not an order id is
+       refused outright instead. */
+    const id = String(req.params.id)
+    if (!/^[\w-]{1,64}$/.test(id)) {
+      res.status(400).json({ error: 'Wrong Param' })
+      return
+    }
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
     db.ordersCollection.find({ orderId: id }).then((order: any) => {
