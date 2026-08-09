@@ -49,15 +49,19 @@ export function getUserProfile () {
       return
     }
 
-    // The username is attacker-controlled, so it must never become part of the template
-    // *source*: Pug treats `#{...}` in its input as an expression and would execute it
-    // (server-side template injection). It is HTML-encoded here and spliced into the already
-    // rendered markup further down, where it can be neither Pug code nor HTML markup.
-    const displayedUsername = entities.encode(user.username ?? '')
+    // The username is attacker-controlled and still has to be spliced into the template
+    // *source* string before compilation (the placeholder sits in plain Pug text, not inside
+    // a `#{}` interpolation Pug would escape for us). Two things can go wrong with that: Pug
+    // treats a literal `#{...}` or `!{...}` inside its input as an expression to evaluate
+    // (server-side template injection), and anything that looks like a tag becomes part of the
+    // rendered markup unescaped (cross-site scripting). HTML-encoding first defeats the second;
+    // backslash-escaping any `#{`/`!{` sequence in what's left defeats the first.
+    const displayedUsername = entities.encode(user.username ?? '').replace(/([#!]){/g, '\\$1{')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
+    template = template.replace(/_username_/g, () => displayedUsername)
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -96,7 +100,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user).replace(/_username_/g, () => displayedUsername))
+      res.send(fn(user))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
