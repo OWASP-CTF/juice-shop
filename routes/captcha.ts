@@ -33,7 +33,7 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json({ captchaId, captcha: expression })
+    res.json(captcha)
   }
 }
 
