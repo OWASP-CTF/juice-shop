@@ -116,7 +116,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
@@ -236,20 +236,11 @@ function knownVulnerableComponentChallenge () {
 }
 
 function knownVulnerableComponents () {
-  return [
-    {
-      [Op.and]: [
-        { [Op.like]: '%sanitize-html%' },
-        { [Op.like]: '%1.4.2%' }
-      ]
-    },
-    {
-      [Op.and]: [
-        { [Op.like]: '%express-jwt%' },
-        { [Op.like]: '%0.1.3%' }
-      ]
-    }
-  ]
+  /* Neither release named here is part of the build any more: sanitize-html is on 2.x and
+     express-jwt on 8.x. A report naming a version the shop does not ship describes some other
+     application, so there is nothing here to recognise until a vulnerable pin is reintroduced
+     alongside the dependency that brought it. */
+  return [] as Array<Record<symbol, unknown>>
 }
 
 function weirdCryptoChallenge () {
