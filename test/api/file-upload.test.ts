@@ -67,6 +67,7 @@ void describe('/file-upload', () => {
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
+      assert.doesNotMatch(res.text, /\[drivers\]/)
     })
 
     void it('POST file type XML with XXE attack against Linux', async () => {
@@ -75,31 +76,37 @@ void describe('/file-upload', () => {
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
+      assert.doesNotMatch(res.text, /root:.*:0:0:/)
     })
 
-    void it('POST file type XML with Billion Laughs attack is caught by parser', async () => {
+    void it('POST file type XML with Billion Laughs attack without expanding entities', async () => {
       const file = path.resolve(__dirname, '../files/xxeBillionLaughs.xml')
+      const start = Date.now()
       const res = await request(app)
         .post('/file-upload')
         .attach('file', file)
       assert.equal(res.status, 410)
-      assert.ok(res.text.includes('Detected an entity reference loop'))
+      assert.ok(Date.now() - start < 2000)
     })
 
     void it('POST file type XML with Quadratic Blowup attack', async () => {
       const file = path.resolve(__dirname, '../files/xxeQuadraticBlowup.xml')
+      const start = Date.now()
       const res = await request(app)
         .post('/file-upload')
         .attach('file', file)
-      assert.ok(res.status >= 410)
+      assert.equal(res.status, 410)
+      assert.ok(Date.now() - start < 2000)
     })
 
     void it('POST file type XML with dev/random attack', async () => {
       const file = path.resolve(__dirname, '../files/xxeDevRandom.xml')
+      const start = Date.now()
       const res = await request(app)
         .post('/file-upload')
         .attach('file', file)
-      assert.ok(res.status >= 410)
+      assert.equal(res.status, 410)
+      assert.ok(Date.now() - start < 2000)
     })
   }
 
