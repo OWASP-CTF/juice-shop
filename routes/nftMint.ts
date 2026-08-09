@@ -42,7 +42,14 @@ export function nftMintListener () {
       }
       res.status(200).json({ success: true, message: 'Event Listener Created' })
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      /* The chain listener is an optional integration: it needs an API key and outbound access to
+         the Sepolia endpoint, and neither is guaranteed. When it cannot be brought up, that is a
+         missing upstream, not a fault in this request - answering 500 turns an unconfigured
+         integration into a server error and takes the caller down with it. Report that no listener
+         is watching and carry on; the verification step below observes nothing and simply declines,
+         which is the correct outcome when no mint can be confirmed. */
+      logger.error(`Unable to create the NFT mint listener: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: false, message: 'Event Listener unavailable' })
     }
   }
 }
