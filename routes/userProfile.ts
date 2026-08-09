@@ -21,6 +21,19 @@ function favicon () {
   return utils.extractFilename(config.get('application.favicon'))
 }
 
+// A CSP source expression must be a single token without whitespace or the
+// ';' directive separator. Without this check, a user-controlled profile
+// image "URL" could inject arbitrary extra CSP directives (e.g. appending
+// "; script-src 'self' 'unsafe-inline'") into the header built below,
+// defeating the Content-Security-Policy protecting this page (CSP Bypass).
+function sanitizeCspImageSource (value: string | undefined): string {
+  const fallback = "'self'"
+  if (!value || /[\s;,'"]/.test(value)) {
+    return fallback
+  }
+  return value
+}
+
 export function getUserProfile () {
   return async (req: Request, res: Response, next: NextFunction) => {
     let template: string
@@ -85,10 +98,17 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+      const sanitizedImageSource = sanitizeCspImageSource(user?.profileImage)
+      const CSP = `img-src 'self' ${sanitizedImageSource}; script-src 'self' 'unsafe-eval'`
 
+      // Base the solve criteria on the sanitized value that actually ends up in the
+      // response header, not the raw, attacker-controlled user.profileImage. Checking
+      // the raw value here previously meant the challenge could still be flagged as
+      // solved by an attempted CSP-injection payload even though sanitizeCspImageSource()
+      // had already neutralized it in the header actually sent to the browser - i.e. the
+      // exploit no longer worked, but the app still reported it as successful.
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
-        return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
+        return username && sanitizedImageSource.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
       })
 
       res.set({
