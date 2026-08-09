@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -43,6 +44,12 @@ export function addBasketItem () {
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+
+      const product = await ProductModel.findByPk(basketItem.ProductId) // paranoid model: excludes soft-deleted products
+      if (product == null) {
+        res.status(404).json({ error: 'Product not found' })
+        return
+      }
 
       const basketItemInstance = BasketItemModel.build(basketItem)
       try {
