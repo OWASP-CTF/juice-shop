@@ -94,20 +94,19 @@ export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
       const url = req.body.imageUrl
+      if (!await isPubliclyFetchable(url)) {
+        res.status(400).send('imageUrl must be an http(s) URL resolving to a public address')
+        return
+      }
+      if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (!loggedInUser) {
         next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
         return
       }
-      if (!await isPubliclyFetchable(url)) {
-        res.status(400).send('imageUrl must be an http(s) URL resolving to a public address')
-        return
-      }
       let ext = imageExtensionOf(url)
       try {
         const response = await fetch(url, { redirect: 'manual' })
-        // Only a request that actually left the server can have abused anything.
-        if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
         if (!response.ok || !response.body) {
           throw new Error('url returned a non-OK status code or an empty body')
         }
