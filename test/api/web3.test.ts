@@ -13,8 +13,22 @@ let app: Express
 
 const skipReason = process.env.ALCHEMY_API_KEY ? undefined : 'ALCHEMY_API_KEY not set'
 
+/* The shop no longer ships a seed phrase, so the test run supplies a throw-away one of its own
+   through the same environment variable an operator would use, and derives the expected keys
+   from it rather than repeating them as literals. */
+const testMnemonic = 'test test test test test test test test test test test junk'
+let walletPrivateKey: string
+let walletPublicKey: string
+let walletAddress: string
+
 before(async () => {
   if (!process.env.ALCHEMY_API_KEY) return
+  process.env.NFT_WALLET_MNEMONIC = testMnemonic
+  const { HDNodeWallet } = await import('ethers')
+  const testWallet = HDNodeWallet.fromPhrase(testMnemonic)
+  walletPrivateKey = testWallet.privateKey
+  walletPublicKey = testWallet.publicKey
+  walletAddress = testWallet.address
   const result = await createTestApp()
   app = result.app
 }, { timeout: 60000 })
@@ -42,32 +56,32 @@ void describe('/submitKey', { skip: skipReason }, () => {
     assert.equal(res.body.message, 'Looks like you entered a non-Ethereum private key to access me.')
   })
 
-  void it('POST public wallet key in request body gets rejected as such', async () => {
+  void it('POST public wallet key in request body gets rejected without confirming what it is', async () => {
     const res = await request(app)
       .post('/rest/web3/submitKey')
-      .send({ privateKey: '0x02c7a2a93289c9fbda5990bac6596993e9bb0a8d3f178175a80b7cfd983983f506' })
+      .send({ privateKey: walletPublicKey })
 
     assert.equal(res.status, 401)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(res.body.success, false)
-    assert.equal(res.body.message, 'Looks like you entered the public key of my ethereum wallet!')
+    assert.equal(res.body.message, 'Looks like you entered a non-Ethereum private key to access me.')
   })
 
-  void it('POST wallet address in request body gets rejected as such', async () => {
+  void it('POST wallet address in request body gets rejected without confirming what it is', async () => {
     const res = await request(app)
       .post('/rest/web3/submitKey')
-      .send({ privateKey: '0x8343d2eb2B13A2495De435a1b15e85b98115Ce05' })
+      .send({ privateKey: walletAddress })
 
     assert.equal(res.status, 401)
     assert.ok(res.headers['content-type']?.includes('application/json'))
     assert.equal(res.body.success, false)
-    assert.equal(res.body.message, 'Looks like you entered the public address of my ethereum wallet!')
+    assert.equal(res.body.message, 'Looks like you entered a non-Ethereum private key to access me.')
   })
 
   void it('POST private key in request body gets accepted', async () => {
     const res = await request(app)
       .post('/rest/web3/submitKey')
-      .send({ privateKey: '0x5bcc3e9d38baa06e7bfaab80ae5957bbe8ef059e640311d7d6d465e6bc948e3e' })
+      .send({ privateKey: walletPrivateKey })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
