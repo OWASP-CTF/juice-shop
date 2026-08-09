@@ -34,7 +34,6 @@ interface IAuthenticatedUsers {
   tokenMap: Record<string, ResponseWithUser>
   idMap: Record<string, string>
   put: (token: string, user: ResponseWithUser) => void
-  revokeAllFor: (userId: number) => void
   get: (token?: string) => ResponseWithUser | undefined
   tokenOf: (user: UserModel) => string | undefined
   from: (req: Request) => ResponseWithUser | undefined
@@ -52,22 +51,10 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-const revokedTokens = new Set<string>()
-
-export const isAuthorized = () => {
-  const jwtMiddleware = expressJwt(({ secret: publicKey }) as any)
-  return (req: Request, res: Response, next: NextFunction) => {
-    jwtMiddleware(req, res, (error: unknown) => {
-      if (error) return next(error)
-      const token = utils.jwtFrom(req)
-      if (token && revokedTokens.has(token)) return res.sendStatus(401)
-      next()
-    })
-  }
-}
+export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? !revokedTokens.has(token) && (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -88,15 +75,6 @@ export const authenticatedUsers: IAuthenticatedUsers = {
   put: function (token: string, user: ResponseWithUser) {
     this.tokenMap[token] = user
     this.idMap[user.data.id] = token
-  },
-  revokeAllFor: function (userId: number) {
-    for (const [token, user] of Object.entries(this.tokenMap)) {
-      if (user.data.id === userId) {
-        revokedTokens.add(token)
-        delete this.tokenMap[token]
-      }
-    }
-    delete this.idMap[userId]
   },
   get: function (token?: string) {
     return token ? this.tokenMap[utils.unquote(token)] : undefined
@@ -218,10 +196,6 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token) {
-    if (revokedTokens.has(token)) {
-      res.sendStatus(401)
-      return
-    }
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
