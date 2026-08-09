@@ -228,6 +228,45 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The web3 sandbox is an internal development screen that no shop visitor is entitled to
+     reach, and its spacer image is part of that screen. Nothing linked to the screen, and
+     that was its entire protection: the server handed the spacer to any anonymous caller
+     and then recorded the request as a visit to the screen.
+
+     The screen's access rule therefore has to be enforced here, on the server, and on every
+     path that can carry the spacer rather than only on the folder it happens to live in.
+     accessControlChallenges() is mounted on /assets/public/images/padding,
+     /assets/public/images/products, /assets/public/images/uploads, /assets/i18n and
+     /support/logs, and it only ever inspects the tail of the URL - so
+     /assets/i18n/11px.png and /support/logs/11px.png reach it exactly like
+     /assets/public/images/padding/11px.png does. One check in front of all of them closes
+     every one of those paths at once, including paths that do not exist on disk.
+
+     The session is read from the Authorization header or from the token cookie, because an
+     <img> that the browser loads for a legitimate administrator carries the cookie and no
+     header, and cookieParser is not mounted this early in the chain. */
+  const sessionTokenOf = (req: Request) => {
+    const fromHeader = utils.jwtFrom(req)
+    if (fromHeader) {
+      return fromHeader
+    }
+    const cookie = /(?:^|;\s*)token=([^;]*)/.exec(req.headers.cookie ?? '')
+    return cookie ? decodeURIComponent(cookie[1]) : undefined
+  }
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!utils.endsWith(req.path, '/11px.png')) {
+      next()
+      return
+    }
+    const token = sessionTokenOf(req)
+    const decodedToken: any = (token && security.verify(token)) ? security.decode(token) : undefined
+    if (decodedToken?.data?.role === security.roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Forbidden' })
+    }
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
