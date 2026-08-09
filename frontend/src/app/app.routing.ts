@@ -53,11 +53,6 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
-}
-
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -235,10 +230,12 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
-    path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
-    loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  /* An on-the-fly editor that compiles and deploys smart contracts was a prototyping aid for the
+     developers and was never meant to leave their machines. Nothing in the shop linked to it, so
+     the only thing standing between a visitor and it was not knowing the path - and the routing
+     table is part of the bundle every visitor downloads, so the path was never actually secret.
+     A guard would leave a tool that has no business being on a shop's origin one credential away
+     from the public, so the route is withdrawn rather than restricted. */
   {
     path: 'chatbot',
     component: ChatbotComponent,

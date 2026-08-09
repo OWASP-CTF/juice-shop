@@ -205,6 +205,29 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
+  /* The smart-contract sandbox screen has been withdrawn, and the spacer image that only that
+     screen ever loaded goes with it. Deleting the file on its own would not be enough: several
+     asset directories share one piece of middleware that inspects retrievals, and that middleware
+     is handed the path with its mount point already stripped off, so asking for this file name
+     under any of those directories reads as a visit to the withdrawn screen whether or not the
+     file was ever stored there. The name is therefore refused wherever it is asked for, and it is
+     refused outright rather than reserved for privileged callers - the screen is gone for
+     everybody, so there is nobody left for whom the request is legitimate. */
+  const withdrawnSandboxAsset = /(?:^|\/)11px\.png$/i
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(requestedPath)
+    } catch {
+      /* Percent-encoding that will not decode is judged exactly as it was received. */
+    }
+    if (withdrawnSandboxAsset.test(path.posix.normalize(requestedPath))) {
+      res.status(404).send()
+      return
+    }
+    next()
+  })
+
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
 
