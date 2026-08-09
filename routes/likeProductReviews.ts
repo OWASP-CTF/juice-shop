@@ -20,6 +20,10 @@ export function likeProductReviews () {
     if (!user) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
+    // A review id is an opaque string: reject query operator objects outright.
+    if (typeof id !== 'string' || id.length === 0) {
+      return res.status(400).json({ error: 'Wrong Params' })
+    }
 
     try {
       const review = await db.reviewsCollection.findOne({ _id: id })

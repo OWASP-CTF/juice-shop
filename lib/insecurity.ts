@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
+import { expressjwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -51,22 +51,78 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+/* Session tokens are signed RS256 and the matching key is public, so verification has to pin the
+   algorithm: without it a token could be HMAC-signed with the published public key, or presented
+   unsigned as `alg: none`, and still be accepted. */
+const jwtSigningAlgorithm = 'RS256'
+
+export const isAuthorized = () => expressjwt({ secret: publicKey, algorithms: [jwtSigningAlgorithm] })
+export const denyAll = () => expressjwt({ secret: '' + Math.random(), algorithms: ['HS256'] })
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: jwtSigningAlgorithm })
+const jwtHeaderOf = (token: unknown) => {
+  if (typeof token !== 'string') {
+    return undefined
+  }
+  const encodedHeader = token.split('.')[0]
+  if (!encodedHeader) {
+    return undefined
+  }
+  try {
+    const header: unknown = JSON.parse(Buffer.from(encodedHeader, 'base64').toString('utf8'))
+    if (header === null || typeof header !== 'object') {
+      return undefined
+    }
+    return header as { alg?: string }
+  } catch {
+    return undefined
+  }
+}
+
+export const hasExpectedJwtAlgorithm = (token: unknown) => jwtHeaderOf(token)?.alg === jwtSigningAlgorithm
+
+/* Rejects any request presenting a token which declares a signing algorithm outside the
+   allow-list, before it reaches middleware that would try to verify or decode it. */
+export const enforceJwtAlgorithm = () => (req: Request, res: Response, next: NextFunction) => {
+  for (const token of [req.cookies?.token, utils.jwtFrom(req)]) {
+    const header = jwtHeaderOf(token)
+    if (header !== undefined && header.alg !== jwtSigningAlgorithm) {
+      res.status(401).json({ error: 'Unsupported JWT signing algorithm' })
+      return
+    }
+  }
+  next()
+}
+
+export const verify = (token: string) => {
+  if (!token || !hasExpectedJwtAlgorithm(token)) {
+    return false
+  }
+  try {
+    return jws.verify(token, jwtSigningAlgorithm, publicKey)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
+const SANITIZE_PASS_LIMIT = 25
+
 export const sanitizeSecure = (html: string): string => {
-  const sanitized = sanitizeHtml(html)
-  if (sanitized === html) {
-    return html
-  } else {
-    return sanitizeSecure(sanitized)
+  // Sanitising once can leave a payload behind when a stripped tag reveals another one,
+  // so keep sanitising until the result stops changing. The pass limit turns a pathological
+  // input into an empty string instead of unbounded work.
+  let current = html
+  for (let pass = 0; pass < SANITIZE_PASS_LIMIT; pass++) {
+    const sanitized = sanitizeHtml(current)
+    if (sanitized === current) {
+      return sanitized
+    }
+    current = sanitized
   }
+  return ''
 }
 
 export const authenticatedUsers: IAuthenticatedUsers = {
@@ -122,10 +178,7 @@ function hasValidFormat (coupon: string) {
 
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
-  'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
+  'https://github.com/juice-shop/juice-shop', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -133,11 +186,7 @@ export const redirectAllowlist = new Set([
 ])
 
 export const isRedirectAllowed = (url: string) => {
-  let allowed = false
-  for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
-  }
-  return allowed
+  return redirectAllowlist.has(url) // vuln-code-snippet vuln-line redirectChallenge
 }
 // vuln-code-snippet end redirectCryptoCurrencyChallenge redirectChallenge
 
@@ -151,6 +200,22 @@ export const roles = {
 export const deluxeToken = (email: string) => {
   const hmac = crypto.createHmac('sha256', privateKey)
   return hmac.update(email + roles.deluxe).digest('hex')
+}
+
+/* A session token may arrive as a bearer token (XHR) or as the `token` cookie
+   (plain document and asset requests made by the browser itself). */
+const sessionTokenFrom = (req: Request) => utils.jwtFrom(req) || req.cookies?.token
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = sessionTokenFrom(req)
+    const decodedToken = token && verify(token) && decode(token)
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
 }
 
 export const isAccounting = () => {
@@ -187,7 +252,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasExpectedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
