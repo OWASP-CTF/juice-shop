@@ -80,7 +80,12 @@ function handleXmlUpload ({ file }: Request, res: Response, next: NextFunction) 
       try {
         const sandbox = { libxml, data }
         vm.createContext(sandbox)
-        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, noent: true, nocdata: true })', sandbox, { timeout: 2000 })
+        /* 'noent: true' told libxml to substitute entities, which is what makes a <!ENTITY ...
+           SYSTEM "file:///etc/passwd"> reference read a local file, and what makes an entity
+           that expands into itself consume the parser forever. The complaint documents the shop
+           accepts have no legitimate use for entity substitution, external DTDs or network
+           access, so all three stay off. */
+        const xmlDoc = vm.runInContext('libxml.parseXml(data, { noblanks: true, nocdata: true, noent: false, dtdload: false, nonet: true })', sandbox, { timeout: 2000 })
         const xmlString = xmlDoc.toString(false)
         challengeUtils.solveIf(challenges.xxeFileDisclosureChallenge, () => { return (utils.matchesEtcPasswdFile(xmlString) || utils.matchesSystemIniFile(xmlString)) })
         res.status(410)
