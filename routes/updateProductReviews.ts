@@ -19,10 +19,14 @@ export function updateProductReviews () {
       res.status(400).json({ error: 'Invalid review id' })
       return
     }
-    // A review may only be edited by the customer who wrote it
-    const selector = user?.data?.email
-      ? { _id: req.body.id, author: user.data.email }
-      : { _id: req.body.id }
+    /* A review may only be edited by the customer who wrote it, so the author predicate is not
+       optional. Making it conditional meant a session whose token carried no email dropped the
+       predicate entirely and matched purely on the identifier, which let any review be edited. */
+    if (!user?.data?.email) {
+      res.status(401).json({ error: 'You have to be logged in to edit a review' })
+      return
+    }
+    const selector = { _id: req.body.id, author: user.data.email }
     db.reviewsCollection.update(
       selector,
       { $set: { message: req.body.message } }
