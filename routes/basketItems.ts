@@ -5,6 +5,7 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
+import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -72,7 +73,9 @@ export function quantityCheckBeforeBasketItemUpdate () {
         if (item == null) {
           throw new Error('No such item found!')
         }
-        void quantityCheck(req, res, next, item.ProductId, req.body.quantity)
+        void quantityCheck(req, res, next, item.ProductId, req.body.quantity).catch((error: Error) => {
+          next(error)
+        })
       } else {
         next()
       }
@@ -85,6 +88,15 @@ export function quantityCheckBeforeBasketItemUpdate () {
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
+    throw new Error('No such product found!')
+  }
+
+  /* The stock row survives a product being withdrawn, so checking only that stock exists still
+     accepted an item the shop no longer sells: a caller who knew (or guessed) its id could put
+     a discontinued product straight into a basket and order it. Products are soft deleted, so
+     the product table itself is what has to be consulted - a withdrawn one resolves to nothing
+     and is treated the same as an id that never existed. */
+  if (await ProductModel.findByPk(id) == null) {
     throw new Error('No such product found!')
   }
 

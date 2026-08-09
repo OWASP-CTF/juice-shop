@@ -21,7 +21,11 @@ export function addMemory () {
 
 export function getMemories () {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const memories = await MemoryModel.findAll({ include: [UserModel] })
+    /* The photo wall is readable without signing in, and pulling in the whole associated user
+       row shipped every uploader's email address, password hash, TOTP secret and deluxe token
+       along with the picture. The wall only ever renders who posted a memory, so that single
+       column is the only one that leaves the database. */
+    const memories = await MemoryModel.findAll({ include: [{ model: UserModel, attributes: ['username'] }] })
     res.status(200).json({ status: 'success', data: memories })
   }
 }

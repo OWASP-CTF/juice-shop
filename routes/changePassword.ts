@@ -36,7 +36,12 @@ export function changePassword () {
       return
     }
 
-    if (currentPassword && security.hash(currentPassword) !== loggedInUser.data.password) {
+    /* The current password is a mandatory part of this request, not an optional extra. Only
+       checking it when the caller happened to supply one means omitting the parameter skipped
+       the check altogether, so anybody able to make the browser send its ambient session (a
+       link, an image tag, a form on another site) could rewrite the account's password without
+       ever knowing it. An absent value is therefore treated exactly like a wrong one. */
+    if (!currentPassword || security.hash(currentPassword) !== loggedInUser.data.password) {
       res.status(401).send(res.__('Current password is not correct.'))
       return
     }
@@ -49,11 +54,16 @@ export function changePassword () {
       }
 
       await user.update({ password: newPasswordInString })
+      /* The cached session still carries the credential it was minted against, so it has to
+         follow the new password instead of outliving it. */
+      loggedInUser.data.password = user.password
       challengeUtils.solveIf(
         challenges.changePasswordBenderChallenge,
         () => user.id === 3 && !currentPassword && user.password === security.hash('slurmCl4ssic')
       )
-      res.json({ user })
+      /* The full model row carries the password hash and the TOTP secret; the caller only has
+         to learn which account was changed. */
+      res.json({ user: { id: user.id, email: user.email } })
     } catch (error) {
       next(error)
     }

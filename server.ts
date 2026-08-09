@@ -253,6 +253,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   })
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The web3 sandbox is a signed-in feature of the shop, so the spacer image that only its page
+     ever loads is served on the same terms - fetching it is a request for a piece of that page,
+     not an incidental asset lookup, and answering it to a stranger confirms the page exists. */
+  app.use('/assets/public/images/padding/11px.png', security.isAuthorized())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
@@ -290,7 +294,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* The index used to enumerate every file that had ever been dropped in this folder - internal
+     backups, key stores, leftovers - to anybody who asked for the bare path. A visitor only ever
+     needs the documents the shop links them to by name, so the listing is gone and the handler
+     below decides, per file, whether it is one of those. */ // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -337,8 +344,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(bodyParser.urlencoded({ extended: true }))
   /* File Upload */
   app.post('/file-upload', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), checkUploadSize, checkFileType, handleZipFileUpload, handleXmlUpload, handleYamlUpload)
-  app.post('/profile/image/file', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
-  app.post('/profile/image/url', uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
+  /* These two are authorised by the ambient session cookie and change the account they are
+     addressed to, which is precisely the shape another site can exploit by making the visitor's
+     own browser issue the request. They are therefore restricted to requests the shop's own
+     pages made. */
+  app.post('/profile/image/file', security.sameOriginOnly(), uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
+  app.post('/profile/image/url', security.sameOriginOnly(), uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
   app.post('/rest/memories', uploadToDisk.single('image'), ensureFileIsPassed, security.appendUserId(), metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(addMemory()))
 
   app.use(bodyParser.text({ type: '*/*' }))
@@ -399,8 +410,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
      the shop is a thing the administration screen does, not a thing any signed-in customer has
      any business doing, so it is authorised as the administration function it is. */
   app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  /* Reading somebody else's account record is the same administration function as reading the
+     whole list, only one row at a time, so it is authorised the same way. */
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -416,7 +429,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  app.get('/api/Complaints', security.isAuthorized())
+  /* Filing a complaint is a customer action; reading the complaints every other customer has
+     filed is not one, so the collection is handled as the administration data it is. */
+  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
@@ -434,12 +449,53 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
   app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
-  app.use('/rest/basket/:id', security.isAuthorized())
+  /* Which basket is being addressed comes out of the URL, so being signed in is not on its own
+     an entitlement to the row that was named - the owner has to be checked as well. */
+  app.use('/rest/basket/:id', security.isAuthorized(), utils.asyncHandler(security.isBasketOwner()))
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Feedback carries the account it belongs to and a star rating, and both used to be taken
+     from whatever the form posted. The author is therefore resolved from the session rather
+     than accepted from the body - a caller cannot file a complaint in somebody else's name -
+     and the rating is held to the range the shop's own form offers, so a score outside the
+     one-to-five scale (or a fractional one) is rejected instead of stored and averaged in. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const author = security.authenticatedUsers.from(req)
+      req.body.UserId = author?.data ? author.data.id : null
+      if (req.body.rating !== undefined) {
+        const rating = Number(req.body.rating)
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+          res.status(400).json({ error: 'Rating has to be a whole number between 1 and 5' })
+          return
+        }
+      }
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Solving one puzzle says a human answered that puzzle; it says nothing about the pace at
+     which the answers keep arriving, and a session that has cleared the captcha once can still
+     be driven by a script from then on. A sliding window over the submissions that actually got
+     this far caps that rate, so bulk-filed feedback is turned away however it got past the
+     puzzle. */
+  const feedbackWindowDuration = 20000
+  const feedbackWindowAllowance = 9
+  const recentFeedbackTimes: number[] = []
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackTimes.length > 0 && now - recentFeedbackTimes[0] > feedbackWindowDuration) {
+      recentFeedbackTimes.shift()
+    }
+    if (recentFeedbackTimes.length >= feedbackWindowAllowance) {
+      res.status(429).send('Too many feedbacks have been submitted in a short time. Please try again later.')
+      return
+    }
+    recentFeedbackTimes.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
@@ -497,7 +553,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   app.post('/api/Addresss', security.appendUserId())
   app.get('/api/Addresss', security.appendUserId(), utils.asyncHandler(address.getAddress()))
-  app.put('/api/Addresss/:id', security.appendUserId())
+  app.put('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.requireOwnAddress()))
   app.delete('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.delAddressById()))
   app.get('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.getAddressById()))
   app.get('/api/Deliverys', utils.asyncHandler(delivery.getDeliveryMethods()))
@@ -714,7 +770,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Routes for profile page */
   app.get('/profile', security.updateAuthenticatedUsers(), utils.asyncHandler(getUserProfile()))
-  app.post('/profile', utils.asyncHandler(updateUserProfile()))
+  app.post('/profile', security.sameOriginOnly(), utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
   app.get('/snippets/:challenge', utils.asyncHandler(serveCodeSnippet()))
@@ -773,7 +829,10 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+/* The Prometheus scrape exposes operational counters - registered users, placed orders, solved
+   challenges, file uploads - which is monitoring data about the deployment rather than shop
+   content, so it is only served to an administrator. */
+app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

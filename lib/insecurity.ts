@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
@@ -19,8 +18,22 @@ import * as utils from './utils'
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import * as z85 from 'z85'
 
-export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIICXAIBAAKBgQDNwqLEe9wgTXCbC7+RPdDbBbeqjdbs4kOPOIGzqLpXvJXlxxW8iMz0EaM4BKUqYsIa+ndv3NAn2RxCd5ubVdJJcX43zO6Ko0TFEZx/65gY3BE0O6syCEmUP4qbSd6exou/F+WTISzbQ5FBVPVmhnYhG/kpwt/cIxK5iUn5hm+4tQIDAQABAoGBAI+8xiPoOrA+KMnG/T4jJsG6TsHQcDHvJi7o1IKC/hnIXha0atTX5AUkRRce95qSfvKFweXdJXSQ0JMGJyfuXgU6dI0TcseFRfewXAa/ssxAC+iUVR6KUMh1PE2wXLitfeI6JLvVtrBYswm2I7CtY0q8n5AGimHWVXJPLfGV7m0BAkEA+fqFt2LXbLtyg6wZyxMA/cnmt5Nt3U2dAu77MzFJvibANUNHE4HPLZxjGNXN+a6m0K6TD4kDdh5HfUYLWWRBYQJBANK3carmulBwqzcDBjsJ0YrIONBpCAsXxk8idXb8jL9aNIg15Wumm2enqqObahDHB5jnGOLmbasizvSVqypfM9UCQCQl8xIqy+YgURXzXCN+kwUgHinrutZms87Jyi+D8Br8NY0+Nlf+zHvXAomD2W5CsEK7C+8SLBr3k/TsnRWHJuECQHFE9RA2OP8WoaLPuGCyFXaxzICThSRZYluVnWkZtxsBhW2W8z1b8PvWUE7kMy7TnkzeJS2LSnaNHoyxi7IaPQUCQCwWU4U+v4lD7uYBw00Ga/xt+7+UqFPlPVdz1yyr4q24Zxaw0LgmuEvgU5dycq8N7JxjTubX0MIRR+G9fmDBBl8=\r\n-----END RSA PRIVATE KEY-----'
+/* The key that signs session tokens used to be a literal in this file, and the matching public
+   half was a tracked file served over HTTP. A signing key committed to a repository is a signing
+   key handed to every reader of that repository: anybody who had seen the source could mint a
+   token for any account, with any role, that this server would then verify as genuine - and no
+   later edit could take that back, because the key stays readable in the history. So the pair is
+   no longer material that ships with the code at all. It is generated when the process starts,
+   which means it exists only in this process's memory, differs between deployments and between
+   restarts, and has never been written anywhere it could be read from. Only the public half is
+   exported; nothing outside this module has any business holding the private one. */
+const sessionSigningKeys = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'pkcs1', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs1', format: 'pem' }
+})
+export const publicKey = sessionSigningKeys.publicKey
+const privateKey = sessionSigningKeys.privateKey
 
 interface ResponseWithUser {
   status?: string
@@ -122,23 +135,42 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+/* A campaign coupon used to be nothing but its own text run through z85. z85 is a transport
+   encoding, not a signature: it is public, unkeyed and reversible, so working out what a 90%
+   coupon looks like took one call to the same encoder in the other direction. What tells a
+   coupon the shop issued apart from one the customer typed has to be something only the shop
+   can produce, so each code now carries a keyed tag over its own contents and a code whose tag
+   does not recompute is not a coupon at all. The key is minted per process and never leaves it:
+   coupons are only valid for the current month, so there is nothing here worth persisting - and
+   a key that is never written down cannot be read back out of the source or a backup. */
+const couponSigningKey = crypto.randomBytes(32)
+const COUPON_TAG_LENGTH = 16
+
+const couponTag = (coupon: string) => {
+  return crypto.createHmac('sha256', couponSigningKey).update(coupon).digest('hex').slice(0, COUPON_TAG_LENGTH)
+}
+
 export const generateCoupon = (discount: number, date = new Date()) => {
   const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  return z85.encode(coupon) + couponTag(coupon)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
-  if (!coupon) {
+  if (!coupon || coupon.length <= COUPON_TAG_LENGTH) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
-  if (decoded && (hasValidFormat(decoded.toString()) != null)) {
-    const parts = decoded.toString().split('-')
-    const validity = parts[0]
-    if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parts[1]
-      return parseInt(discount)
-    }
+  const decoded = z85.decode(coupon.slice(0, -COUPON_TAG_LENGTH))?.toString()
+  if (!decoded || hasValidFormat(decoded) == null) {
+    return undefined
+  }
+  if (coupon.slice(-COUPON_TAG_LENGTH) !== couponTag(decoded)) {
+    return undefined
+  }
+  const parts = decoded.split('-')
+  const validity = parts[0]
+  if (utils.toMMMYY(new Date()) === validity) {
+    const discount = parts[1]
+    return parseInt(discount)
   }
 }
 
@@ -158,7 +190,12 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || utils.startsWith(url, allowedUrl)
+    /* The allow list names the pages the shop is willing to send a visitor to, so those exact
+       pages are what it permits. Accepting anything that merely *begins* with an entry still
+       lets a destination be extended into somewhere else entirely - a longer host that shares
+       the prefix, or extra path and query the shop never vetted - and the outgoing link then
+       carries the shop's referrer to a site nobody approved. */
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
@@ -225,6 +262,53 @@ export const isAdmin = () => {
       next()
     } else {
       res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+/* The browser attaches the `token` cookie to any request another site can make it issue - a
+   form post, an image, a link - so on the endpoints that still accept that ambient cookie as
+   proof of identity, holding a session is not the same as having asked for the action. Where
+   the request came from is what distinguishes the two, and the browser reports that in Origin
+   (and, failing that, Referer) as a value page script cannot forge. A request that names no
+   source at all proves nothing about who made it either, so it is refused on the same footing
+   as one that names somebody else. */
+export const sameOriginOnly = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const declaredSource = req.headers.origin ?? req.headers.referer
+    let sourceHost: string | undefined
+    if (declaredSource !== undefined) {
+      try {
+        sourceHost = new URL(declaredSource).host
+      } catch {
+        sourceHost = undefined
+      }
+    }
+    if (sourceHost === undefined || sourceHost !== req.headers.host) {
+      res.status(403).json({ error: 'Cross-origin request blocked' })
+      return
+    }
+    next()
+  }
+}
+
+/* Which basket a request operates on is taken from the URL, so a valid session only proves who
+   is asking - never that the row they named is theirs. Every signed-in customer could read (and
+   fill) anybody else's basket just by counting up through the ids. The owner recorded on the
+   row is compared against the account behind the token before the request is allowed to go on. */
+export const isBasketOwner = () => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { BasketModel } = await import('../models/basket')
+      const user = authenticatedUsers.from(req)
+      const basket = await BasketModel.findByPk(req.params.id)
+      if (!user || (basket != null && basket.UserId !== user.data.id)) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+      next()
+    } catch (error: unknown) {
+      next(error)
     }
   }
 }
