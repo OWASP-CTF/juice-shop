@@ -8,6 +8,8 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
+const exposableFields = ['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive']
+
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
     let user
@@ -20,7 +22,8 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
+        // Only ever hand out fields that are safe to expose, no matter what was requested
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => exposableFields.includes(f)) : []
 
         let baseUser: any = {}
 
@@ -51,11 +54,13 @@ export function retrieveLoggedInUser () {
     // Solve passwordHashLeakChallenge when password field is included in response
     challengeUtils.solveIf(challenges.passwordHashLeakChallenge, () => response?.user?.password)
 
-    if (req.query.callback === undefined) {
-      res.json(response)
-    } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
-    }
+    /* The profile of the signed-in user is answered as JSON only. Honouring a "callback"
+       parameter here turned the endpoint into a JSONP source: any third-party page could load
+       it with a <script> tag, the browser would attach the session cookie, and the response
+       would execute in that page's context - handing the visitor's e-mail address and profile
+       to a site that has no business reading it. JSONP predates CORS and cannot be constrained
+       by an origin check, so the padded variant is simply not served. */
+    res.type('application/json')
+    res.json(response)
   }
 }
