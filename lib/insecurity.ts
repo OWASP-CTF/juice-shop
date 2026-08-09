@@ -247,7 +247,7 @@ export const deluxeToken = (email: string) => {
 }
 
 // Browser-driven pages (e.g. /support/logs) send the session as a cookie, not an Authorization header.
-const tokenFrom = (req: Request) => req.cookies?.token || utils.jwtFrom(req)
+const tokenFrom = (req: Request) => utils.jwtFrom(req) || req.cookies?.token
 
 // 'secure' is omitted on purpose: the shop is also served over plain HTTP.
 export const sessionCookieOptions = { httpOnly: true, sameSite: 'strict' } as const
