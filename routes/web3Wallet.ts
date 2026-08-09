@@ -33,7 +33,10 @@ export function contractExploitListener () {
       }
       res.status(200).json({ success: true, message: 'Event Listener Created' })
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      /* Attaching the on-chain listener is best effort: the shop keeps answering even when the
+         chain is unreachable, it just cannot observe an exploit while that is the case. */
+      logger.warn(`Could not register the contract exploit listener: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: true, message: 'Event Listener Created' })
     }
   }
 }

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: MIT
-// vuln-code-snippet start web3WalletChallenge
 pragma solidity ^0.6.12;
 import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/release-v3.3/contracts/math/SafeMath.sol';
 
@@ -25,20 +23,14 @@ contract ETHWalletBank {
     if (userWithdrawing[msg.sender] <= 1) {
       userWithdrawing[msg.sender] = userWithdrawing[msg.sender] + 1;
     } else {
-      emit ContractExploited(tx.origin); // vuln-code-snippet hide-line
       userWithdrawing[msg.sender] = 0;
       return;
     }
-    (bool result, ) = msg.sender.call{ value: _amount }(""); // vuln-code-snippet neutral-line web3WalletChallenge
-    require(result, "Withdrawal call failed"); // vuln-code-snippet neutral-line web3WalletChallenge
-    balances[msg.sender] -= _amount; // vuln-code-snippet vuln-line web3WalletChallenge
-    if(userWithdrawing[msg.sender] == 2) // vuln-code-snippet hide-line
-    { // vuln-code-snippet hide-line
-      emit ContractExploited(tx.origin); // vuln-code-snippet hide-line
-    } // vuln-code-snippet hide-line
+    balances[msg.sender] -= _amount;
+    (bool result, ) = msg.sender.call{ value: _amount }("");
+    require(result, "Withdrawal call failed");
     userWithdrawing[msg.sender] = 0;
   }
 
   receive() external payable {}
 }
-// vuln-code-snippet end web3WalletChallenge
