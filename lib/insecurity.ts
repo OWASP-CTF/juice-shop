@@ -51,18 +51,10 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey, algorithms: ['RS256'] }) as any)
+export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => {
-  if (!token) return false
-  try {
-    jwt.verify(token, publicKey, { algorithms: ['RS256'] })
-    return true
-  } catch {
-    return false
-  }
-}
+export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -118,8 +110,8 @@ export const discountFromCoupon = (coupon?: string) => {
     const parts = decoded.toString().split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
-      const discount = parseInt(parts[1])
-      return discount > 20 ? 20 : discount
+      const discount = parts[1]
+      return parseInt(discount)
     }
   }
 }
