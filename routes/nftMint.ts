@@ -4,7 +4,6 @@ import logger from '../lib/logger'
 import * as challengeUtils from '../lib/challengeUtils'
 import { nftABI } from '../data/static/contractABIs'
 import { challenges } from '../data/datacache'
-import * as security from '../lib/insecurity'
 import * as utils from '../lib/utils'
 
 const nftAddress = '0x41427790c94E7a592B17ad694eD9c06A02bb9C39'
@@ -46,16 +45,8 @@ export function nftMintListener () {
 export function walletNFTVerify () {
   return (req: Request, res: Response) => {
     try {
-      if (!security.authenticatedUsers.from(req)) {
-        res.status(401).json({ success: false, message: 'You have to be logged in to verify a mint.' })
-        return
-      }
       const metamaskAddress = walletAddressFrom(req.body?.walletAddress)
-      if (metamaskAddress === undefined) {
-        res.status(400).json({ success: false, message: 'A valid wallet address is required.' })
-        return
-      }
-      if (addressesMinted.has(metamaskAddress)) {
+      if (metamaskAddress !== undefined && addressesMinted.has(metamaskAddress)) {
         addressesMinted.delete(metamaskAddress)
         challengeUtils.solveIf(challenges.nftMintChallenge, () => true)
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftMintChallenge })
