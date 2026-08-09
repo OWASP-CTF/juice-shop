@@ -59,9 +59,24 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
   next()
 }
 
+// The administration section beacon was only ever protected by not being linked from
+// anywhere for a normal user - the underlying asset request itself had no access control at
+// all, so anyone who learned the URL (it ships in the client bundle) could fetch it directly,
+// bypassing the Angular route guard entirely. Require an authenticated admin session, the same
+// as the section it represents, and reject anyone else explicitly instead of quietly serving
+// the file to whoever asks.
+function requestIsFromAdmin (req: Request): boolean {
+  const loggedInUser = security.authenticatedUsers.get(req.cookies?.token)
+  return loggedInUser?.data?.role === security.roles.admin
+}
+
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
+  if (utils.endsWith(url, '/19px.png') && !requestIsFromAdmin(req)) {
+    res.status(403).end()
+    return
+  }
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
