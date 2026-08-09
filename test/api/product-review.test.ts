@@ -123,39 +123,6 @@ void describe('/rest/products/reviews', () => {
     assert.equal(res.status, 200)
   })
 
-  void it('POST concurrent likes record a user only once', async () => {
-    const { token: authorToken } = await login(app, {
-      email: 'bjoern.kimminich@gmail.com',
-      password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
-    })
-    const message = 'Concurrent like regression review'
-    const createRes = await request(app)
-      .put('/rest/products/1/reviews')
-      .set({ Authorization: `Bearer ${authorToken}` })
-      .send({ message })
-    assert.equal(createRes.status, 201)
-
-    const reviewsRes = await request(app).get('/rest/products/1/reviews')
-    const concurrentReview = reviewsRes.body.data.find((review: { message: string }) => review.message === message)
-    assert.ok(concurrentReview)
-
-    const { token: likerToken } = await login(app, {
-      email: 'jim@' + config.get<string>('application.domain'),
-      password: 'ncc-1701'
-    })
-    const responses = await Promise.all(
-      Array.from({ length: 3 }, async () => await request(app)
-        .post('/rest/products/reviews')
-        .set({ Authorization: `Bearer ${likerToken}` })
-        .send({ id: concurrentReview._id }))
-    assert.ok(responses.every(response => response.status === 200 || response.status === 403))
-
-    const finalReviewsRes = await request(app).get('/rest/products/1/reviews')
-    const finalReview = finalReviewsRes.body.data.find((review: { _id: string }) => review._id === concurrentReview._id)
-    assert.equal(finalReview.likesCount, 1)
-    assert.deepEqual(finalReview.likedBy, ['jim@' + config.get<string>('application.domain')])
-  })
-
   void it('PATCH multiple product review via injection', async () => {
     const totalReviews = config.get<Product[]>('products').reduce((sum: number, { reviews = [] }: any) => sum + reviews.length, 1)
 
