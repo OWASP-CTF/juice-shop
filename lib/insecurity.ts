@@ -53,8 +53,33 @@ export const cutOffPoisonNullByte = (str: string) => {
 
 export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+const TOKEN_LIFETIME_IN_MINUTES = 6 * 60
+
+/* The installed jsonwebtoken release understands `expiresInMinutes`, not `expiresIn`, so the
+   intended six hour lifetime was silently dropped and every token was issued without an `exp`
+   claim - a session that never ends, on a token that cannot be revoked. */
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresInMinutes: TOKEN_LIFETIME_IN_MINUTES, algorithm: 'RS256' } as any)
+
+/* A signature only says the token was issued by us, never that it is still valid. Expiry has to
+   be enforced where the token is accepted, so a token with no `exp` claim or one that has passed
+   is refused here rather than being trusted forever. */
+export const verify = (token: string) => {
+  if (!token) {
+    return false
+  }
+  if (!(jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)) {
+    return false
+  }
+  try {
+    /* Depending on the jws release the payload comes back already parsed for a `typ: JWT`
+       token, or still as the raw JSON string. */
+    const decoded = jws.decode(token)?.payload
+    const payload = typeof decoded === 'string' ? JSON.parse(decoded) : decoded
+    return typeof payload?.exp === 'number' && payload.exp > Math.floor(Date.now() / 1000)
+  } catch {
+    return false
+  }
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
