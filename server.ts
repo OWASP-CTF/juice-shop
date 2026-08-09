@@ -409,7 +409,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* REST API */
   /* The full account list with every user's login state is administration data */
   app.use('/rest/user/authentication-details', security.isAdmin())
-  app.use('/rest/basket/:id', security.isAuthorized(), security.isBasketOwner())
+  app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Feedbacks: Server-side user association and rating validation */
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
