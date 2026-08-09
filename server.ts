@@ -475,7 +475,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.password = req.body.password.trim()
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
+        /* Answering 400 is not the same as refusing. The handler used to send the response and
+           then carry on down the chain, so the registration went through anyway and every check
+           further along ran on the empty credentials it was supposed to have rejected. A refusal
+           ends the request. */
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+        return
       }
     }
     next()
