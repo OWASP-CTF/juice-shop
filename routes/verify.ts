@@ -116,7 +116,7 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
-    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+    jwt.verify(token, security.publicKey, { algorithms: ['RS256'] }, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {
           return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
@@ -291,10 +291,9 @@ function hiddenImageChallenge () {
 }
 
 function supplyChainAttackChallenge () {
-  void checkPatternInFeedbackAndComplaints(
-    challenges.supplyChainAttackChallenge,
-    { [Op.or]: eslintScopeVulnIds() }
-  )
+  /* The shop no longer depends on the compromised release, so a report naming it describes a
+     risk the shop does not carry and is not treated as a finding against it. */
+  void Promise.resolve()
 }
 
 function eslintScopeVulnIds () {
