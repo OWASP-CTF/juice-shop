@@ -41,7 +41,40 @@ interface IAuthenticatedUsers {
 }
 
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
-export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
+
+/* The key that protects every stored recovery answer was a literal in this file, so it shipped in
+   the repository, in every image built from it and in every fork. Anyone holding it can precompute
+   the hash of a guessed answer offline, which reduces account recovery to a rainbow table. It is
+   configuration, not code: it comes from the environment, and when nothing is configured the shop
+   derives one at boot so there is nothing left to leak. */
+const hmacKey = process.env.HMAC_KEY ?? crypto.randomBytes(32).toString('hex')
+export const hmac = (data: string) => crypto.createHmac('sha256', hmacKey).update(data).digest('hex')
+
+/* MD5 is a fast, unsalted digest: a disclosed user table is cracked at billions of guesses a
+   second, and two accounts choosing the same password are visibly identical. Passwords are stored
+   with scrypt under a per-account salt. Records written before this change still verify against
+   the old scheme, so nobody is locked out and they upgrade the next time the password is set. */
+const SCRYPT_KEYLEN = 64
+const scryptHash = (plainText: string, salt: string) =>
+  crypto.scryptSync(plainText, salt, SCRYPT_KEYLEN).toString('hex')
+
+export const hashPassword = (plainText: string) => {
+  const salt = crypto.randomBytes(16).toString('hex')
+  return `scrypt$${salt}$${scryptHash(plainText, salt)}`
+}
+
+export const verifyPassword = (plainText: string, stored: string | undefined) => {
+  if (!stored) {
+    return false
+  }
+  if (stored.startsWith('scrypt$')) {
+    const [, salt, expected] = stored.split('$')
+    const actual = scryptHash(plainText ?? '', salt)
+    return actual.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'))
+  }
+  return hash(plainText ?? '') === stored
+}
 
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'

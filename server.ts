@@ -186,6 +186,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(cors())
 
   /* Security middleware */
+  app.use(helmet.hidePoweredBy())
   app.use(helmet.noSniff())
   app.use(helmet.frameguard())
   // app.use(helmet.xssFilter()); // = no protection from persisted XSS via RESTful API
@@ -677,7 +678,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   }
 
   /* Custom Restful API */
-  app.post('/rest/user/login', login())
+  /* Nothing limited how often credentials could be tried here, while the password-reset endpoint
+     next door has been rate limited all along. An unmetered login endpoint is what makes credential
+     stuffing and password spraying practical. The window matches the other limited endpoints, so a
+     person signing in - even repeatedly, even after typos - is unaffected. */
+  app.post('/rest/user/login', rateLimit({ windowMs: 5 * 60 * 1000, max: 100, validate: false }), login())
   app.post('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.get('/rest/user/change-password', utils.asyncHandler(changePassword()))
   app.post('/rest/user/reset-password', utils.asyncHandler(resetPassword()))

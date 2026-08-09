@@ -31,9 +31,15 @@ export function login () {
 
   return (req: Request, res: Response, next: NextFunction) => {
     verifyPreLoginChallenges(req) // vuln-code-snippet hide-line
-    models.sequelize.query('SELECT * FROM Users WHERE email = $1 AND password = $2 AND deletedAt IS NULL', { model: UserModel, plain: true, bind: [req.body.email || '', security.hash(req.body.password || '')] })
+    /* A salted hash differs per account, so the secret can no longer be part of the lookup: the
+       account is fetched by address alone and the password is verified against its own salt here.
+       The query stays fully parameterised. */
+    models.sequelize.query('SELECT * FROM Users WHERE email = $1 AND deletedAt IS NULL', { model: UserModel, plain: true, bind: [req.body.email || ''] })
       .then((authenticatedUser) => { // vuln-code-snippet neutral-line loginAdminChallenge loginBenderChallenge loginJimChallenge
-        const user = utils.queryResultToJson(authenticatedUser)
+        const candidate = utils.queryResultToJson(authenticatedUser)
+        const user = security.verifyPassword(req.body.password || '', candidate?.data?.password)
+          ? candidate
+          : utils.queryResultToJson(null)
         if (user.data?.id && user.data.totpSecret !== '') {
           res.status(401).json({
             status: 'totp_token_required',
