@@ -99,7 +99,8 @@ function isPublicUnicastIPv6 (address: string) {
   if ((leading & 0xff00) === 0xff00) return false // ff00::/8 multicast
   if (leading === 0x2002) return false // 6to4, embeds an arbitrary IPv4 address
   if (leading === 0x2001) {
-    const second = groups[1] === undefined || groups[1] === '' ? 0 : Number.parseInt(groups[1], 16)
+    const secondGroup = groups.length > 1 ? groups[1] : ''
+    const second = secondGroup === '' ? 0 : Number.parseInt(secondGroup, 16)
     if (second === 0 || second === 0xdb8) return false // Teredo, documentation
   }
   return true
@@ -205,13 +206,19 @@ export function profileImageUrlUpload () {
           const user = await UserModel.findByPk(loggedInUser.data.id)
           await user?.update({ profileImage: `/assets/public/images/uploads/${loggedInUser.data.id}.${ext}` })
         } catch (error) {
-          try {
-            const user = await UserModel.findByPk(loggedInUser.data.id)
-            await user?.update({ profileImage: url })
-            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
-          } catch (error) {
-            next(error)
-            return
+          const directLink = storableImageLink(url)
+          if (directLink === null) {
+            // Fail closed: input the outbound guard rejected is not persisted either.
+            logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; image link rejected, keeping the current profile image`)
+          } else {
+            try {
+              const user = await UserModel.findByPk(loggedInUser.data.id)
+              await user?.update({ profileImage: directLink })
+              logger.warn(`Error retrieving user profile image: ${utils.getErrorMessage(error)}; using image link directly`)
+            } catch (error) {
+              next(error)
+              return
+            }
           }
         }
       } else {

@@ -20,9 +20,41 @@ import * as utils from '../lib/utils'
 // legitimate complaint. Generous enough that ordinary anchor reuse is unaffected.
 const MAX_YAML_ALIASES = 50
 
+// Counting alias tokens does not bound the blow-up on its own: expansion is width ^ depth,
+// so 8 tiers of 6 references is only 48 tokens and still expands to 1.7 million nodes. Bound
+// the expansion itself as well - the resolved document may not inflate past this many bytes.
+const MAX_YAML_EXPANSION_BYTES = 8 * 1024 * 1024
+
 function hasExcessiveAliases (data: string) {
   const aliases = data.match(new RegExp('[*][0-9a-zA-Z_-]+', 'g'))
   return aliases !== null && aliases.length > MAX_YAML_ALIASES
+}
+
+// Every reference to an anchor duplicates whatever that anchor holds, and anchors that
+// reference other anchors multiply, so the product of the per-anchor reference counts is an
+// upper bound on how often the innermost node gets materialised. Multiplied by the document
+// size that is a conservative estimate of the expanded document. Counting each name over the
+// whole document keeps the estimate independent of layout, so spreading a sequence across
+// several lines or padding it with decoy anchors cannot talk the estimate down.
+function expandsBeyondBudget (data: string) {
+  const aliases = data.match(new RegExp('[*][0-9a-zA-Z_-]+', 'g'))
+  if (aliases === null) {
+    return false
+  }
+  const references = new Map<string, number>()
+  for (const alias of aliases) {
+    const name = alias.slice(1)
+    references.set(name, (references.get(name) ?? 0) + 1)
+  }
+  const budget = Math.max(1, Math.floor(MAX_YAML_EXPANSION_BYTES / Math.max(1, data.length)))
+  let factor = 1
+  for (const count of references.values()) {
+    factor *= count
+    if (factor > budget) {
+      return true
+    }
+  }
+  return false
 }
 
 function ensureFileIsPassed ({ file }: Request, res: Response, next: NextFunction) {
@@ -127,7 +159,7 @@ function handleYamlUpload ({ file }: Request, res: Response, next: NextFunction)
     challengeUtils.solveIf(challenges.deprecatedInterfaceChallenge, () => { return true })
     if (((file?.buffer) != null) && utils.isChallengeEnabled(challenges.deprecatedInterfaceChallenge)) {
       const data = file.buffer.toString()
-      if (hasExcessiveAliases(data)) {
+      if (hasExcessiveAliases(data) || expandsBeyondBudget(data)) {
         res.status(410)
         next(new Error('B2B customer complaints via file upload have been deprecated for security reasons: too many aliases (' + file.originalname + ')'))
         return
