@@ -390,7 +390,29 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* SecurityQuestions: Only GET list of questions allowed. */
   app.post('/api/SecurityQuestions', security.denyAll())
   app.use('/api/SecurityQuestions/:id', security.denyAll())
-  /* SecurityAnswers: Only POST of answer allowed. */
+  /* SecurityAnswers: Only POST of answer allowed. The answer is what recovers an account, so it
+     may only ever be set by the account's own owner. The registration screen posts one for the
+     account it has just created, which cannot log in yet, so this has to stay reachable without a
+     session - but only for an account that has no answer yet. Accepting a UserId from the request
+     body unconditionally let anybody attach their own answer to somebody else's account and then
+     reset that account's password through the Forgot Password screen. */
+  app.post('/api/SecurityAnswers', utils.asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    const loggedInUser = security.authenticatedUsers.from(req)
+    if (loggedInUser?.data?.id) {
+      req.body.UserId = loggedInUser.data.id
+    }
+    const userId = req.body?.UserId
+    if (!userId) {
+      res.status(401).json({ error: 'A security answer can only be set for an existing account' })
+      return
+    }
+    const existingAnswer = await SecurityAnswerModel.findOne({ where: { UserId: userId } })
+    if (existingAnswer) {
+      res.status(401).json({ error: 'This account already has a security answer' })
+      return
+    }
+    next()
+  }))
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
