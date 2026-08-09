@@ -56,8 +56,8 @@ export function addBasketItem () {
     } else {
       const basketItem = {
         ProductId: productIds[productIds.length - 1],
-        // The session's own basket wins over anything the body names.
-        BasketId: user?.bid ?? requestedBasketId,
+        // Same value the guard above authorised, never a different occurrence of the key.
+        BasketId: requestedBasketId,
         quantity: quantities[quantities.length - 1]
       }
       challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
@@ -93,13 +93,12 @@ export function quantityCheckBeforeBasketItemUpdate () {
         res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
         return
       }
-      // Moving a line item to a different basket is not an update this endpoint offers, so a
-      // BasketId in the body is pinned to the item's own basket before the finale writes it.
-      if (item != null && req.body.BasketId !== undefined) {
-        req.body.BasketId = item.BasketId
-      }
-
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && req.body.BasketId && user.bid != req.body.BasketId }) // eslint-disable-line eqeqeq
+      // Reassignment of an item that already has a basket stays blocked by the model's
+      // `noUpdate` constraint on BasketId, which the request below still runs into.
+      // The challenge is about a line item actually ending up in someone else's basket, so it
+      // is judged on the basket the item really lives in - reading the wish in the request
+      // body marked it solved even when nothing was written.
+      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return Boolean(user && item != null && item.BasketId && user.bid != item.BasketId) }) // eslint-disable-line eqeqeq
       if (req.body.quantity) {
         if (item == null) {
           throw new Error('No such item found!')
