@@ -27,6 +27,7 @@ import logger from '../lib/logger'
 import { getCodeChallenges } from '../lib/codingChallenges'
 import type { Memory as MemoryConfig, Product as ProductConfig } from '../lib/config.types'
 import config from 'config'
+import nodeCrypto from 'node:crypto'
 import * as utils from '../lib/utils'
 import type { StaticUser, StaticUserAddress, StaticUserCard } from './staticData'
 import { loadStaticChallengeData, loadStaticDeliveryData, loadStaticUserData, loadStaticSecurityQuestionsData } from './staticData'
@@ -182,6 +183,12 @@ async function createChallenges () {
   }
 }
 
+/* Seed accounts whose credential would otherwise be readable straight out of this
+   repository are marked RANDOM and get an unpredictable password at startup instead. */
+function resolveSeedPassword (password: string) {
+  return password === 'RANDOM' ? nodeCrypto.randomBytes(24).toString('base64url') : password
+}
+
 async function createUsers () {
   const users = await loadStaticUserData()
 
@@ -192,7 +199,7 @@ async function createUsers () {
         const user = await UserModel.create({
           username,
           email: completeEmail,
-          password,
+          password: resolveSeedPassword(password),
           role,
           deluxeToken: role === security.roles.deluxe ? security.deluxeToken(completeEmail) : '',
           profileImage: `assets/public/images/uploads/${profileImage ?? (role === security.roles.admin ? 'defaultAdmin.png' : 'default.svg')}`,
