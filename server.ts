@@ -228,6 +228,21 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* Spacer images that only a privileged area loads are treated as part of that area. */
+  // The administration page, the token sale page and the web3 sandbox each announce
+  // themselves by requesting a spacer of a size nothing else in the shop uses: 19px, 56px
+  // and 11px respectively. Grep the frontend and each of those three appears in exactly one
+  // template, the one for the restricted area. Serving them to an anonymous caller therefore
+  // tells that caller the area exists and is reachable, which is the disclosure the areas
+  // were meant to be protected against in the first place. They follow the same access
+  // control as the pages that load them. 1px.png (score board) and 81px.png (privacy policy)
+  // belong to pages any visitor may open and stay public.
+  app.use([
+    '/assets/public/images/padding/19px.png',
+    '/assets/public/images/padding/11px.png',
+    '/assets/public/images/padding/56px.png'
+  ], security.isAuthorized(), security.isAdmin())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
