@@ -59,6 +59,27 @@ async function isSsrfSafeUrl (rawUrl: string): Promise<boolean> {
   }
 }
 
+// fetch() follows redirects transparently by default - validating only the URL the caller
+// supplied and then letting fetch() itself chase a 3xx response would let an attacker point at
+// an allowed public host that redirects to an internal address, bypassing the check entirely.
+// Re-validate (and re-resolve) every hop before following it.
+async function ssrfSafeFetch (url: string, maxRedirects = 5): Promise<globalThis.Response> {
+  let currentUrl = url
+  for (let i = 0; i <= maxRedirects; i++) {
+    if (!(await isSsrfSafeUrl(currentUrl))) {
+      throw new Error('URL is not allowed (must be a public http(s) address)')
+    }
+    const response = await fetch(currentUrl, { redirect: 'manual' })
+    const location = response.headers.get('location')
+    if (response.status >= 300 && response.status < 400 && location) {
+      currentUrl = new URL(location, currentUrl).toString()
+      continue
+    }
+    return response
+  }
+  throw new Error('Too many redirects')
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
@@ -70,10 +91,7 @@ export function profileImageUrlUpload () {
           // The URL was previously fetched with no validation at all, letting an attacker
           // make the server issue requests to internal services or the cloud metadata
           // endpoint (169.254.169.254) using the app's own network position.
-          if (!(await isSsrfSafeUrl(url))) {
-            throw new Error('URL is not allowed (must be a public http(s) address)')
-          }
-          const response = await fetch(url)
+          const response = await ssrfSafeFetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
