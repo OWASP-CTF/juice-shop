@@ -701,7 +701,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/rest/basket/:id/checkout', placeOrder())
   app.put('/rest/basket/:id/coupon/:coupon', utils.asyncHandler(applyCoupon()))
   app.get('/rest/admin/application-version', utils.asyncHandler(retrieveAppVersion()))
-  app.get('/rest/admin/application-configuration', utils.asyncHandler(retrieveAppConfiguration()))
+  /* The deployment's own configuration is administrative data. It sat behind a path that merely
+     looked internal, which is not an access control at all. */
+  app.get('/rest/admin/application-configuration', security.isAuthorized(), security.isAdmin(), utils.asyncHandler(retrieveAppConfiguration()))
   app.get('/rest/repeat-notification', utils.asyncHandler(repeatNotification()))
   app.get('/rest/continue-code', utils.asyncHandler(continueCode()))
   app.get('/rest/continue-code-findIt', utils.asyncHandler(continueCodeFindIt()))
