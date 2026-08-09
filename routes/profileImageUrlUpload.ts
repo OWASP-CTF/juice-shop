@@ -135,7 +135,16 @@ export function profileImageUrlUpload () {
           if (await isSelfOrInternalTarget(url)) {
             throw new Error('refusing to fetch a URL that targets this deployment or its internal network')
           }
-          const response = await fetch(url)
+          // The check above only validates the URL the caller supplied. A remote server the
+          // caller does control can still redirect an initially-allowed request to an internal
+          // target; fetch() follows redirects by default, which would carry the request there
+          // without ever re-running the check. Take redirects out of fetch's hands entirely -
+          // any 3xx response is treated as a failure rather than silently followed - so nothing
+          // this server sends a request to can redirect it anywhere else.
+          const response = await fetch(url, { redirect: 'manual' })
+          if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+            throw new Error('url redirected to another location, which is not permitted')
+          }
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
