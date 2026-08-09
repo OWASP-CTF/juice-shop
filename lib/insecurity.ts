@@ -153,6 +153,20 @@ export const deluxeToken = (email: string) => {
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
+/* Route guard for endpoints that expose operator-only material. The role is taken from the
+   verified token payload, so a caller cannot claim it through a header or query parameter. */
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    const payload = verify(token) ? decode(token) : null
+    if (payload?.data?.role !== roles.admin) {
+      res.status(403).json({ error: 'Malicious activity detected' })
+      return
+    }
+    next()
+  }
+}
+
 export const isAccounting = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
