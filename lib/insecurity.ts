@@ -123,9 +123,10 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
+  /* The three crypto donation addresses that used to sit here were retired years ago. An
+     allow-list entry is a standing permission to send customers somewhere, so an entry nobody
+     owns any more is attack surface: whoever controls that address today inherits the shop's
+     endorsement. Retired targets are removed rather than left to rot. */
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +136,11 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    /* An allow-list has to be matched exactly. Asking only whether the permitted URL appears
+       *somewhere* in the target lets an attacker keep it as a query parameter or a fragment -
+       https://evil.example/?to=https://github.com/juice-shop/juice-shop contains an allowed
+       entry and redirects wherever the attacker likes. */
+    allowed = allowed || url === allowedUrl
   }
   return allowed
 }
