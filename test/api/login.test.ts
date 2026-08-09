@@ -55,6 +55,18 @@ void describe('/rest/user/login', () => {
     assert.equal(res.status, 401)
   })
 
+  void it('POST login rejects SQL injection in email', async () => {
+    const res = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: "admin@juice-sh.op'--",
+        password: 'anything'
+      })
+
+    assert.equal(res.status, 401)
+  })
+
   void it('POST login without credentials', async () => {
     const res = await request(app)
       .post('/rest/user/login')
