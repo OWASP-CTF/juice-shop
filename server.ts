@@ -365,8 +365,13 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
-  app.post('/api/Products', security.isAuthorized()) // vuln-code-snippet neutral-line changeProductChallenge
-  // app.put('/api/Products/:id', security.isAuthorized()) // vuln-code-snippet vuln-line changeProductChallenge
+  /* The catalogue is not customer-editable. POST was open to any signed-in customer and the PUT
+     line was commented out entirely, so any account could rewrite a product's name, description
+     or price - the description is rendered into the shop, so this is also a way to plant markup
+     in front of every visitor. Writes to the catalogue are refused; it is maintained out of
+     band, not through the shopping API. */
+  app.post('/api/Products', security.denyAll())
+  app.put('/api/Products/:id', security.denyAll())
   app.delete('/api/Products/:id', security.denyAll())
   /* Challenges: GET list of challenges allowed. Everything else forbidden entirely */
   app.post('/api/Challenges', security.denyAll())
