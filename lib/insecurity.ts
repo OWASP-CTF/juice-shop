@@ -43,6 +43,15 @@ interface IAuthenticatedUsers {
 export const hash = (data: string) => crypto.createHash('md5').update(data).digest('hex')
 export const hmac = (data: string) => crypto.createHmac('sha256', 'pa4qacea4VK9t9nGv7yZtwmj').update(data).digest('hex')
 
+/* The continue code is a capability: presenting one restores the progress it encodes. Its salt
+   was a literal in the source, so anyone reading the repository could mint a code for any set of
+   challenges and hand themselves that progress. A salt that is published is not a salt. It is
+   taken from the environment when the operator supplies one, and drawn at boot otherwise, so
+   there is nothing in the repository left to forge with. */
+export const continueCodeSalt = process.env.CONTINUE_CODE_SALT ?? crypto.randomBytes(32).toString('hex')
+export const continueCodeFindItSalt = process.env.CONTINUE_CODE_FINDIT_SALT ?? crypto.randomBytes(32).toString('hex')
+export const continueCodeFixItSalt = process.env.CONTINUE_CODE_FIXIT_SALT ?? crypto.randomBytes(32).toString('hex')
+
 export const cutOffPoisonNullByte = (str: string) => {
   const nullByte = '%00'
   if (utils.contains(str, nullByte)) {
