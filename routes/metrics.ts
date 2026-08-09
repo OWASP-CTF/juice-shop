@@ -12,6 +12,7 @@ import { FeedbackModel } from '../models/feedback'
 import { ComplaintModel } from '../models/complaint'
 import { Op } from 'sequelize'
 import * as challengeUtils from '../lib/challengeUtils'
+import * as security from '../lib/insecurity'
 import logger from '../lib/logger'
 import config from 'config'
 import * as utils from '../lib/utils'
@@ -63,8 +64,26 @@ export function observeFileUploadMetricsMiddleware () {
   }
 }
 
+/* The metrics endpoint publishes the internal state of the running instance - solved
+   challenges, registered users by type, placed orders, wallet balances, cheat score,
+   plus the default process metrics of the Node.js runtime. Its only protection was that
+   nobody was expected to guess `/metrics`, which is not access control. A scrape is an
+   operational action, so it now requires an authenticated administrator. */
+function isAdmin (req: Request) {
+  const token = utils.jwtFrom(req)
+  if (!token || !security.verify(token)) {
+    return false
+  }
+  const decodedToken: any = security.decode(token)
+  return decodedToken?.data?.role === security.roles.admin
+}
+
 export function serveMetrics () {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if (!isAdmin(req)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
     challengeUtils.solveIf(challenges.exposedMetricsChallenge, () => {
       const userAgent = req.headers['user-agent'] ?? ''
       const ignoredUserAgents = config.get<string[]>('challenges.metricsIgnoredUserAgents')
