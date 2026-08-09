@@ -39,16 +39,22 @@ async function isForbiddenImageUrl (url: string): Promise<boolean> {
     return true
   }
 
-  // If the hostname is itself a literal IP address, check it directly.
+  // If the hostname is itself a literal IP address, check it directly. Note:
+  // isPrivateOrReservedIpAddress() already handles IPv4-mapped/-compatible IPv6
+  // syntax (e.g. `::ffff:127.0.0.1` and its hex-group form `::ffff:7f00:1`) on its
+  // own - it must be passed the hostname as-is here, NOT pre-processed through
+  // toSimpleIpAddress(), which only strips the `::ffff:` marker down to a bare
+  // remainder (e.g. `7f00:1`) that is no longer valid, parseable IPv6 syntax and
+  // would defeat that detection.
   if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) || hostname.includes(':')) {
-    return utils.isPrivateOrReservedIpAddress(utils.toSimpleIpAddress(hostname))
+    return utils.isPrivateOrReservedIpAddress(hostname)
   }
 
   // Otherwise resolve the hostname and make sure none of the resolved addresses
   // point at internal/private infrastructure (also mitigates naive DNS rebinding).
   try {
     const records = await dns.lookup(hostname, { all: true })
-    return records.some(({ address }) => utils.isPrivateOrReservedIpAddress(utils.toSimpleIpAddress(address)))
+    return records.some(({ address }) => utils.isPrivateOrReservedIpAddress(address))
   } catch {
     return false
   }

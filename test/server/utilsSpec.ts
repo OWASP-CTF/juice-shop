@@ -76,6 +76,14 @@ describe('utils', () => {
       expect(utils.isPrivateOrReservedIpAddress('::ffff:0808:0808')).to.equal(false) // 8.8.8.8
     })
 
+    it('does not flag an ordinary public IPv6 address that merely ends in two hex groups resembling a private IPv4 octet pattern', () => {
+      // the leading groups here are NOT zero, so this must not be mistaken for an
+      // IPv4-mapped/-compatible address just because its trailing groups, read as
+      // hex bytes, would look like 10.0.0.1 / 169.254.169.254
+      expect(utils.isPrivateOrReservedIpAddress('2001:db8::a00:1')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('2001:4860:4860::a9fe:a9fe')).to.equal(false)
+    })
+
     it('does not flag ordinary public IPv6 addresses as private', () => {
       expect(utils.isPrivateOrReservedIpAddress('2001:4860:4860::8888')).to.equal(false)
     })
