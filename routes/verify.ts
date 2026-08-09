@@ -116,6 +116,13 @@ function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, em
       return
     }
 
+    // Enforce the same RS256-only policy the rest of the app uses: the pinned
+    // jsonwebtoken@0.4.0 honours the token's own `alg` header, so an `alg:none` or
+    // HS256-signed-with-the-public-key forgery would otherwise verify successfully here.
+    if (!security.hasAllowedJwtAlgorithm(token)) {
+      return
+    }
+
     jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
       if (err === null) {
         challengeUtils.solveIf(challenge, () => {

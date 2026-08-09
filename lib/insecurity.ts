@@ -51,10 +51,50 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
+// JWTs in this app are RS256, signed with the RSA private key and verified with the
+// public key. Only that asymmetric algorithm may ever be trusted. The pinned
+// jsonwebtoken@0.4.0 / express-jwt@0.1.3 predate the `algorithms` verification option
+// (added in jsonwebtoken 4.2.2, the CVE-2015-9235 fix), so passing `algorithms` to them
+// is silently ignored and they still honour the attacker-controlled `alg` header. That is
+// what enables both the `alg:none` (unsigned) and the HS256-signed-with-the-public-key
+// forgeries. To be robust regardless of library version we enforce the algorithm ourselves
+// by inspecting the JWT header before/around every verification.
+export const ALLOWED_JWT_ALGORITHMS = ['RS256']
+
+export const hasAllowedJwtAlgorithm = (token?: string): boolean => {
+  if (!token || typeof token !== 'string') {
+    return false
+  }
+  const parts = token.split('.')
+  // A trusted RS256 token always has three parts and a non-empty signature; an
+  // `alg:none` forgery carries an empty signature segment.
+  if (parts.length !== 3 || parts[0] === '' || parts[2] === '') {
+    return false
+  }
+  try {
+    const header = JSON.parse(Buffer.from(parts[0], 'base64').toString('utf8'))
+    return typeof header?.alg === 'string' && ALLOWED_JWT_ALGORITHMS.includes(header.alg)
+  } catch {
+    return false
+  }
+}
+
+export const isAuthorized = () => {
+  const jwtMiddleware = expressJwt(({ secret: publicKey, algorithms: ALLOWED_JWT_ALGORITHMS }) as any)
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    // Reject forged tokens (alg:none / HS256-with-public-key) before the ancient
+    // express-jwt/jsonwebtoken can be tricked into accepting them.
+    if (token && !hasAllowedJwtAlgorithm(token)) {
+      res.status(401).json({ error: 'Unauthorized JWT algorithm' })
+      return
+    }
+    jwtMiddleware(req, res, next)
+  }
+}
 export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => (token && hasAllowedJwtAlgorithm(token)) ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -187,7 +227,7 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  if (token && hasAllowedJwtAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
