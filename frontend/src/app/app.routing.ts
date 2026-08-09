@@ -4,6 +4,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { environment } from '../environments/environment'
 import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
@@ -235,10 +236,10 @@ const routes: Routes = [
     path: 'wallet-web3',
     loadChildren: async () => await loadWeb3WalletModule()
   },
-  { // vuln-code-snippet neutral-line web3SandboxChallenge
+  ...(environment.production ? [] : [{ // vuln-code-snippet neutral-line web3SandboxChallenge
     path: 'web3-sandbox', // vuln-code-snippet vuln-line web3SandboxChallenge
     loadChildren: async () => await loadWeb3SandboxModule() // vuln-code-snippet neutral-line web3SandboxChallenge
-  }, // vuln-code-snippet neutral-line web3SandboxChallenge
+  }]), // vuln-code-snippet neutral-line web3SandboxChallenge
   {
     path: 'chatbot',
     component: ChatbotComponent,
