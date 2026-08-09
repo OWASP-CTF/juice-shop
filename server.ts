@@ -228,6 +228,30 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The web3 sandbox and the unannounced token sale are restricted screens. The only thing that
+     kept anyone off them was that nothing linked there and a guard that runs in the browser, so
+     the server handed out everything belonging to those screens to whoever asked. The spacer
+     images are part of those screens, so the screens' own access rule is enforced here, on the
+     server. The session is read from the Authorization header or the token cookie, because an
+     <img> the browser loads for a legitimate administrator carries the cookie and no header. */
+  const sessionTokenOf = (req: Request) => {
+    const fromHeader = utils.jwtFrom(req)
+    if (fromHeader) return fromHeader
+    const cookie = /(?:^|;\s*)token=([^;]*)/.exec(req.headers.cookie ?? '')
+    return cookie ? decodeURIComponent(cookie[1]) : undefined
+  }
+  const restrictedScreenAsset = () => (req: Request, res: Response, next: NextFunction) => {
+    const token = sessionTokenOf(req)
+    const role = token && security.verify(token) ? security.decode(token)?.data?.role : undefined
+    if (role === security.roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+  app.use('/assets/public/images/padding/11px.png', restrictedScreenAsset())
+  app.use('/assets/public/images/padding/56px.png', restrictedScreenAsset())
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())

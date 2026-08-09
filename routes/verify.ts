@@ -62,10 +62,22 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
+  /* Fetching the spacer of a restricted screen is evidence of having been on that screen only if
+     the caller was entitled to the screen at all. An unauthorised fetch of the URL proves nothing,
+     so it is no longer read as a visit. */
+  const entitledToRestrictedScreen = () => {
+    const fromHeader = utils.jwtFrom(req)
+    const cookie = /(?:^|;\s*)token=([^;]*)/.exec(req.headers.cookie ?? '')
+    const token = fromHeader ?? (cookie ? decodeURIComponent(cookie[1]) : undefined)
+    if (!token || !security.verify(token)) {
+      return false
+    }
+    return security.decode(token)?.data?.role === security.roles.admin
+  }
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') && entitledToRestrictedScreen() }, false, uiBypassed)
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') && entitledToRestrictedScreen() }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
