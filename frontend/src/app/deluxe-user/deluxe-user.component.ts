@@ -54,7 +54,12 @@ export class DeluxeUserComponent implements OnInit {
   ngOnInit (): void {
     this.configurationService.getApplicationConfiguration().subscribe({
       next: (config) => {
-        const decalParam: string = this.route.snapshot.queryParams.testDecal // "Forgotten" test parameter to play with different stickers on the delivery box image
+        const requestedDecal: string = this.route.snapshot.queryParams.testDecal // "Forgotten" test parameter to play with different stickers on the delivery box image
+        // The value is interpolated into an asset path that ends up in an SVG
+        // <image href>, which Angular's URL sanitizer does not cover, so a
+        // traversal like ../../../ escapes the image folder and fetches
+        // off-origin content. Only a plain bundled file name is allowed.
+        const decalParam = /^[\w-]+\.(png|jpe?g|svg|gif|webp)$/i.test(requestedDecal ?? '') ? requestedDecal : undefined
         if (config?.application) {
           if (config.application.name) {
             this.applicationName = config.application.name
