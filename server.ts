@@ -199,14 +199,22 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
-  /* Remove duplicate slashes from URL which allowed bypassing subsequent filters */
+  /* Canonicalise the request path before any filter or authorisation decision reads it, so the
+     same resource cannot be addressed by a spelling a path based check does not recognise. */
   app.use((req: Request, res: Response, next: NextFunction) => {
-    req.url = req.url.replace(/[/]+/g, '/')
+    const queryStart = req.url.indexOf('?')
+    const rawPath = queryStart === -1 ? req.url : req.url.substring(0, queryStart)
+    const query = queryStart === -1 ? '' : req.url.substring(queryStart)
+    const normalizedPath = path.posix.normalize(rawPath.replace(/[/]+/g, '/'))
+    req.url = (normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath) + query
     next()
   })
 
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
+
+  /* Parse cookies early so authorisation can see the session on plain browser requests */
+  app.use(cookieParser('kekse'))
 
   /* Security Policy */
   const securityTxtExpiration = new Date()
@@ -227,6 +235,23 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
+
+  /* The spacer asset belongs to a restricted screen, so it is subject to the same authorisation
+     as the screen itself. The decision is made on the canonical path, not on a literal mount. */
+  const restrictedAreaAsset = /\/19px\.png$/i
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(req.path)
+    } catch {
+      // Malformed percent-encoding: decide on the raw path.
+    }
+    if (restrictedAreaAsset.test(path.posix.normalize(requestedPath))) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
@@ -286,7 +311,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
   /* Serve vendor dependencies locally instead of from CDN */
