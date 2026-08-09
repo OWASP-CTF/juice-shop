@@ -29,6 +29,38 @@ describe('utils', () => {
     })
   })
 
+  describe('isPrivateOrReservedIpAddress', () => {
+    it('flags loopback addresses as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('127.0.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('127.255.255.255')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::1')).to.equal(true)
+    })
+
+    it('flags the unspecified address as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('0.0.0.0')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('::')).to.equal(true)
+    })
+
+    it('flags RFC 1918 private ranges as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('10.0.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('172.16.0.1')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('172.31.255.255')).to.equal(true)
+      expect(utils.isPrivateOrReservedIpAddress('192.168.0.1')).to.equal(true)
+    })
+
+    it('flags link-local ranges as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('169.254.169.254')).to.equal(true) // cloud metadata endpoint
+      expect(utils.isPrivateOrReservedIpAddress('fe80::1')).to.equal(true)
+    })
+
+    it('does not flag public IP addresses as private', () => {
+      expect(utils.isPrivateOrReservedIpAddress('8.8.8.8')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('1.1.1.1')).to.equal(false)
+      expect(utils.isPrivateOrReservedIpAddress('172.32.0.1')).to.equal(false) // just outside 172.16.0.0/12
+      expect(utils.isPrivateOrReservedIpAddress('172.15.255.255')).to.equal(false) // just below 172.16.0.0/12
+    })
+  })
+
   describe('extractFilename', () => {
     it('returns standalone filename unchanged', () => {
       expect(utils.extractFilename('test.exe')).to.equal('test.exe')

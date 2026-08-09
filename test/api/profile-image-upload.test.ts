@@ -110,6 +110,81 @@ void describe('/profile/image/url', () => {
     assert.ok(res.text.includes('Error: Blocked illegal activity'))
   })
 
+  void it('POST profile image URL rejects loopback address (CWE-918 SSRF)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://127.0.0.1:3000/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
+  void it('POST profile image URL rejects "localhost" hostname (CWE-918 SSRF)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://localhost:3000/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
+  void it('POST profile image URL rejects RFC 1918 private address (CWE-918 SSRF)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://10.0.0.5/internal')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
+  void it('POST profile image URL rejects link-local/cloud-metadata address (CWE-918 SSRF)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://169.254.169.254/latest/meta-data')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
+  void it('POST profile image URL rejects non-http(s) scheme (CWE-918 SSRF)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'file:///etc/passwd')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
   void it('POST valid image with tampered content length', { skip: 'Fails on CI/CD pipeline' }, async () => {
     const file = path.resolve(__dirname, '../files/validProfileImage.jpg')
 
@@ -127,5 +202,28 @@ void describe('/profile/image/url', () => {
 
     assert.equal(res.status, 500)
     assert.ok(res.text.includes('Unexpected end of form'))
+  })
+
+  void it('replaying the known SSRF exploit sequence leaves "ssrfChallenge" unsolved (CWE-918)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const beforeRes = await request(app).get('/api/Challenges')
+    const beforeChallenge = beforeRes.body.data.find((c: { key: string }) => c.key === 'ssrfChallenge')
+    assert.ok(beforeChallenge, "challenge with key 'ssrfChallenge' should exist")
+    assert.equal(beforeChallenge.solved, false, 'precondition: ssrfChallenge should start unsolved')
+
+    // Former SSRF exploit: make the server request itself via the image URL upload feature.
+    await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://localhost:3000/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3')
+    await request(app).get('/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3')
+
+    const afterRes = await request(app).get('/api/Challenges')
+    const afterChallenge = afterRes.body.data.find((c: { key: string }) => c.key === 'ssrfChallenge')
+    assert.equal(afterChallenge.solved, false, 'server must never SSRF itself via profile image URL upload')
   })
 })

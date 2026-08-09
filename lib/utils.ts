@@ -214,6 +214,39 @@ export const toSimpleIpAddress = (ipv6: string) => {
   }
 }
 
+/**
+ * Checks whether the given (simple, non-IPv6-mapped) IPv4 address falls into a
+ * private, loopback, link-local or otherwise non-publicly-routable range.
+ * Used to block Server-Side Request Forgery (SSRF) attacks against internal
+ * or local infrastructure. See CWE-918.
+ */
+export const isPrivateOrReservedIpAddress = (ip: string): boolean => {
+  const ipv4Match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (ipv4Match) {
+    const octets = ipv4Match.slice(1, 5).map(Number)
+    if (octets.some((octet) => octet < 0 || octet > 255)) {
+      return true // not a valid IP, treat as unsafe
+    }
+    const [a, b] = octets
+    if (a === 127) return true // 127.0.0.0/8 loopback
+    if (a === 0) return true // 0.0.0.0/8 "this" network
+    if (a === 10) return true // 10.0.0.0/8 private
+    if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12 private
+    if (a === 192 && b === 168) return true // 192.168.0.0/16 private
+    if (a === 169 && b === 254) return true // 169.254.0.0/16 link-local
+    if (a === 100 && b >= 64 && b <= 127) return true // 100.64.0.0/10 carrier-grade NAT
+    return false
+  }
+
+  const normalized = ip.toLowerCase()
+  if (normalized === '::1') return true // IPv6 loopback
+  if (normalized === '::') return true // IPv6 unspecified
+  if (normalized.startsWith('fe80:') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true // fe80::/10 link-local
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true // fc00::/7 unique local
+
+  return false
+}
+
 export const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message
   return String(error)
