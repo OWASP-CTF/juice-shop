@@ -80,6 +80,14 @@ export function profileImageUrlUpload () {
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
           }
+          /* A profile image URL is only ever meant to name a picture. Refusing to keep whatever a
+             URL happens to return stops the shop being used to reach an endpoint for its effect
+             rather than for its content, which is what makes a server-side request forgery
+             worth attempting in the first place. */
+          const contentType = response.headers.get('content-type') ?? ''
+          if (!contentType.toLowerCase().startsWith('image/')) {
+            throw new Error('url did not return an image')
+          }
           if (url.match(/(.)*solve\/challenges\/server-side(.)*/) !== null) req.app.locals.abused_ssrf_bug = true
           const ext = ['jpg', 'jpeg', 'png', 'svg', 'gif'].includes(url.split('.').slice(-1)[0].toLowerCase()) ? url.split('.').slice(-1)[0].toLowerCase() : 'jpg'
           const fileStream = fs.createWriteStream(`frontend/dist/frontend/assets/public/images/uploads/${loggedInUser.data.id}.${ext}`, { flags: 'w' })
