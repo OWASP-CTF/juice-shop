@@ -7,6 +7,7 @@ import * as challengeUtils from '../lib/challengeUtils'
 import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
+import * as utils from '../lib/utils'
 
 const exposableFields = ['id', 'email', 'lastLoginIp', 'profileImage', 'username', 'role']
 
@@ -15,9 +16,10 @@ export function retrieveLoggedInUser () {
     let user
     let response: any
     const emptyUser = { id: undefined, email: undefined, lastLoginIp: undefined, profileImage: undefined }
+    const token = utils.jwtFrom(req) || req.cookies.token
     try {
-      if (security.verify(req.cookies.token)) {
-        user = security.authenticatedUsers.get(req.cookies.token)
+      if (security.verify(token)) {
+        user = security.authenticatedUsers.get(token)
 
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
