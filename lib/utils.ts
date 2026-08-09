@@ -215,10 +215,33 @@ export const toSimpleIpAddress = (ipv6: string) => {
 }
 
 /**
- * Checks whether the given (simple, non-IPv6-mapped) IPv4 address falls into a
- * private, loopback, link-local or otherwise non-publicly-routable range.
- * Used to block Server-Side Request Forgery (SSRF) attacks against internal
- * or local infrastructure. See CWE-918.
+ * If `ip` is an IPv4-mapped or (deprecated) IPv4-compatible IPv6 address - in either
+ * its dotted-decimal suffix form (`::ffff:127.0.0.1`) or its canonical hex-group form
+ * (`::ffff:7f00:1`, the form Node's URL parser normalizes bracketed IPv6-literal hosts
+ * to) - returns the embedded IPv4 address in dotted-decimal notation. Returns null
+ * otherwise. This closes an SSRF filter bypass where an attacker wraps a blocked IPv4
+ * address (e.g. 127.0.0.1) in IPv6 syntax to evade a naive dotted-decimal-only check.
+ */
+export const extractMappedIpv4Address = (ip: string): string | null => {
+  const lower = ip.toLowerCase()
+  const dottedMatch = lower.match(/(?:^|:)(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/)
+  if (dottedMatch) {
+    return dottedMatch[1]
+  }
+  const hexMatch = lower.match(/(?:^|:)(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (hexMatch) {
+    const hi = parseInt(hexMatch[1], 16)
+    const lo = parseInt(hexMatch[2], 16)
+    return [(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff].join('.')
+  }
+  return null
+}
+
+/**
+ * Checks whether the given IP address (IPv4, IPv6, or an IPv4 address embedded in
+ * IPv6 syntax) falls into a private, loopback, link-local or otherwise
+ * non-publicly-routable range. Used to block Server-Side Request Forgery (SSRF)
+ * attacks against internal or local infrastructure. See CWE-918.
  */
 export const isPrivateOrReservedIpAddress = (ip: string): boolean => {
   const ipv4Match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
@@ -243,6 +266,14 @@ export const isPrivateOrReservedIpAddress = (ip: string): boolean => {
   if (normalized === '::') return true // IPv6 unspecified
   if (normalized.startsWith('fe80:') || normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true // fe80::/10 link-local
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true // fc00::/7 unique local
+
+  // An IPv4 address wrapped in IPv6 syntax (e.g. `::ffff:127.0.0.1` or its
+  // canonical hex-group form `::ffff:7f00:1`) must be judged by the IPv4 rules
+  // above too, or it becomes a trivial SSRF filter bypass.
+  const mappedIpv4 = extractMappedIpv4Address(normalized)
+  if (mappedIpv4 && isPrivateOrReservedIpAddress(mappedIpv4)) {
+    return true
+  }
 
   return false
 }

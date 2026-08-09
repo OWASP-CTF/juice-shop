@@ -170,6 +170,21 @@ void describe('/profile/image/url', () => {
     assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
   })
 
+  void it('POST profile image URL rejects loopback wrapped in IPv6 literal syntax (CWE-918 SSRF filter bypass)', async () => {
+    const { token } = await login(app, {
+      email: `jim@${config.get<string>('application.domain')}`,
+      password: 'ncc-1701'
+    })
+
+    const res = await request(app)
+      .post('/profile/image/url')
+      .set('Cookie', `token=${token}`)
+      .field('imageUrl', 'http://[::ffff:127.0.0.1]/solve/challenges/server-side?key=tRy_H4rd3r_n0thIng_iS_Imp0ssibl3')
+
+    assert.equal(res.status, 500)
+    assert.ok(res.text.includes('Error: Invalid or forbidden image URL'))
+  })
+
   void it('POST profile image URL rejects non-http(s) scheme (CWE-918 SSRF)', async () => {
     const { token } = await login(app, {
       email: `jim@${config.get<string>('application.domain')}`,
