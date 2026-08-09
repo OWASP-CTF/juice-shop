@@ -32,7 +32,11 @@ export function dataExport () {
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          const accountOrderPrefix = security.hash(email).slice(0, 4) + '-'
+          const matchingMaskedEmail = await db.ordersCollection.find({ email: updatedEmail })
+          orders = matchingMaskedEmail.filter((order: { orderId?: unknown }) =>
+            typeof order.orderId === 'string' && order.orderId.startsWith(accountOrderPrefix)
+          )
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return
