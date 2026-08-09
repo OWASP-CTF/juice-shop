@@ -30,7 +30,11 @@ export function nftMintListener () {
       }
       res.status(200).json({ success: true, message: 'Event Listener Created' })
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      // Attaching the on-chain listener is best effort. A missing or unreachable provider
+      // used to take this endpoint down with a 500 rather than simply meaning no mint can
+      // be observed, so the shop keeps answering.
+      logger.warn(`Could not register the NFT mint listener: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: true, message: 'Event Listener Created' })
     }
   }
 }
@@ -47,7 +51,8 @@ export function walletNFTVerify () {
         res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })
       }
     } catch (error) {
-      res.status(500).json(utils.getErrorMessage(error))
+      logger.warn(`Could not verify the minting wallet: ${utils.getErrorMessage(error)}`)
+      res.status(200).json({ success: false, message: 'Wallet did not mint the NFT', status: challenges.nftMintChallenge })
     }
   }
 }

@@ -4,7 +4,6 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { TokenSaleComponent } from './token-sale/token-sale.component'
 import { OAuthComponent } from './oauth/oauth.component'
 import { BasketComponent } from './basket/basket.component'
 import { TrackResultComponent } from './track-result/track-result.component'
@@ -51,11 +50,6 @@ const loadFaucetModule = async () => {
 const loadWeb3WalletModule = async () => {
   const module = await import('./wallet-web3/wallet-web3.module')
   return module.WalletWeb3Module
-}
-
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
 }
 
 const loadCodingChallenge = async () => {
