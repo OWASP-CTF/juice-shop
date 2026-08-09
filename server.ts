@@ -449,10 +449,19 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
   /* Anti automation: a solved CAPTCHA alone is no proof of a human, so feedback submission is
      additionally throttled over a sliding window. Answering the CAPTCHA in a loop no longer gets
-     more than nine entries into the shop within twenty seconds. */
+     more than nine entries into the shop within the window.
+
+     The window is deliberately wider than the twenty seconds the submission rate is expressed in.
+     The limit is enforced here from one clock reading while the burst is measured further down the
+     chain from a later one, and two readings taken microseconds apart can still straddle a
+     millisecond boundary. With the window equal to the measured period a submission held back to
+     the very edge could be recorded as one millisecond inside it, so the burst that the throttle
+     had just refused to allow was reported as having happened. Leaving a second of margin puts the
+     enforced spacing beyond anything that reading skew can close. */
+  const feedbackWindow = 21000
   app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
     const now = Date.now()
-    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > 20000) {
+    while (recentFeedbackSubmissions.length > 0 && now - recentFeedbackSubmissions[0] > feedbackWindow) {
       recentFeedbackSubmissions.shift()
     }
     if (recentFeedbackSubmissions.length >= 9) {
