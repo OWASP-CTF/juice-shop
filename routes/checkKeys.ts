@@ -20,20 +20,15 @@ const walletOfTheShop = async (): Promise<ShopWallet> => {
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { privateKey, publicKey, address } = await walletOfTheShop()
+      const { privateKey } = await walletOfTheShop()
       challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
         return req.body.privateKey === privateKey
       })
       if (req.body.privateKey === privateKey) {
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftUnlockChallenge })
       } else {
-        if (req.body.privateKey === address) {
-          res.status(401).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else if (req.body.privateKey === publicKey) {
-          res.status(401).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else {
-          res.status(401).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })
-        }
+        // Telling a caller which part of the wallet they guessed narrows the search for the rest.
+        res.status(401).json({ success: false, message: 'That is not the private key of my ethereum wallet.', status: challenges.nftUnlockChallenge })
       }
     } catch (error) {
       res.status(500).json(utils.getErrorMessage(error))
