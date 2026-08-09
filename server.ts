@@ -429,21 +429,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
-  /* The author of a feedback is whoever is signed in, and the rating is validated rather
-     than taken on trust. Both used to be attributes the request body could simply assert. */
-  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
-    if (req.body === Object(req.body)) {
-      const user = security.authenticatedUsers.from(req)
-      req.body.UserId = user?.data?.id ?? null
-      const rating = Number(req.body.rating)
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        res.status(400).json({ error: 'Rating must be a whole number between 1 and 5' })
-        return
-      }
-      req.body.rating = rating
-    }
-    next()
-  })
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
@@ -476,16 +461,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         delete req.body[privileged]
       }
       req.body.role = security.roles.customer
-    }
-    next()
-  })
-  /* A weak password is what makes a documented account takeable in the first place, so
-     the policy is enforced at the boundary where the account is created. */
-  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
-    const violation = security.validatePasswordPolicy(req.body?.password)
-    if (violation) {
-      res.status(400).json({ error: violation })
-      return
     }
     next()
   })

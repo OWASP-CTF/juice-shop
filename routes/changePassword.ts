@@ -24,13 +24,6 @@ export function changePassword () {
       return
     }
 
-    // Same policy as registration, from the same source, so a weak password cannot be
-    // introduced through the back door of a password change.
-    const violation = security.validatePasswordPolicy(newPasswordInString)
-    if (violation) {
-      res.status(401).send(violation)
-      return
-    }
 
     const token = headers.authorization ? headers.authorization.substr('Bearer='.length) : null
     if (token === null) {
