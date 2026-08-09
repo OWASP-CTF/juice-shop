@@ -821,15 +821,23 @@
 		]
 	},
 	"nftMintChallenge_1.sol": {
-		"added": [],
-		"removed": []
+		"added": [
+			24
+		],
+		"removed": [
+			24
+		]
 	},
 	"nftMintChallenge_2.sol": {
-		"added": [],
+		"added": [
+			24
+		],
 		"removed": []
 	},
 	"nftMintChallenge_3.sol": {
-		"added": [],
+		"added": [
+			24
+		],
 		"removed": []
 	},
 	"nftMintChallenge_4_correct.sol": {
