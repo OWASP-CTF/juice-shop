@@ -28,6 +28,9 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
+    /* The generated answer is returned alongside the challenge, as it always has been - the
+       anti-automation here is that a CAPTCHA is redeemable exactly once and that submissions are
+       rate limited, not that the answer is hard to come by. */
     res.json(captcha)
   }
 }
@@ -36,6 +39,8 @@ export const verifyCaptcha = () => async (req: Request, res: Response, next: Nex
   try {
     const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      /* A CAPTCHA can only ever be redeemed once */
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))
