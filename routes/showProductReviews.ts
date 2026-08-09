@@ -12,19 +12,6 @@ import { type Review } from 'data/types'
 import * as db from '../data/mongodb'
 import * as utils from '../lib/utils'
 
-// Blocking sleep function as in native MongoDB
-// @ts-expect-error FIXME Type safety broken for global object
-global.sleep = (time: number) => {
-  // Ensure that users don't accidentally dos their servers for too long
-  if (time > 2000) {
-    time = 2000
-  }
-  const stop = new Date().getTime()
-  while (new Date().getTime() < stop + time) {
-    ;
-  }
-}
-
 export function showProductReviews () {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = Number(req.params.id)
