@@ -13,6 +13,45 @@ import { UserModel } from '../models/user'
 import * as utils from '../lib/utils'
 import logger from '../lib/logger'
 
+// Hostnames that resolve to the host itself or to infrastructure only reachable from
+// inside the deployment. Fetching these on a caller's behalf is server-side request
+// forgery, not an avatar download.
+const BLOCKED_HOST_PATTERNS = [
+  'localhost',
+  '127.',
+  '0.0.0.0',
+  '10.',
+  '192.168.',
+  '169.254.',
+  '[',
+  'metadata'
+]
+
+function isSafeOutboundUrl (candidate: string) {
+  let parsed
+  try {
+    parsed = new URL(candidate)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (BLOCKED_HOST_PATTERNS.some(prefix => host === prefix || host.startsWith(prefix))) {
+    return false
+  }
+  // 172.16.0.0/12
+  const privateB = host.match(new RegExp('^172[.]([0-9]+)[.]'))
+  if (privateB !== null) {
+    const second = Number(privateB[1])
+    if (second >= 16 && second <= 31) {
+      return false
+    }
+  }
+  return true
+}
+
 export function profileImageUrlUpload () {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.body.imageUrl !== undefined) {
@@ -21,6 +60,9 @@ export function profileImageUrlUpload () {
       const loggedInUser = security.authenticatedUsers.get(req.cookies.token)
       if (loggedInUser) {
         try {
+          if (!isSafeOutboundUrl(url)) {
+            throw new Error('image url is not an allowed outbound target')
+          }
           const response = await fetch(url)
           if (!response.ok || !response.body) {
             throw new Error('url returned a non-OK status code or an empty body')
