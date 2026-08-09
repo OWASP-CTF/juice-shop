@@ -387,6 +387,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/authentication-details', security.isAuthorized())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Solving one CAPTCHA per request is no obstacle to a script, so feedback
+     submission was effectively unlimited: twelve went through in four seconds.
+     Five per twenty seconds leaves ordinary use untouched. */
+  app.post('/api/Feedbacks', rateLimit({
+    windowMs: 20 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many feedbacks submitted. Please try again shortly.' }
+  }))
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
