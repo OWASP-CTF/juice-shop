@@ -57,7 +57,18 @@ export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: 
 export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
-export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
+// Applying sanitize-html only once is not enough, as a single pass can leave behind
+// tags that were nested inside a now-removed tag (e.g. '<<script>Foo</script>iframe
+// src="javascript:alert(`xss`)">' sanitizes to '<iframe src="javascript:alert(`xss`)">'
+// in a single pass). Re-sanitizing until the output stops changing closes that gap.
+export const sanitizeHtml = (html: string): string => {
+  let sanitized = sanitizeHtmlLib(html)
+  while (sanitized !== html) {
+    html = sanitized
+    sanitized = sanitizeHtmlLib(html)
+  }
+  return sanitized
+}
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
 export const sanitizeFilename = (filename: string) => sanitizeFilenameLib(filename)
 export const sanitizeSecure = (html: string): string => {
