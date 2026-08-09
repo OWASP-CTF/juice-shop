@@ -1062,9 +1062,9 @@ export const BeeFaucetABI = [
     name: 'balance',
     outputs: [
       {
-        internalType: 'uint8',
+        internalType: 'uint256',
         name: '',
-        type: 'uint8',
+        type: 'uint256',
       },
     ],
     stateMutability: 'view',
@@ -1075,9 +1075,9 @@ export const BeeFaucetABI = [
     name: 'getBalance',
     outputs: [
       {
-        internalType: 'uint8',
+        internalType: 'uint256',
         name: '',
-        type: 'uint8',
+        type: 'uint256',
       },
     ],
     stateMutability: 'view',
@@ -1099,9 +1099,9 @@ export const BeeFaucetABI = [
   {
     inputs: [
       {
-        internalType: 'uint8',
+        internalType: 'uint256',
         name: 'amount',
-        type: 'uint8',
+        type: 'uint256',
       },
     ],
     name: 'withdraw',

@@ -16,7 +16,11 @@ describe('/profile', () => {
   })
 
   describe('challenge "usernameXss"', () => {
-    it('Username field should be susceptible to XSS attacks after disarming CSP via profile image URL', () => {
+    // Regression test: a CSP-breaking profile image URL is now rejected
+    // (see routes/profileImageUrlUpload.ts) and the username is always
+    // sanitized (see models/user.ts), so CSP can no longer be weakened
+    // and this challenge can never be solved.
+    it('should reject a CSP-breaking profile image URL and sanitize the username', () => {
       cy.task('isDocker').then((isDocker) => {
         if (!isDocker) {
           cy.visit('/profile')
@@ -27,10 +31,6 @@ describe('/profile', () => {
           cy.get('#username').type('<<a|ascript>alert(`xss`)</script>')
           cy.get('#submit').click()
 
-          cy.on('window:alert', (t) => {
-            expect(t).to.equal('xss')
-          })
-
           cy.get('#username').clear()
           cy.get('#username').type('αδмιη')
           cy.get('#submit').click()
@@ -40,7 +40,16 @@ describe('/profile', () => {
           )
           cy.get('#submitUrl').click()
           cy.visit('/#/')
-          cy.expectChallengeSolved({ challenge: 'CSP Bypass' })
+
+          cy.request({
+            method: 'GET',
+            url: '/api/Challenges/?name=CSP Bypass',
+            timeout: 60000
+          }).then((res) => {
+            const challenge = res.body.data[0]
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            expect(challenge.solved).to.be.false
+          })
         }
       })
     })

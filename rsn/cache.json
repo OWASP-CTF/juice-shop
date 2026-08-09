@@ -1,8 +1,6 @@
 {
 	"accessLogDisclosureChallenge_1_correct.ts": {
-		"added": [
-			16
-		],
+		"added": [],
 		"removed": []
 	},
 	"accessLogDisclosureChallenge_2.ts": {
@@ -41,26 +39,26 @@
 	},
 	"changeProductChallenge_1.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_2.ts": {
 		"added": [
 			18,
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_3_correct.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_4.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
@@ -1136,9 +1134,14 @@
 	},
 	"resetPasswordMortyChallenge_1.ts": {
 		"added": [
-			2
+			2,
+			3,
+			4,
+			5
 		],
-		"removed": []
+		"removed": [
+			6
+		]
 	},
 	"resetPasswordMortyChallenge_2.ts": {
 		"added": [],
@@ -1146,12 +1149,12 @@
 	},
 	"resetPasswordMortyChallenge_3.ts": {
 		"added": [
-			4,
-			5
+			7,
+			8
 		],
 		"removed": [
-			4,
-			5
+			7,
+			8
 		]
 	},
 	"resetPasswordMortyChallenge_4_correct.ts": {
@@ -1203,10 +1206,7 @@
 		]
 	},
 	"restfulXssChallenge_1_correct.ts": {
-		"added": [
-			42,
-			43
-		],
+		"added": [],
 		"removed": []
 	},
 	"restfulXssChallenge_2.ts": {
