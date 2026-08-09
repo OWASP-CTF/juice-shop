@@ -65,10 +65,12 @@ export const promotionVideo = () => {
       template = template.replace(/_navColor_/g, theme.navColor)
       template = template.replace(/_primLight_/g, theme.primLight)
       template = template.replace(/_primDark_/g, theme.primDark)
-      template = template.replace(/_subtitles_/g, subtitleFile())
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      res.send(fn())
+      // The cue text is raw text inside the element, so only a literal '</script' can escape it.
+      // Encoding the angle brackets closes that exit without altering how a cue reads.
+      const cues = subs.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      res.send(fn().replace('<script id="subtitle"></script>', `<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">${cues}</script>`))
     })
   }
   function favicon () {
