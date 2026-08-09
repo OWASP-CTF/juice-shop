@@ -4,6 +4,7 @@ import { type NextFunction, type Request, type Response } from 'express'
 
 import * as accuracy from '../lib/accuracy'
 import * as challengeUtils from '../lib/challengeUtils'
+import { codingChallengeUnlocked } from '../lib/codingChallenges'
 import { type ChallengeKey } from 'models/challenge'
 
 const FixesDir = 'data/static/codefixes'
@@ -55,6 +56,10 @@ interface VerdictRequestBody {
 
 export const serveCodeFixes = () => (req: Request<FixesRequestParams, Record<string, unknown>, Record<string, unknown>>, res: Response, next: NextFunction) => {
   const key = req.params.key
+  if (!codingChallengeUnlocked(key)) {
+    res.status(403).json({ error: 'No fixes available for this challenge yet!' })
+    return
+  }
   const fixData = readFixes(key)
   if (fixData.fixes.length === 0) {
     res.status(404).json({
@@ -70,6 +75,10 @@ export const serveCodeFixes = () => (req: Request<FixesRequestParams, Record<str
 export const checkCorrectFix = () => async (req: Request<Record<string, unknown>, Record<string, unknown>, VerdictRequestBody>, res: Response, next: NextFunction) => {
   const key = req.body.key
   const selectedFix = req.body.selectedFix
+  if (!codingChallengeUnlocked(key)) {
+    res.status(403).json({ error: 'No fixes available for this challenge yet!' })
+    return
+  }
   const fixData = readFixes(key)
   if (fixData.fixes.length === 0) {
     res.status(404).json({

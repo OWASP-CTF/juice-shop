@@ -7,7 +7,7 @@ import { type NextFunction, type Request, type Response } from 'express'
 import yaml from 'js-yaml'
 import fs from 'node:fs'
 
-import { getCodeChallenges } from '../lib/codingChallenges'
+import { getCodeChallenges, codingChallengeUnlocked } from '../lib/codingChallenges'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as accuracy from '../lib/accuracy'
 import * as utils from '../lib/utils'
@@ -41,6 +41,10 @@ export const retrieveCodeSnippet = async (challengeKey: string) => {
 
 export const serveCodeSnippet = () => async (req: Request<SnippetRequestBody, Record<string, unknown>, Record<string, unknown>>, res: Response, next: NextFunction) => {
   try {
+    if (!codingChallengeUnlocked(req.params.challenge)) {
+      res.status(403).json({ status: 'error', error: `No code challenge available yet for challenge key: ${req.params.challenge}` })
+      return
+    }
     const snippetData = await retrieveCodeSnippet(req.params.challenge)
     if (snippetData == null) {
       res.status(404).json({ status: 'error', error: `No code challenge for challenge key: ${req.params.challenge}` })
@@ -69,6 +73,10 @@ export const getVerdict = (vulnLines: number[], neutralLines: number[], selected
 
 export const checkVulnLines = () => async (req: Request<Record<string, unknown>, Record<string, unknown>, VerdictRequestBody>, res: Response, next: NextFunction) => {
   const key = req.body.key
+  if (!codingChallengeUnlocked(key)) {
+    res.status(403).json({ status: 'error', error: `No code challenge available yet for challenge key: ${key}` })
+    return
+  }
   let snippetData
   try {
     snippetData = await retrieveCodeSnippet(key)
