@@ -95,6 +95,7 @@ import { serveLogFiles } from './routes/logfileServer'
 import { servePublicFiles } from './routes/fileServer'
 import { addMemory, getMemories } from './routes/memory'
 import { changePassword } from './routes/changePassword'
+import { passwordPolicyViolation } from './lib/passwordPolicy'
 import { countryMapping } from './routes/countryMapping'
 import { retrieveAppVersion } from './routes/appVersion'
 import { captchas, verifyCaptcha } from './routes/captcha'
@@ -412,6 +413,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      }
+    }
+    next()
+  })
+  /* A password is only worth anything while guessing it stays expensive, so one that is too short
+     or that already sits in the lists an attacker owns is refused at registration. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body?.password !== undefined) {
+      const violation = passwordPolicyViolation(req.body.password, req.body.email)
+      if (violation) {
+        res.status(400).json({ error: violation })
+        return
       }
     }
     next()
