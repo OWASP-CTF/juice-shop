@@ -208,6 +208,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
 
+  /* Parse cookies early so authorisation can see the session on plain browser requests */
+  app.use(cookieParser('kekse'))
+
   /* Security Policy */
   const securityTxtExpiration = new Date()
   securityTxtExpiration.setFullYear(securityTxtExpiration.getFullYear() + 1)
@@ -273,7 +276,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/.well-known', serveIndexMiddleware, serveIndex('.well-known', { icons: true, view: 'details' }))
   app.use('/.well-known', express.static('.well-known'))
 
-  /* /encryptionkeys directory browsing */
+  /* /encryptionkeys directory browsing: key material is served only to administrators.
+     Publishing the token verification key is what lets an attacker use it as an HMAC
+     secret, and the rest of the directory has no business being world readable either. */
+  app.use('/encryptionkeys', security.isAdmin())
   app.use('/encryptionkeys', serveIndexMiddleware, serveIndex('encryptionkeys', { icons: true, view: 'details' }))
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
@@ -286,7 +292,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
 
   app.use(express.static(path.resolve('frontend/dist/frontend')))
-  app.use(cookieParser('kekse'))
   // vuln-code-snippet end directoryListingChallenge accessLogDisclosureChallenge
 
   /* Serve vendor dependencies locally instead of from CDN */
