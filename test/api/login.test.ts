@@ -161,9 +161,7 @@ void describe('/rest/user/login', () => {
         password: undefined
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login with known email "admin@juice-sh.op" in SQL injection attack', async () => {
@@ -175,9 +173,7 @@ void describe('/rest/user/login', () => {
         password: undefined
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login with known email "jim@juice-sh.op" in SQL injection attack', async () => {
@@ -189,9 +185,7 @@ void describe('/rest/user/login', () => {
         password: undefined
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login with known email "bender@juice-sh.op" in SQL injection attack', async () => {
@@ -203,9 +197,7 @@ void describe('/rest/user/login', () => {
         password: undefined
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login with non-existing email "acc0unt4nt@juice-sh.op" via UNION SELECT injection attack', async () => {
@@ -217,9 +209,7 @@ void describe('/rest/user/login', () => {
         password: undefined
       })
 
-    assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(typeof res.body.authentication.token, 'string')
+    assert.equal(res.status, 401)
   })
 
   void it('POST login with query-breaking SQL Injection attack', async () => {
@@ -236,6 +226,26 @@ void describe('/rest/user/login', () => {
 })
 
 void describe('/rest/saveLoginIp', () => {
+  void it('GET sanitizes markup from the True-Client-IP header', async () => {
+    const loginRes = await request(app)
+      .post('/rest/user/login')
+      .set({ 'content-type': 'application/json' })
+      .send({
+        email: 'admin@' + config.get<string>('application.domain'),
+        password: 'admin123'
+      })
+
+    const res = await request(app)
+      .get('/rest/saveLoginIp')
+      .set({
+        Authorization: `Bearer ${loginRes.body.authentication.token}`,
+        'True-Client-IP': '<iframe src="javascript:alert(`xss`)">'
+      })
+
+    assert.equal(res.status, 200)
+    assert.equal(res.body.lastLoginIp, '')
+  })
+
   void it('GET last login IP will be saved as True-Client-IP header value', async () => {
     const loginRes = await request(app)
       .post('/rest/user/login')
