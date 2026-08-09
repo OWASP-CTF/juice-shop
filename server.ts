@@ -172,6 +172,8 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.locals.captchaId = 0
   app.locals.captchaReqId = 1
   app.locals.captchaBypassReqTimes = []
+  /* Timestamps of the recently accepted customer feedbacks, used to throttle bulk submissions */
+  app.locals.recentFeedbackSubmissions = []
   app.locals.abused_ssti_bug = false
   app.locals.abused_ssrf_bug = false
 
@@ -406,6 +408,22 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Anti-automation. Solving a CAPTCHA proves the puzzle was answered, not that a human answered
+     it, and a fresh puzzle can always be requested. The control that actually limits automation is
+     a rate limit on the submission itself, enforced over a sliding window. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    const recent: number[] = req.app.locals.recentFeedbackSubmissions
+    while (recent.length > 0 && now - recent[0] > 21000) {
+      recent.shift()
+    }
+    if (recent.length >= 9) {
+      res.status(429).send('Too many feedbacks were submitted in a short time. Please try again later.')
+      return
+    }
+    recent.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
