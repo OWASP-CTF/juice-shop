@@ -437,6 +437,16 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     }
     next()
   })
+  /* A weak password is what makes a documented account takeable in the first place, so
+     the policy is enforced at the boundary where the account is created. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    const violation = security.validatePasswordPolicy(req.body?.password)
+    if (violation) {
+      res.status(400).json({ error: violation })
+      return
+    }
+    next()
+  })
   app.post('/api/Users', verify.registerAdminChallenge())
   app.post('/api/Users', verify.passwordRepeatChallenge()) // vuln-code-snippet hide-end
   app.post('/api/Users', verify.emptyUserRegistration())
