@@ -40,6 +40,10 @@ export class ForgotPasswordComponent {
   public securityQuestionControl: UntypedFormControl = new UntypedFormControl({ disabled: true, value: '' }, [Validators.required])
   public passwordControl: UntypedFormControl = new UntypedFormControl({ disabled: true, value: '' }, [Validators.required, Validators.minLength(5)])
   public repeatPasswordControl: UntypedFormControl = new UntypedFormControl({ disabled: true, value: '' }, [Validators.required, matchValidator(this.passwordControl)])
+  /* Second factor: the one-time token from the reset link. Only asked for once the
+     security answer has been accepted, since the answer alone no longer resets anything. */
+  public tokenControl: UntypedFormControl = new UntypedFormControl({ disabled: true, value: '' })
+  public awaitingToken = false
   public securityQuestion?: string
   public error?: string
   public confirmation?: string
@@ -76,28 +80,43 @@ export class ForgotPasswordComponent {
   }
 
   resetPassword () {
+    const token = this.tokenControl.value
     this.userService.resetPassword({
       email: this.emailControl.value,
       answer: this.securityQuestionControl.value,
       new: this.passwordControl.value,
-      repeat: this.repeatPasswordControl.value
+      repeat: this.repeatPasswordControl.value,
+      ...(token ? { token } : {})
     }).subscribe({
       next: () => {
         this.error = undefined
-        this.translate.get('PASSWORD_SUCCESSFULLY_CHANGED').subscribe({
-          next: (passwordSuccessfullyChanged) => {
-            this.confirmation = passwordSuccessfullyChanged
-          },
-          error: (translationId) => {
-            this.confirmation = translationId
-          }
-        })
+        if (!token) {
+          /* The answer was right, but it only requested the reset. Keep the form
+             filled and ask for the one-time token that was sent out of band. */
+          this.awaitingToken = true
+          this.tokenControl.enable()
+          this.showConfirmation('PASSWORD_RESET_LINK_SENT')
+          return
+        }
+        this.showConfirmation('PASSWORD_SUCCESSFULLY_CHANGED')
+        this.awaitingToken = false
         this.resetForm()
       },
       error: (error) => {
         this.error = error.error
         this.confirmation = undefined
         this.resetErrorForm()
+      }
+    })
+  }
+
+  private showConfirmation (translationKey: string) {
+    this.translate.get(translationKey).subscribe({
+      next: (translated) => {
+        this.confirmation = translated
+      },
+      error: (translationId) => {
+        this.confirmation = translationId
       }
     })
   }
@@ -115,6 +134,14 @@ export class ForgotPasswordComponent {
     this.repeatPasswordControl.setValue('')
     this.repeatPasswordControl.markAsPristine()
     this.repeatPasswordControl.markAsUntouched()
+    this.clearToken()
+  }
+
+  private clearToken () {
+    this.tokenControl.setValue('')
+    this.tokenControl.markAsPristine()
+    this.tokenControl.markAsUntouched()
+    this.tokenControl.disable()
   }
 
   resetErrorForm () {
@@ -129,6 +156,9 @@ export class ForgotPasswordComponent {
     this.repeatPasswordControl.setValue('')
     this.repeatPasswordControl.markAsPristine()
     this.repeatPasswordControl.markAsUntouched()
+    /* A rejected or expired token sends the user back to requesting a fresh one. */
+    this.awaitingToken = false
+    this.clearToken()
   }
 }
 

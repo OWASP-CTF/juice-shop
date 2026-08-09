@@ -100,10 +100,32 @@ void describe('/nftMintListen', { skip: skipReason }, () => {
 })
 
 void describe('/walletNFTVerify', { skip: skipReason }, () => {
-  void it('POST missing wallet address fails to solve minting challenge', async () => {
+  void it('POST missing wallet address gets rejected as invalid', async () => {
     const res = await request(app)
       .post('/rest/web3/walletNFTVerify')
       .send({})
+
+    assert.equal(res.status, 400)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.success, false)
+    assert.equal(res.body.message, 'Invalid wallet address')
+  })
+
+  void it('POST malformed wallet address gets rejected as invalid', async () => {
+    const res = await request(app)
+      .post('/rest/web3/walletNFTVerify')
+      .send({ walletAddress: 'lalalalala' })
+
+    assert.equal(res.status, 400)
+    assert.ok(res.headers['content-type']?.includes('application/json'))
+    assert.equal(res.body.success, false)
+    assert.equal(res.body.message, 'Invalid wallet address')
+  })
+
+  void it('POST well-formed wallet address that did not mint fails to solve minting challenge', async () => {
+    const res = await request(app)
+      .post('/rest/web3/walletNFTVerify')
+      .send({ walletAddress: '0x0000000000000000000000000000000000000001' })
 
     assert.equal(res.status, 200)
     assert.ok(res.headers['content-type']?.includes('application/json'))
@@ -111,15 +133,15 @@ void describe('/walletNFTVerify', { skip: skipReason }, () => {
     assert.equal(res.body.message, 'Wallet did not mint the NFT')
   })
 
-  void it('POST invalid wallet address fails to solve minting challenge', async () => {
-    const res = await request(app)
+  void it('POST well-formed wallet address never solves the minting challenge', async () => {
+    await request(app)
       .post('/rest/web3/walletNFTVerify')
-      .send({ walletAddress: 'lalalalala' })
+      .send({ walletAddress: '0x0000000000000000000000000000000000000002' })
+
+    const res = await request(app).get('/api/Challenges/?key=nftMintChallenge')
 
     assert.equal(res.status, 200)
-    assert.ok(res.headers['content-type']?.includes('application/json'))
-    assert.equal(res.body.success, false)
-    assert.equal(res.body.message, 'Wallet did not mint the NFT')
+    assert.equal(res.body.data[0].solved, false)
   })
 })
 

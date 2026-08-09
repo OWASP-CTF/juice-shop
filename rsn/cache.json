@@ -1,8 +1,6 @@
 {
 	"accessLogDisclosureChallenge_1_correct.ts": {
-		"added": [
-			16
-		],
+		"added": [],
 		"removed": []
 	},
 	"accessLogDisclosureChallenge_2.ts": {
@@ -41,26 +39,26 @@
 	},
 	"changeProductChallenge_1.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_2.ts": {
 		"added": [
 			18,
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_3_correct.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
 	"changeProductChallenge_4.ts": {
 		"added": [
-			48
+			51
 		],
 		"removed": []
 	},
@@ -689,7 +687,8 @@
 			2,
 			6,
 			7,
-			8
+			8,
+			9
 		]
 	},
 	"directoryListingChallenge_1_correct.ts": {
@@ -728,23 +727,54 @@
 	},
 	"forgedReviewChallenge_1.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			13,
+			14
 		],
 		"removed": [
-			6
+			6,
+			7,
+			8
 		]
 	},
 	"forgedReviewChallenge_2_correct.ts": {
-		"added": [],
-		"removed": []
+		"added": [
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			13,
+			14
+		],
+		"removed": [
+			7,
+			8
+		]
 	},
 	"forgedReviewChallenge_3.ts": {
 		"added": [
+			4,
+			5,
 			6,
-			7
+			7,
+			8,
+			9,
+			10,
+			13,
+			14
 		],
 		"removed": [
-			6
+			6,
+			7
 		]
 	},
 	"localXssChallenge_1.ts": {
@@ -854,34 +884,50 @@
 	},
 	"noSqlReviewsChallenge_1.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			13
 		],
 		"removed": [
 			4,
-			6,
+			5,
 			8,
 			9,
-			6
+			10
 		]
 	},
 	"noSqlReviewsChallenge_2.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			13
 		],
 		"removed": [
-			6
+			6,
+			7
 		]
 	},
 	"noSqlReviewsChallenge_3_correct.ts": {
 		"added": [
-			6
+			4,
+			5,
+			6,
+			7,
+			13
 		],
 		"removed": [
 			4,
-			6,
+			5,
 			8,
 			9,
-			6
+			10
 		]
 	},
 	"redirectChallenge_1.ts": {
@@ -1136,9 +1182,14 @@
 	},
 	"resetPasswordMortyChallenge_1.ts": {
 		"added": [
-			2
+			2,
+			3,
+			4,
+			5
 		],
-		"removed": []
+		"removed": [
+			6
+		]
 	},
 	"resetPasswordMortyChallenge_2.ts": {
 		"added": [],
@@ -1146,12 +1197,12 @@
 	},
 	"resetPasswordMortyChallenge_3.ts": {
 		"added": [
-			4,
-			5
+			7,
+			8
 		],
 		"removed": [
-			4,
-			5
+			7,
+			8
 		]
 	},
 	"resetPasswordMortyChallenge_4_correct.ts": {
@@ -1203,10 +1254,7 @@
 		]
 	},
 	"restfulXssChallenge_1_correct.ts": {
-		"added": [
-			42,
-			43
-		],
+		"added": [],
 		"removed": []
 	},
 	"restfulXssChallenge_2.ts": {
@@ -1267,7 +1315,9 @@
 	},
 	"unionSqlInjectionChallenge_1.ts": {
 		"added": [],
-		"removed": []
+		"removed": [
+			6
+		]
 	},
 	"unionSqlInjectionChallenge_2_correct.ts": {
 		"added": [
@@ -1285,7 +1335,8 @@
 			6,
 			7,
 			8,
-			9
+			9,
+			10
 		]
 	},
 	"weakPasswordChallenge_1_correct.ts": {

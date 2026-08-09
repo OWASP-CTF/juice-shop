@@ -15,7 +15,11 @@ export function trackOrder () {
     const id = !utils.isChallengeEnabled(challenges.reflectedXssChallenge) ? String(req.params.id).replace(/[^\w-]+/g, '') : utils.trunc(req.params.id, 60)
 
     challengeUtils.solveIf(challenges.reflectedXssChallenge, () => { return utils.contains(id, '<iframe src="javascript:alert(`xss`)">') })
-    db.ordersCollection.find({ $where: `this.orderId === '${id}'` }).then((order: any) => {
+    /* A plain equality match instead of $where, whose JavaScript body could be broken
+       out of with a quote to make the predicate always true and return every order in
+       the collection (CWE-943). The id is still echoed back below - that is the
+       separate reflected XSS concern and is deliberately left as it was. */
+    db.ordersCollection.find({ orderId: id }).then((order: any) => {
       const result = utils.queryResultToJson(order)
       challengeUtils.solveIf(challenges.noSqlOrdersChallenge, () => { return result.data.length > 1 })
       if (result.data[0] === undefined) {
