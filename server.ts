@@ -228,6 +228,17 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The administration console answers on its own path as well as behind the hash, and the
+     server is the only place that can say no to either. */
+  app.use('/administration', security.isAdmin())
+  app.use('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET' && req.query.q !== undefined && !security.isAdministrator(req)) {
+      res.status(403).json({ error: 'Malicious activity detected' })
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
