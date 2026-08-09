@@ -347,6 +347,22 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
+  /* Only rejected credentials are counted, so repeated legitimate authentication is never throttled.
+     'trust proxy' above makes req.ip attacker-controlled, hence the socket address as the key. */
+  app.use('/rest/user/login', rateLimit({
+    windowMs: 60 * 1000,
+    max: 50,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req: Request) => req.socket.remoteAddress ?? 'unknown',
+    validate: false
+  }))
+  /* Registration is the other way an unauthenticated caller reaches the credential store. */
+  app.post('/api/Users', rateLimit({
+    windowMs: 5 * 1000,
+    max: 50,
+    keyGenerator: (req: Request) => req.socket.remoteAddress ?? 'unknown',
+    validate: false
+  }))
 
   // vuln-code-snippet start changeProductChallenge
   /** Authorization **/
