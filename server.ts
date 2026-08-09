@@ -245,6 +245,11 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(antiCheat.checkForPreSolveInteractions())
 
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The contract sandbox is an internal development screen, not part of the shop. Its spacer is
+     loaded by that screen and by nothing else, so serving it to anyone who asks confirms the
+     screen is there and reachable - which is the disclosure. It follows the same authorisation
+     as the screen itself instead of being removed. */
+  app.use('/assets/public/images/padding/11px.png', security.isAuthorized(), security.isAdmin())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
