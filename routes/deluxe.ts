@@ -21,10 +21,6 @@ export function upgradeToDeluxe () {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
-      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
-        res.status(400).json({ status: 'error', error: 'Invalid payment mode. Must be wallet or card.' })
-        return
-      }
       if (req.body.paymentMode === 'wallet') {
         const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
         if ((wallet != null) && wallet.balance < 49) {
