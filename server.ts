@@ -228,6 +228,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* These spacers are referenced only by the internal score board and the unannounced token
+     sale page, so serving them to anyone confirms those pages exist. */
+  app.use('/assets/public/images/padding/1px.png', security.isAdmin())
+  app.use('/assets/public/images/padding/56px.png', security.isAdmin())
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
