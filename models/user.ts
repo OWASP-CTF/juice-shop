@@ -46,27 +46,22 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          this.setDataValue('username', security.sanitizeSecure(username))
+          username = security.sanitizeSecure(username)
+          this.setDataValue('username', username)
         }
       },
       email: {
         type: DataTypes.STRING,
         unique: true,
-        // An email address is an identifier with a defined grammar, not markup, so it is
-        // validated and rejected rather than rewritten. Running it through an HTML
-        // sanitizer silently corrupted valid addresses: '&' is legal in a local part but
-        // came back as '&amp;', and because the login query compares the raw input
-        // against the stored value, the owner of foo&bar@x.com could never sign in again.
-        // Rejecting malformed input also refuses an '<iframe ...>' payload outright
-        // instead of quietly storing a defanged version of it.
-        validate: {
-          isEmail: { msg: 'Must be a valid email address.' }
-        },
         set (email: string) {
-          this.setDataValue(
-            'email',
-            typeof email === 'string' ? email.trim() : email
-          )
+          email = security.sanitizeSecure(email)
+          challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
+            return utils.contains(
+              email,
+              '<iframe src="javascript:alert(`xss`)">'
+            )
+          })
+          this.setDataValue('email', email)
         }
       }, // vuln-code-snippet hide-end
       password: {
@@ -123,18 +118,6 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
       sequelize
     }
   )
-
-  // Judged after the row is written, not when the value is assigned. A setter runs
-  // before validation, so evaluating it there would mark the challenge solved for a
-  // payload that validation went on to reject and never stored.
-  User.addHook('afterSave', (user: User) => {
-    challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
-      return utils.contains(
-        user.email ?? '',
-        '<iframe src="javascript:alert(`xss`)">'
-      )
-    })
-  })
 
   User.addHook('afterValidate', async (user: User) => {
     if (

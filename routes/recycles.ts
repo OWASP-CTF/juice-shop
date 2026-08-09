@@ -3,50 +3,47 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { type Request, type Response } from 'express'
+import { type NextFunction, type Request, type Response } from 'express'
+import { AddressModel } from '../models/address'
 import { RecycleModel } from '../models/recycle'
 
 import * as utils from '../lib/utils'
-import * as security from '../lib/insecurity'
 
-export const getRecycleItem = () => (req: Request, res: Response) => {
-  // The id was run through JSON.parse and handed to the query builder, so a caller could
-  // supply an array or an object where a scalar was expected and widen the selector
-  // instead of naming one row. It is read as a plain integer.
-  const id = Number.parseInt(req.params.id, 10)
-  if (!Number.isSafeInteger(id) || id < 1) {
-    return res.status(400).send(utils.queryResultToJson({ err: 'Invalid recycle id.' }))
+export const prepareRecycleItem = () => async (req: Request, res: Response, next: NextFunction) => {
+  const addressId = Number(req.body.AddressId)
+  const userId = Number(req.body.UserId)
+  if (!Number.isInteger(addressId) || !Number.isInteger(userId)) {
+    res.status(400).json({ error: 'A valid address is required.' })
+    return
   }
-  // A recycle record names the customer and the address it is collected from, so it is
-  // returned to the customer it belongs to and to nobody else. It used to come back to
-  // anyone who could count.
-  const requester = security.authenticatedUsers.from(req)
-  if (requester?.data?.id === undefined) {
-    return res.status(401).send(utils.queryResultToJson({ err: 'Unauthorized' }))
+
+  const address = await AddressModel.findOne({ where: { id: addressId, UserId: userId } })
+  if (!address) {
+    res.status(403).json({ error: 'Address does not belong to the authenticated user.' })
+    return
   }
-  const where: { id: number, UserId?: number } = { id }
-  if (requester.data.role !== security.roles.admin) {
-    where.UserId = requester.data.id
-  }
-  RecycleModel.findAll({ where }).then((Recycle) => {
-    return res.send(utils.queryResultToJson(Recycle))
-  }).catch((_: unknown) => {
-    return res.send('Error fetching recycled items. Please try again')
-  })
+
+  req.body.AddressId = addressId
+  req.body.UserId = userId
+  next()
 }
 
-// Listing recycles used to answer 'this endpoint is not supported' for everyone, which
-// withdrew the feature rather than scoping it. Customers get their own records back; the
-// unscoped list that disclosed every customer's collection address is what is gone.
-export const getRecycleItems = () => (req: Request, res: Response) => {
-  const requester = security.authenticatedUsers.from(req)
-  if (requester?.data?.id === undefined) {
-    return res.status(401).send(utils.queryResultToJson({ err: 'Unauthorized' }))
+export const getRecycleItems = () => async (req: Request, res: Response) => {
+  const recycleItems = await RecycleModel.findAll({ where: { UserId: req.body.UserId } })
+  res.send(utils.queryResultToJson(recycleItems))
+}
+
+export const getRecycleItem = () => async (req: Request, res: Response) => {
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid recycle item id.' })
+    return
   }
-  const where = requester.data.role === security.roles.admin ? {} : { UserId: requester.data.id }
-  RecycleModel.findAll({ where }).then((Recycles) => {
-    return res.send(utils.queryResultToJson(Recycles))
-  }).catch((_: unknown) => {
-    return res.send('Error fetching recycled items. Please try again')
-  })
+
+  const recycleItem = await RecycleModel.findOne({ where: { id, UserId: req.body.UserId } })
+  if (!recycleItem) {
+    res.status(404).json({ error: 'Recycle item not found.' })
+    return
+  }
+  res.send(utils.queryResultToJson([recycleItem]))
 }

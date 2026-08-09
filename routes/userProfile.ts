@@ -49,21 +49,13 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    // The username is data. It is escaped for the template and never evaluated.
-    // NOTE: this prefixed copy is only used for the challenge check below; it is not
-    // rendered and it is not put into the template source.
-    username = '\\' + username
+    // The username is never fed into the template engine: it is HTML-encoded and injected into
+    // the already rendered markup, so it can neither be interpreted as Pug nor as HTML.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    // The username is NEVER spliced into the template source. It is handed to Pug as a
-    // local (see views/userProfile.pug) so the compiler treats it as data, not syntax.
-    // Substituting it here would make `#{...}`, `!{...}` or a leading `- ` inside the
-    // username part of the template that gets compiled and evaluated.
-    // Only values that come from static config/themes below are safe as source substitutions.
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -77,9 +69,18 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      // The policy is fixed. Splicing a user-controlled value into it let an attacker
-      // append their own directives, and 'unsafe-eval' is not needed by this page.
-      const CSP = `img-src 'self'; script-src 'self'`
+
+      // Only the origin of a well-formed http(s) profile image URL is added to the policy, so no
+      // user input can ever inject additional CSP directives.
+      let imgSrc = "'self'"
+      try {
+        if (user?.profileImage && /^https?:\/\//i.test(user.profileImage)) {
+          imgSrc += ' ' + new URL(user.profileImage).origin
+        }
+      } catch {
+        imgSrc = "'self'"
+      }
+      const CSP = `img-src ${imgSrc}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
@@ -89,7 +90,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }

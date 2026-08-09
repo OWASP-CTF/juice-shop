@@ -8,13 +8,7 @@ import { type Request, type Response } from 'express'
 import { challenges } from '../data/datacache'
 import * as security from '../lib/insecurity'
 
-// The only user attributes this endpoint is allowed to disclose. The fields
-// parameter may narrow this set, never extend it.
-// Shared with the password change, password reset and login-IP routes, which answer with
-// a user record too. 'role' is the caller's own, read from the server-side session rather
-// than a token the client could have edited, so it gives the routing guards an
-// authoritative answer to check instead of an unverified JWT payload.
-const DISCLOSABLE_FIELDS = security.DISCLOSABLE_USER_FIELDS
+const exposableFields = ['id', 'username', 'email', 'role', 'lastLoginIp', 'profileImage', 'isActive']
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
@@ -28,14 +22,14 @@ export function retrieveLoggedInUser () {
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
-        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
-        const permittedFields = requestedFields.filter(field => DISCLOSABLE_FIELDS.includes(field))
+        // Only ever hand out fields that are safe to expose, no matter what was requested
+        const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()).filter(f => exposableFields.includes(f)) : []
 
         let baseUser: any = {}
 
-        if (permittedFields.length > 0) {
+        if (requestedFields.length > 0) {
           // When fields are specified, return only those fields
-          for (const field of permittedFields) {
+          for (const field of requestedFields) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
@@ -46,8 +40,7 @@ export function retrieveLoggedInUser () {
             id: user?.data?.id,
             email: user?.data?.email,
             lastLoginIp: user?.data?.lastLoginIp,
-            profileImage: user?.data?.profileImage,
-            role: user?.data?.role
+            profileImage: user?.data?.profileImage
           }
         }
 

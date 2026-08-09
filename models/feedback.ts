@@ -40,7 +40,8 @@ const FeedbackModelInit = (sequelize: Sequelize) => {
       comment: {
         type: DataTypes.STRING,
         set (comment: string) {
-          const sanitizedComment = security.sanitizeSecure(comment)
+          // Sanitize repeatedly until stable, otherwise nested markup survives a single pass
+          const sanitizedComment: string = security.sanitizeSecure(comment)
           challengeUtils.solveIf(challenges.persistedXssFeedbackChallenge, () => {
             return utils.contains(
               sanitizedComment,

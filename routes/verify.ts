@@ -62,19 +62,13 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
-  challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  /* The spacer images of the restricted screens are part of those screens, so reaching one
-     is only evidence of having reached the screen if the caller was allowed onto it in the
-     first place. Deleting these markers was the wrong correction: it removed the record of
-     a visit rather than the ability of an unauthorised caller to claim one. The beacons of
-     the administration area, the web3 sandbox and the unannounced token sale are now read
-     only for a caller the server has already authorised, so an anonymous fetch of the image
-     URL - which this middleware also sees for /assets/i18n and the image folders - proves
-     nothing and is no longer treated as a visit. */
+  /* The spacer images of the restricted screens are part of those screens. Reaching one of them
+     is only evidence of having reached the screen if the caller was allowed onto the screen in
+     the first place, so the beacons of the administration area, the web3 sandbox and the
+     unannounced token sale are read only for a caller the server has already authorised for
+     them. An anonymous fetch of the URL proves nothing and is no longer treated as a visit. */
   const authorizedFor = (allowed: (role: string) => boolean) => {
-    // The beacons are fetched by the browser as page assets, so the session arrives on the
-    // cookie and not as a bearer header.
-    const token = security.sessionTokenFrom(req)
+    const token = utils.jwtFrom(req)
     if (!token || !security.verify(token)) {
       return false
     }
@@ -83,6 +77,7 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   }
   const isAdminCaller = () => authorizedFor((role) => role === security.roles.admin)
   const isCustomerCaller = () => authorizedFor((role) => role === security.roles.admin || role === security.roles.customer || role === security.roles.deluxe)
+  challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') && isCustomerCaller() }, false, uiBypassed)
   challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') && isAdminCaller() }, false, uiBypassed)
   challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') && isCustomerCaller() }, false, uiBypassed)
@@ -91,12 +86,7 @@ export const accessControlChallenges = () => (req: Request, res: Response, next:
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
   challengeUtils.solveIf(challenges.securityPolicyChallenge, () => { return utils.endsWith(url, '/security.txt') })
   challengeUtils.solveIf(challenges.missingEncodingChallenge, () => { return utils.endsWith(url.toLowerCase(), '%e1%93%9a%e1%98%8f%e1%97%a2-%23zatschi-%23whoneedsfourlegs-1572600969477.jpg') })
-  /* Same correction for the access log. The logs are served again, now behind an
-     administrator check, so a request for one is a genuine disclosure only when the caller
-     could actually read it. A path that merely mentions access.log - which this middleware
-     sees for /assets/i18n too, since Express strips the mount path before req.url is read -
-     discloses nothing on its own. */
-  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return url.match(/access\.log(0-9-)*/) !== null && isAdminCaller() })
+  challengeUtils.solveIf(challenges.accessLogDisclosureChallenge, () => { return url.match(/access\.log(0-9-)*/) })
   next()
 }
 
@@ -132,73 +122,27 @@ export const serverSideChallenges = () => (req: Request, res: Response, next: Ne
   next()
 }
 
-// A token is only ever minted by this application with RS256 (see the single call to
-// jwt.sign in lib/insecurity), so any other algorithm in the header belongs to a token
-// this application never issued. jws reads the algorithm out of the token's own header
-// when it is not told which one to use, which is what let a header of none, or an HS256
-// signature made with the RSA public key published at /encryptionkeys/jwt.pub, pass a
-// signature check. The algorithm is therefore pinned to the literal RS256 here before the
-// signature is looked at, in this file, so the answer does not depend on any other module
-// continuing to pin it.
-function isGenuinelySignedToken (token: string) {
-  try {
-    if (jws.decode(token)?.header?.alg !== 'RS256') {
-      return false
-    }
-    // The algorithm handed to jws is the literal RS256 and never the one the token asks
-    // for, so the signature is checked as an RSA signature over the published key or not
-    // at all.
-    return jws.verify(token, 'RS256', security.publicKey)
-  } catch {
-    return false
-  }
-}
-
-// jws.decode parses the payload as JSON whenever the header says typ JWT, and does not
-// guard that parse, so a token carrying a payload that is not JSON threw out of the
-// middleware below and into the error handler instead of being ignored as the junk it is.
-function decodedPayloadOf (token: string): unknown {
-  try {
-    return jws.decode(token) ? jwt.decode(token) : null
-  } catch {
-    return null
-  }
-}
-
 function jwtChallenge (challenge: Challenge, req: Request, algorithm: string, email: string | RegExp) {
   const token = utils.jwtFrom(req)
   if (token) {
-    const decoded = decodedPayloadOf(token)
+    const decoded = jws.decode(token) ? jwt.decode(token) : null
 
-    if (decoded === null || decoded === undefined || typeof decoded === 'string') {
+    if (decoded === null || typeof decoded === 'string') {
       return
     }
 
-    // Ask the application's own verification routine rather than calling jsonwebtoken
-    // directly. 0.4.0 reads the algorithm out of the header, so a token declaring none, or
-    // one signed HS256 with the published public key, verified here even though every
-    // other path had been pinned to RS256. The detector is unchanged; it now simply asks
-    // the same question the rest of the application asks.
-    if (isGenuinelySignedToken(token) && security.verify(token)) {
-      challengeUtils.solveIf(challenge, () => {
-        return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
-      })
-    }
-  }
-}
-
-// A header that does not parse is not a header claiming any algorithm at all, so this
-// answers with nothing rather than throwing out of the middleware it is called from.
-function headerOf (token: string): { alg?: string } | null {
-  try {
-    return JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
-  } catch {
-    return null
+    jwt.verify(token, security.publicKey, (err: jwt.VerifyErrors | null) => {
+      if (err === null) {
+        challengeUtils.solveIf(challenge, () => {
+          return hasAlgorithm(token, algorithm) && hasEmail(decoded as { data: { email: string } }, email)
+        })
+      }
+    })
   }
 }
 
 function hasAlgorithm (token: string, algorithm: string) {
-  const header = headerOf(token)
+  const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64').toString())
   return token && header && header.alg === algorithm
 }
 

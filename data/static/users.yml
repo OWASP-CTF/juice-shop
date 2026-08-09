@@ -1,6 +1,6 @@
 -
   email: admin
-  password: 'gPEtTRYCsRu2NxAPzdHY49AjXKI8'
+  password: 'admin123'
   key: admin
   role: 'admin'
   securityQuestion:
@@ -28,13 +28,13 @@
       expYear: 2086
 -
   email: jim
-  password: 'TOja6c8b6JHR3JOW1pDmhZJbfI6e'
+  password: 'ncc-1701'
   key: jim
   role: 'customer'
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'q4Zt7RmWxE2vNbHs9Lka'
+    answer: 'Ts6@Nr4!Qv8#Lm2$Yp9'
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -60,12 +60,12 @@
       expYear: 2099
 -
   email: bender
-  password: 'm00WGlM9iAbnLupwc53iVWsTKn0e'
+  password: 'OhG0dPlease1nsertLiquor!'
   key: bender
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: 'Pv6XnDs3RwQz8TmJyL4c'
+    answer: 'Wx7!Kp3@Hv9#Rt5$Zn2'
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -85,7 +85,7 @@
 -
   email: bjoern.kimminich@gmail.com
   username: bkimminich
-  password: 'aUHonOo7lOudgGE8NJqfSfNTEZUD'
+  password: 'bW9jLmxpYW1nQGhjaW5pbW1pay5ucmVvamI='
   customDomain: true
   key: bjoernGoogle
   role: 'admin'
@@ -126,10 +126,10 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: 'Hj2QcVn7ZsRt4WmXp9Ld'
+    answer: 'Qv7-Ldx2-Mhs4-Rtn9'
 -
   email: mc.safesearch
-  password: 'IqVSXJEG1wxOQ90w0NrhKyDcfkmT'
+  password: 'sT4y-S4feS3arch#2026!'
   key: rapper
   role: 'customer'
   walletBalance: 13337
@@ -138,7 +138,7 @@
     answer: 'I even shared my pizza bagels with you!'
 -
   email: J12934
-  password: '8MzTxzqXjEOrj9Qwmfw2uWJXKdaS'
+  password: '0Y8rMnww$*9VFYE§59-!Fg1L6t&6lB'
   key: jannik
   role: 'admin'
   securityQuestion:
@@ -156,7 +156,7 @@
     answer: 'NZMJLjEinU7TFElDIYW8'
 -
   email: amy
-  password: 'rOx0dErGbBYGasWUPbccPMFk4Wiz'
+  password: 'qN7$vRz2-Lk9!TbXw3Ee'
   key: amy
   role: 'customer'
   walletBalance: 48
@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'Bn9WqLx5TcJv2ZmRh7Ks'
+    answer: 'Gb4#Mx8!Qp2@Lv7$Ts5'
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Kj7#mQx2vLp9$Rn4TzWc'
+    answer: 'q7Vt-nGx4-Lm2s-Rd9E' # not derivable from any public profile or social media post
 -
   email: chris.pike
   password: 'uss enterprise'
@@ -209,7 +209,7 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Kd4RvTn8Xq2ZmWc6Lbj9'
+    answer: 'Jr6@Yw3!Nk9#Fp2$Vx8'
 -
   email: demo
   password: 'demo'
