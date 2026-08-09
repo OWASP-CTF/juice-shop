@@ -208,6 +208,33 @@ export const isAdmin = () => {
   }
 }
 
+// A state-changing endpoint that authorises from the ambient session cookie is reachable
+// by any page the victim happens to visit. A request that states where it came from has to
+// state this host; one that states nothing is left alone, so ordinary non-browser clients
+// and the shop's own same-origin forms keep working and only genuine cross-site
+// submissions are refused.
+export const sameOriginOnly = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const statedOrigin = req.headers.origin ?? req.headers.referer
+    if (!statedOrigin) {
+      next()
+      return
+    }
+    let statedHost
+    try {
+      statedHost = new URL(statedOrigin).host
+    } catch {
+      res.status(403).json({ error: 'Cross-site request refused' })
+      return
+    }
+    if (statedHost !== req.headers.host) {
+      res.status(403).json({ error: 'Cross-site request refused' })
+      return
+    }
+    next()
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
