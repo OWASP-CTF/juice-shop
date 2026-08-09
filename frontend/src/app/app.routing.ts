@@ -52,11 +52,6 @@ const loadWeb3WalletModule = async () => {
   return module.WalletWeb3Module
 }
 
-const loadWeb3SandboxModule = async () => {
-  const module = await import('./web3-sandbox/web3-sandbox.module')
-  return module.Web3SandboxModule
-}
-
 const loadCodingChallenge = async () => {
   const module = await import('./coding-challenge-page/coding-challenge-page.component')
   return module.CodingChallengePageComponent
@@ -72,7 +67,7 @@ const loadAboutComponent = async () => {
   return module.AboutComponent
 }
 
-// vuln-code-snippet start adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
+// vuln-code-snippet start adminSectionChallenge scoreBoardChallenge
 const routes: Routes = [
   {
     path: 'administration',
@@ -235,10 +230,6 @@ const routes: Routes = [
     loadChildren: async () => await loadWeb3WalletModule()
   },
   {
-    path: 'web3-sandbox',
-    loadChildren: async () => await loadWeb3SandboxModule()
-  },
-  {
     path: 'chatbot',
     component: ChatbotComponent,
     children: [
@@ -269,7 +260,7 @@ const routes: Routes = [
     component: SearchResultComponent
   }
 ]
-// vuln-code-snippet end adminSectionChallenge scoreBoardChallenge web3SandboxChallenge
+// vuln-code-snippet end adminSectionChallenge scoreBoardChallenge
 
 export const Routing = RouterModule.forRoot(routes, { useHash: true })
 
