@@ -182,7 +182,15 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    # The previous answer here was the truthful, real-world answer to "Name of your favorite
+    # pet?" and had been publicly disclosed by the account owner on camera, so anyone could
+    # recover it by OSINT (or by brute forcing a list of common pet names) and use the
+    # /#/forgot-password flow to take the account over. Per the OWASP "Choosing and Using
+    # Security Questions" cheat sheet, a security answer is a credential: it must not be a
+    # publicly discoverable fact about the user. It is now a high-entropy secret unrelated to
+    # the question (same approach already used for the 'ciso' account above), which restores
+    # the answer's value as a shared secret rather than a researchable biographical detail.
+    answer: 'K8v#pR2mQ!7wZtN4xLd$3bYhF9sJcE6a'
 -
   email: chris.pike
   password: 'uss enterprise'
