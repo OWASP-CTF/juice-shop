@@ -228,6 +228,30 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* The administration screen is the only template in the whole client bundle that loads this
+     spacer image, so fetching it is not an incidental asset request: it is a request for a piece
+     of the administration area, and answering it confirms that area to a caller who was never
+     shown it. The only control standing in front of that area today is an Angular route guard,
+     which is code the browser runs and therefore code the person it is meant to stop is free to
+     edit or skip entirely; requesting the asset directly bypasses it without any effort at all.
+     The same authorisation decision is applied here, on the server, where it cannot be tampered
+     with. The check is on the file name rather than on a mount path because the asset can be
+     addressed by more than one spelling of the same URL, and every spelling has to be covered. */
+  const administrationAreaAsset = '19px.png'
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(requestedPath)
+    } catch {
+      /* Percent-encoding that does not decode is judged exactly as it arrived. */
+    }
+    if (path.posix.basename(path.posix.normalize(requestedPath)) === administrationAreaAsset) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
@@ -364,8 +388,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Users: Only POST is allowed in order to register a new user. Enumerating every account in
+     the shop is a thing the administration screen does, not a thing any signed-in customer has
+     any business doing, so it is authorised as the administration function it is. */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
   app.route('/api/Users/:id')
     .get(security.isAuthorized())
     .put(security.denyAll())
@@ -400,7 +426,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
   app.use('/rest/basket/:id', security.isAuthorized())
   app.use('/rest/basket/:id/order', security.isAuthorized())
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start

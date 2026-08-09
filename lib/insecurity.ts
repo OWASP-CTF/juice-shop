@@ -178,6 +178,44 @@ export const isAccounting = () => {
   }
 }
 
+/* A session token reaches the server by two different routes. XHR calls made by the Angular
+   client attach it as a bearer token, but the requests the browser issues on its own behalf --
+   documents, stylesheets, images -- carry no Authorization header and identify the session only
+   through the `token` cookie. An authorisation check that has to cover both kinds of request
+   therefore has to look in both places. The Cookie header is read directly rather than through
+   req.cookies so that the decision does not depend on cookie-parsing middleware having been
+   mounted earlier in the chain than the check itself. */
+export const sessionTokenOf = (req: Request) => {
+  const bearerToken = utils.jwtFrom(req)
+  if (bearerToken) {
+    return bearerToken
+  }
+  const cookieHeader: string = req.headers?.cookie ?? ''
+  const tokenCookie = /(?:^|;)\s*token=([^;]*)/.exec(cookieHeader)
+  if (!tokenCookie) {
+    return undefined
+  }
+  const rawValue = tokenCookie[1].trim()
+  try {
+    return decodeURIComponent(rawValue)
+  } catch {
+    /* A value that is not valid percent-encoding is judged exactly as it arrived. */
+    return rawValue
+  }
+}
+
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = sessionTokenOf(req)
+    const decodedToken = token ? verify(token) && decode(token) : false
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
