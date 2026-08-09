@@ -17,16 +17,22 @@ export function retrieveLoggedInUser () {
       if (security.verify(req.cookies.token)) {
         user = security.authenticatedUsers.get(req.cookies.token)
 
+        // Only these non-sensitive attributes may ever be projected via ?fields=
+        const allowedFields = ['id', 'email', 'lastLoginIp', 'profileImage', 'username']
+
         // Parse the fields parameter into an array, splitting by comma.
         // If not provided, both these variables will be undefined.
         const fieldsParam = req.query?.fields as string | undefined
         const requestedFields = fieldsParam ? fieldsParam.split(',').map(f => f.trim()) : []
 
+        // Intersect requested fields with the allowlist; anything else (e.g. password, totpSecret) is dropped
+        const selectedFields = requestedFields.filter(field => allowedFields.includes(field))
+
         let baseUser: any = {}
 
-        if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
-          for (const field of requestedFields) {
+        if (selectedFields.length > 0) {
+          // When fields are specified, return only the allowlisted subset of them
+          for (const field of selectedFields) {
             if (user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
