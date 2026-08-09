@@ -168,6 +168,7 @@ export function placeOrder () {
             orderId,
             delivered: false,
             email: (email ? email.replace(/[aeiou]/gi, '*') : undefined),
+            UserId: req.body.UserId,
             totalPrice,
             products: basketProducts,
             bonus: totalPoints,

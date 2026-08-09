@@ -779,11 +779,20 @@ async function createOrders () {
     }
   ]
 
+  // Orders are looked up by their owner rather than by the lossy masked email,
+  // so the seeded ones need to carry the owner's id too.
+  const orderOwners = new Map<string, number>()
+  for (const ownerEmail of [adminEmail, 'demo']) {
+    const owner = await UserModel.findOne({ where: { email: ownerEmail } })
+    if (owner) orderOwners.set(ownerEmail.replace(/[aeiou]/gi, '*'), owner.id)
+  }
+
   return await Promise.all(
     orders.map(({ orderId, email, totalPrice, bonus, products, eta, delivered }) =>
       ordersCollection.insert({
         orderId,
         email,
+        UserId: orderOwners.get(email),
         totalPrice,
         bonus,
         products,

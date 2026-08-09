@@ -80,7 +80,9 @@ export const isAuthorized = () => {
 export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
   res.status(401).json({ error: 'Unauthorized' })
 }
-export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
+// jsonwebtoken@0.4.0 only understands expiresInMinutes; it silently ignores
+// expiresIn, so issued tokens carried no exp claim at all and never expired.
+export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresInMinutes: 360, algorithm: 'RS256' } as any)
 export const verify = (token: string) => {
   if (!hasRsaSignature(token)) return false
   try {
