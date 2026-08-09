@@ -231,12 +231,6 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
-  /* The administration screen and the web3 sandbox are privileged surfaces, and these two spacer
-     images are referenced by those two screens and by nothing else. Handing them to a caller who
-     could not open either screen confirms the screens are there, so they are gated the same way
-     the screens themselves are. Every other asset stays public. */
-  app.use(['/assets/public/images/padding/11px.png', '/assets/public/images/padding/19px.png'], security.isAdmin())
-
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
