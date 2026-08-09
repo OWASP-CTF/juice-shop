@@ -30,7 +30,8 @@ export function saveLoginIp () {
       try {
         const user = await UserModel.findByPk(loggedInUser.data.id)
         const updatedUser = await user?.update({ lastLoginIp: lastLoginIp?.toString() })
-        res.json(updatedUser)
+        // The caller needs the stored address back, not the account's secrets.
+        res.json(security.publicUserView(updatedUser))
       } catch (error) {
         next(error)
       }

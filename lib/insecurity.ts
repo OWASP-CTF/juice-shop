@@ -59,6 +59,30 @@ const WEAK_PASSWORDS = new Set([
   'changeme', 'iloveyou', 'monkey123', 'football', 'baseball'
 ])
 
+// The only user attributes allowed to leave the server. Withholding by omission rather
+// than by excluding a denylist means a column added later is private until somebody
+// deliberately lists it here - the password hash, the TOTP secret and the deluxe token
+// are all absent because nothing added them.
+//
+// Single source of truth: /rest/user/whoami, the password change, the password reset and
+// the login-IP update all answered with a user record, and three of them returned the
+// whole model, hash included.
+export const DISCLOSABLE_USER_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage', 'role']
+
+export const publicUserView = (user: any, fields: string[] = DISCLOSABLE_USER_FIELDS) => {
+  const source = user?.dataValues ?? user?.data ?? user
+  const view: Record<string, unknown> = {}
+  if (source == null) {
+    return view
+  }
+  for (const field of fields) {
+    if (DISCLOSABLE_USER_FIELDS.includes(field) && source[field] !== undefined) {
+      view[field] = source[field]
+    }
+  }
+  return view
+}
+
 export const validatePasswordPolicy = (password: unknown): string | null => {
   if (typeof password !== 'string' || password === '') {
     return 'Password cannot be empty.'

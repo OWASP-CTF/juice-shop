@@ -10,11 +10,11 @@ import * as security from '../lib/insecurity'
 
 // The only user attributes this endpoint is allowed to disclose. The fields
 // parameter may narrow this set, never extend it.
-// 'role' is the caller's own role, read from the server-side session rather than from a
-// token the client could have edited. Disclosing it to its owner tells them nothing they
-// do not already control, and it gives the routing guards an authoritative answer to
-// check against instead of an unverified JWT payload.
-const DISCLOSABLE_FIELDS = ['id', 'email', 'lastLoginIp', 'profileImage', 'role']
+// Shared with the password change, password reset and login-IP routes, which answer with
+// a user record too. 'role' is the caller's own, read from the server-side session rather
+// than a token the client could have edited, so it gives the routing guards an
+// authoritative answer to check instead of an unverified JWT payload.
+const DISCLOSABLE_FIELDS = security.DISCLOSABLE_USER_FIELDS
 
 export function retrieveLoggedInUser () {
   return (req: Request, res: Response) => {
