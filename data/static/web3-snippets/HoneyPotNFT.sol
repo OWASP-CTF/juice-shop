@@ -6,8 +6,9 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract HoneyPotNFT is ERC721, Ownable {
+contract HoneyPotNFT is ERC721, Ownable, ReentrancyGuard {
     using SafeMath for uint256;
 
     IERC20 public token = IERC20(0x36435796Ca9be2bf150CE0dECc2D8Fab5C4d6E13);
@@ -19,11 +20,22 @@ contract HoneyPotNFT is ERC721, Ownable {
 
     constructor() ERC721("The Enchanted Honey Pot", "EHP") {}
 
-    function mintNFT() external {
-        token.transferFrom(msg.sender, address(this), mintPrice);
-        _safeMint(msg.sender, totalSupply);
+    /* _safeMint hands control to the receiving address before the supply counter has moved, so a
+       contract that mints could call back into mintNFT while totalSupply still held its old
+       value: the same token id was handed out again and the event announced a mint that the
+       counter never accounted for. The supply is settled before control leaves this function, and
+       re-entry is refused outright by the audited OpenZeppelin guard. The payment is required as
+       well, because transferFrom reports failure by returning false as well as by reverting, and
+       that result was discarded - an unpaid caller still reached the mint. */
+    function mintNFT() external nonReentrant {
+        require(
+            token.transferFrom(msg.sender, address(this), mintPrice),
+            "Mint payment was not transferred"
+        );
+        uint256 tokenId = totalSupply;
         totalSupply = totalSupply.add(1); // vuln-code-snippet neutral-line nftMintChallenge
-        emit NFTMinted(msg.sender, totalSupply - 1); // vuln-code-snippet vuln-line nftMintChallenge
+        _safeMint(msg.sender, tokenId);
+        emit NFTMinted(msg.sender, tokenId); // vuln-code-snippet vuln-line nftMintChallenge
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
