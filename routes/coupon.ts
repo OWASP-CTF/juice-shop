@@ -8,16 +8,24 @@ import { BasketModel } from '../models/basket'
 import * as security from '../lib/insecurity'
 
 export function applyCoupon () {
-  return async ({ params }: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const id = params.id
-      let coupon: string | undefined | null = params.coupon ? decodeURIComponent(params.coupon) : undefined
+      const id = req.params.id
+      let coupon: string | undefined | null = req.params.coupon ? decodeURIComponent(req.params.coupon) : undefined
       const discount = security.discountFromCoupon(coupon)
       coupon = discount ? coupon : null
 
       const basket = await BasketModel.findByPk(id)
       if (!basket) {
         next(new Error(`Basket with id=${id} does not exist.`))
+        return
+      }
+
+      // The basket id comes from the path. Without this the endpoint writes a coupon onto
+      // whichever basket is named, not the one belonging to the caller.
+      const customer = security.authenticatedUsers.from(req)
+      if (!customer?.data?.id || basket.UserId !== customer.data.id) {
+        res.status(403).json({ error: 'Malicious activity detected.' })
         return
       }
 
