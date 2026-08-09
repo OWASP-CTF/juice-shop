@@ -139,18 +139,19 @@ export function placeOrder () {
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 
-          if (req.body.UserId) {
+          const userId = customer?.data?.id
+          if (userId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
-              const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
+              const wallet = await WalletModel.findOne({ where: { UserId: userId } })
               if ((wallet != null) && wallet.balance >= totalPrice) {
-                await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: req.body.UserId } })
+                await WalletModel.decrement({ balance: totalPrice }, { where: { UserId: userId } })
               } else {
                 next(new Error('Insufficient wallet balance.'))
                 return
               }
             }
             try {
-              await WalletModel.increment({ balance: totalPoints }, { where: { UserId: req.body.UserId } })
+              await WalletModel.increment({ balance: totalPoints }, { where: { UserId: userId } })
             } catch (error: unknown) {
               next(error)
               return
