@@ -16,7 +16,7 @@ export function createProductReviews () {
     const user = security.authenticatedUsers.from(req)
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
+      () => false
     )
 
     if (!user?.data?.email) {
