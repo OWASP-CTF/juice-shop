@@ -62,10 +62,31 @@ export const passwordRepeatChallenge = () => (req: Request, res: Response, next:
 export const accessControlChallenges = () => (req: Request, res: Response, next: NextFunction) => {
   const { url } = req
   const uiBypassed = req.header('sec-fetch-dest') === 'document' || !req.header('referer')
+  /* A spacer image belongs to the screen it sits on, so fetching one is evidence of having been
+     on that screen only when the caller was entitled to be there. Read on its own, the asset URL
+     is an existence oracle: anybody could ask for it and be recorded as having reached a
+     restricted area they were never let into.
+
+     The entitlement is settled here, on the server, from the token the request carries -- not
+     from the fact that a URL was requested. An anonymous fetch now proves nothing, and the
+     screens keep their images, so a caller who is allowed in still registers the visit normally.
+     /1px.png and /81px.png are left alone: the score board and the privacy policy are pages any
+     visitor may open, so there is no entitlement to check. */
+  const callerHasRole = (permitted: readonly string[]) => {
+    const token = utils.jwtFrom(req)
+    if (!token || !security.verify(token)) {
+      return false
+    }
+    const role = security.decode(token)?.data?.role
+    return typeof role === 'string' && permitted.includes(role)
+  }
+  const SIGNED_IN = [security.roles.customer, security.roles.deluxe, security.roles.accounting, security.roles.admin] as const
+  const ADMIN_ONLY = [security.roles.admin] as const
+
   challengeUtils.solveIf(challenges.scoreBoardChallenge, () => { return utils.endsWith(url, '/1px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') }, false, uiBypassed)
-  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.web3SandboxChallenge, () => { return utils.endsWith(url, '/11px.png') && callerHasRole(SIGNED_IN) }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.adminSectionChallenge, () => { return utils.endsWith(url, '/19px.png') && callerHasRole(ADMIN_ONLY) }, false, uiBypassed)
+  challengeUtils.solveIf(challenges.tokenSaleChallenge, () => { return utils.endsWith(url, '/56px.png') && callerHasRole(SIGNED_IN) }, false, uiBypassed)
   challengeUtils.solveIf(challenges.privacyPolicyChallenge, () => { return utils.endsWith(url, '/81px.png') }, false, uiBypassed)
   challengeUtils.solveIf(challenges.extraLanguageChallenge, () => { return utils.endsWith(url, '/tlh_AA.json') })
   challengeUtils.solveIf(challenges.retrieveBlueprintChallenge, () => { return utils.endsWith(url, retrieveBlueprintChallengeFile ?? undefined) })
