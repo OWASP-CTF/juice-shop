@@ -24,10 +24,12 @@ export function retrieveLoggedInUser () {
 
         let baseUser: any = {}
 
+        const allowedFields = ['id', 'email', 'lastLoginIp', 'profileImage'] as const
+
         if (requestedFields.length > 0) {
-          // When fields are specified, return only those fields
+          // When fields are specified, return only allowlisted fields
           for (const field of requestedFields) {
-            if (user?.data[field as keyof typeof user.data] !== undefined) {
+            if ((allowedFields as readonly string[]).includes(field) && user?.data[field as keyof typeof user.data] !== undefined) {
               baseUser[field] = user?.data[field as keyof typeof user.data]
             }
           }
@@ -54,8 +56,8 @@ export function retrieveLoggedInUser () {
     if (req.query.callback === undefined) {
       res.json(response)
     } else {
-      challengeUtils.solveIf(challenges.emailLeakChallenge, () => { return true })
-      res.jsonp(response)
+      // Do not honor JSONP callbacks — prevents email enumeration via callback wrapping.
+      res.json(response)
     }
   }
 }
