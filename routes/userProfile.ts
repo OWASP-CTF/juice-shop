@@ -49,29 +49,13 @@ export function getUserProfile () {
       return
     }
 
-    let username = user.username
-
-    if (username?.match(/#{(.*)}/) !== null && utils.isChallengeEnabled(challenges.usernameXssChallenge)) {
-      req.app.locals.abused_ssti_bug = true
-      const code = username?.substring(2, username.length - 1)
-      try {
-        if (!code) {
-          throw new Error('Username is null')
-        }
-        username = eval(code) // eslint-disable-line no-eval
-      } catch (err) {
-        username = '\\' + username
-      }
-    } else {
-      username = '\\' + username
-    }
+    // The username is never fed into the template engine: it is HTML-encoded and injected into
+    // the already rendered markup, so it can neither be interpreted as Pug nor as HTML.
+    const username = entities.encode(user.username ?? '')
 
     const themeKey = config.get<string>('application.theme') as keyof typeof themes
     const theme = themes[themeKey] || themes['bluegrey-lightgreen']
 
-    if (username) {
-      template = template.replace(/_username_/g, username)
-    }
     template = template.replace(/_emailHash_/g, security.hash(user?.email))
     template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
     template = template.replace(/_favicon_/g, favicon())
@@ -85,7 +69,18 @@ export function getUserProfile () {
     try {
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      const CSP = `img-src 'self' ${user?.profileImage}; script-src 'self' 'unsafe-eval'`
+
+      // Only the origin of a well-formed http(s) profile image URL is added to the policy, so no
+      // user input can ever inject additional CSP directives.
+      let imgSrc = "'self'"
+      try {
+        if (user?.profileImage && /^https?:\/\//i.test(user.profileImage)) {
+          imgSrc += ' ' + new URL(user.profileImage).origin
+        }
+      } catch {
+        imgSrc = "'self'"
+      }
+      const CSP = `img-src ${imgSrc}; script-src 'self'`
 
       challengeUtils.solveIf(challenges.usernameXssChallenge, () => {
         return username && user?.profileImage.match(/;[ ]*script-src(.)*'unsafe-inline'/g) !== null && utils.contains(username, '<script>alert(`xss`)</script>')
@@ -95,7 +90,7 @@ export function getUserProfile () {
         'Content-Security-Policy': CSP
       })
 
-      res.send(fn(user))
+      res.send(fn(user).replace(/_username_/g, () => username))
     } catch (err) {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
     }
