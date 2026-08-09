@@ -124,7 +124,19 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    // The map is keyed by the raw token string, so any caller holding a string that happens
+    // to be a key was treated as that session - including one presented in a cookie, which
+    // several routes read without going through isAuthorized() at all. The signature is
+    // therefore checked here too, so a session is only ever handed out for a token this
+    // shop actually issued.
+    const presented = utils.unquote(token)
+    if (!verify(presented)) {
+      return undefined
+    }
+    return this.tokenMap[presented]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -134,8 +146,12 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     return token ? this.get(token) : undefined
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
+    // Writing an unverified token into the map would create the very session the lookup
+    // above refuses to hand out, so the same check applies on the way in.
     const token = utils.jwtFrom(req)
-    this.put(token, user)
+    if (token && verify(token)) {
+      this.put(token, user)
+    }
   }
 }
 
@@ -231,7 +247,11 @@ export const sameOriginOnly = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     const statedOrigin = req.headers.origin ?? req.headers.referer
     if (!statedOrigin) {
-      next()
+      // A request that states no origin at all cannot be shown to have come from this shop,
+      // and letting it through made the guard trivially avoidable: a cross-site form or a
+      // scripted client simply omits both headers. State-changing account endpoints require
+      // a stated, matching origin.
+      res.status(403).json({ error: 'A same-origin request is required' })
       return
     }
     let statedHost
@@ -262,7 +282,14 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      // Reading tokenMap directly skipped the signature check that authenticatedUsers.get
+      // performs, so the owning user id was taken from an unverified token.
+      const user = authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
