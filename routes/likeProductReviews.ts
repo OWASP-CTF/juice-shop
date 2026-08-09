@@ -22,7 +22,7 @@ const reviewLikeLocks = new Map<string, Promise<unknown>>()
 
 async function withReviewLock<T> (reviewId: string, work: () => Promise<T>): Promise<T> {
   // Read and replace happen in the same tick, so two requests can never take the same slot.
-  const previous = reviewLikeLocks.get(reviewId) ?? Promise.resolve()
+  const previous: Promise<unknown> = reviewLikeLocks.get(reviewId) ?? Promise.resolve()
   const current = previous.then(work, work)
   const tracked = current.then(() => undefined, () => undefined)
   reviewLikeLocks.set(reviewId, tracked)
