@@ -23,14 +23,20 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          // The export belongs to the signed-in account. Taking the id from the body let a
+          // caller name somebody else's user id and export their memories.
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          const accountOrderPrefix = security.hash(email).slice(0, 4) + '-'
+          const matchingMaskedEmail = await db.ordersCollection.find({ email: updatedEmail })
+          orders = matchingMaskedEmail.filter((order: { orderId?: unknown }) =>
+            typeof order.orderId === 'string' && order.orderId.startsWith(accountOrderPrefix)
+          )
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return

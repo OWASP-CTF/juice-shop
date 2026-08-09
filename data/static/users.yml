@@ -34,7 +34,7 @@
   walletBalance: 100
   securityQuestion:
     id: 1
-    answer: 'Samuel' # https://en.wikipedia.org/wiki/James_T._Kirk
+    answer: 'q4Zt7RmWxE2vNbHs9Lka'
   feedback:
     comment: 'Great shop! Awesome service!'
     rating: 4
@@ -65,7 +65,7 @@
   role: 'customer'
   securityQuestion:
     id: 10
-    answer: "Stop'n'Drop" # http://futurama.wikia.com/wiki/Suicide_booth
+    answer: 'Pv6XnDs3RwQz8TmJyL4c'
   feedback:
     comment: 'Nothing useful available here!'
     rating: 1
@@ -126,7 +126,7 @@
   walletBalance: 100
   securityQuestion:
     id: 7
-    answer: '5N0wb41L' # http://rickandmorty.wikia.com/wiki/Snuffles
+    answer: 'Hj2QcVn7ZsRt4WmXp9Ld'
 -
   email: mc.safesearch
   password: 'Mr. N00dles'
@@ -172,7 +172,7 @@
   isAdmin: true
   securityQuestion:
     id: 9
-    answer: 'West-2082' # http://www.alte-postleitzahlen.de/uetersen
+    answer: 'Bn9WqLx5TcJv2ZmRh7Ks'
 -
   email: bjoern@owasp.org
   password: 'kitten lesser pooch karate buffoon indoors'
@@ -182,7 +182,7 @@
   profileImage: '13.jpg'
   securityQuestion:
     id: 7
-    answer: 'Zaya' # https://www.youtube.com/watch?v=Lu0-kDdtVf4
+    answer: 'Kj7#mQx2vLp9$Rn4TzWc'
 -
   email: chris.pike
   password: 'uss enterprise'
@@ -209,7 +209,7 @@
   walletBalance: 100
   securityQuestion:
     id: 12
-    answer: 'Silence of the Lambs' # https://www.imdb.com/title/tt0102926/
+    answer: 'Kd4RvTn8Xq2ZmWc6Lbj9'
 -
   email: demo
   password: 'demo'
@@ -262,7 +262,7 @@
   key: evm
   role: 'deluxe'
   feedback:
-    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft : "purpose betray marriage blame crunch monitor spin slide donate sport lift clutch"'
+    comment: 'Please send me the juicy chatbot NFT in my wallet at /juicy-nft'
     rating: 1
   securityQuestion:
     id: 10

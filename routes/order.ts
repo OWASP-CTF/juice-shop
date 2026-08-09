@@ -67,8 +67,15 @@ export function placeOrder () {
           let totalPrice = 0
           const basketProducts: Product[] = []
           let totalPoints = 0
-          for (const { BasketItem, price, deluxePrice, name, id } of basket.Products ?? []) {
+          for (const basketProduct of basket.Products ?? []) {
+            const { BasketItem, price, deluxePrice, name, id } = basketProduct
             if (BasketItem != null) {
+              // This query loads the products with paranoid: false, so a discontinued item
+              // that is already sitting in a basket still arrives here and would be billed
+              // and shipped. It is dropped from the order rather than sold.
+              if ((basketProduct as any).deletedAt != null) {
+                continue
+              }
               challengeUtils.solveIf(challenges.christmasSpecialChallenge, () => { return BasketItem.ProductId === products.christmasSpecial.id })
               try {
                 const quantityRow = await QuantityModel.findOne({ where: { ProductId: BasketItem.ProductId } })
@@ -137,7 +144,10 @@ export function placeOrder () {
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
 
-          challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
+          if (!Number.isFinite(totalPrice) || totalPrice < 0) {
+            res.status(400).json({ error: 'Order total must not be negative.' })
+            return
+          }
 
           if (req.body.UserId) {
             if (req.body.orderDetails && req.body.orderDetails.paymentId === 'wallet') {
