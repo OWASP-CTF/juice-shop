@@ -286,20 +286,32 @@ export class FaucetComponent implements OnInit {
           this.nftMintText = translatedString
         })
         setTimeout(() => {
-          this.keysService.verifyNFTWallet(this.metamaskAddress).subscribe({
-            next:
-            (response) => {
-              if (response.success) {
-                this.successResponse = response.status
-                this.mintButtonDisabled = true
+          /* The shop credits the mint to this wallet, so it asks the wallet to prove it is ours
+             first. Signing costs nothing and happens in the wallet the mint was just made from. */
+          void (async () => {
+            try {
+              const ownershipProof = await signer.signMessage(
+                `OWASP Juice Shop: I control the wallet ${this.metamaskAddress.toLowerCase()} and claim its Honey Pot mint.`
+              )
+              this.keysService.verifyNFTWallet(this.metamaskAddress, ownershipProof).subscribe({
+                next:
+                (response) => {
+                  if (response.success) {
+                    this.successResponse = response.status
+                    this.mintButtonDisabled = true
+                  }
+                },
+                error: (error) => {
+                  console.error(error)
+                  this.successResponse = false
+                }
               }
-            },
-            error: (error) => {
+              )
+            } catch (error) {
               console.error(error)
               this.successResponse = false
             }
-          }
-          )
+          })()
         }, 3500)
       }
 
