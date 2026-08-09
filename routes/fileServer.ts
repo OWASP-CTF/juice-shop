@@ -49,8 +49,12 @@ export function servePublicFiles () {
     })
   }
 
-  // Everything else in ftp/ is a forgotten developer file, so only what the shop links is served.
+  // The folder holds public documents and order confirmations, plus leftovers that were never
+  // meant to be downloadable; those are named here rather than guessed at from the extension.
+  const forgottenDeveloperFiles = /(\.bak|\.kdbx|\.pyc|eastere\.gg|suspicious_errors\.yml)$/i
+
   function isPubliclyLinkedDocument (file: string) {
-    return file === 'legal.md' || /^order_[0-9a-f]{4}-[0-9a-f]{16}\.pdf$/.test(file)
+    const name = file.toLowerCase()
+    return !forgottenDeveloperFiles.test(name) && (name.endsWith('.md') || name.endsWith('.pdf'))
   }
 }
