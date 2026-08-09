@@ -5,7 +5,6 @@
 
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
-import { ProductModel } from '../models/product'
 import { QuantityModel } from '../models/quantity'
 import * as challengeUtils from '../lib/challengeUtils'
 
@@ -88,11 +87,6 @@ export function quantityCheckBeforeBasketItemUpdate () {
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
-    throw new Error('No such product found!')
-  }
-
-  // ProductModel is paranoid, so a discontinued product resolves to null and must not be orderable.
-  if (await ProductModel.findByPk(id) == null) {
     throw new Error('No such product found!')
   }
 
