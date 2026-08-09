@@ -46,11 +46,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
+          // Always apply the robust, allow-list based sanitizer. The weaker
+          // regex-based legacy sanitizer must never be used to persist
+          // user-controlled input, regardless of challenge enablement state,
+          // since that flag collapses to "enabled" whenever Safety Mode is off.
+          username = security.sanitizeSecure(username)
           this.setDataValue('username', username)
         }
       },
@@ -65,9 +65,13 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            email = security.sanitizeSecure(email)
           }
+          // Regardless of challenge state, the value that actually gets
+          // persisted (and later rendered elsewhere in the app) must always
+          // be sanitized server-side. Client-side validation on the Angular
+          // form can be bypassed by calling the API directly, so relying on
+          // it alone allows a persisted XSS payload to be stored unescaped.
+          email = security.sanitizeSecure(email)
           this.setDataValue('email', email)
         }
       }, // vuln-code-snippet hide-end
