@@ -135,7 +135,11 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    // `includes` accepted any URL that merely CONTAINED an allowed URL as a substring, e.g.
+    // "https://evil.example/?x=https://github.com/juice-shop/juice-shop" - checking the prefix
+    // instead (matching isUnintendedRedirect's own check in routes/redirect.ts) only accepts
+    // URLs that actually start with an allowlisted target.
+    allowed = allowed || utils.startsWith(url, allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
