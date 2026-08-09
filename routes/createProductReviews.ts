@@ -14,16 +14,26 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    if (!user?.data?.email) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // The author is the authenticated caller. A body-supplied author is ignored, so a review
+    // cannot be attributed to somebody else. The check below observes the value that actually
+    // gets stored rather than the one that was submitted: comparing the session against
+    // req.body.author reported a forgery for every ordinary review, since an honest client
+    // does not send that field at all and undefined never equals the caller's address.
+    const author = user.data.email
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
-      () => user?.data?.email !== req.body.author
+      () => user?.data?.email !== undefined && user.data.email !== author
     )
 
     try {
       await reviewsCollection.insert({
         product: req.params.id,
         message: req.body.message,
-        author: req.body.author,
+        author,
         likesCount: 0,
         likedBy: []
       })

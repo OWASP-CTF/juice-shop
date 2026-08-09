@@ -56,8 +56,16 @@ export const promotionVideo = () => {
 
       challengeUtils.solveIf(challenges.videoXssChallenge, () => { return utils.contains(subs, '</script><script>alert(`xss`)</script>') })
 
+      // The page used to read the subtitle file itself and paste its contents into an inline
+      // <script id="subtitle"> block, which a hand-written parser then pulled back out with
+      // .innerHTML. That makes the subtitle file executable markup: anything able to write to
+      // it writes to the page. Encoding the text on the way in only narrows that, and leaves
+      // a script block whose body is file content. The video element now points at the file
+      // with a native <track>, so the browser parses it as WebVTT and never as HTML, and the
+      // page carries the file's name rather than its contents.
       const themeKey = config.get<string>('application.theme') as keyof typeof themes
       const theme = themes[themeKey] || themes['bluegrey-lightgreen']
+      template = template.replace(/_subtitles_/g, encodeURIComponent(subtitleFilename()))
       template = template.replace(/_title_/g, entities.encode(config.get<string>('application.name')))
       template = template.replace(/_favicon_/g, favicon())
       template = template.replace(/_bgColor_/g, theme.bgColor)
@@ -67,14 +75,16 @@ export const promotionVideo = () => {
       template = template.replace(/_primDark_/g, theme.primDark)
       const pug = (await import('pug')).default
       const fn = pug.compile(template)
-      let compiledTemplate = fn()
-      compiledTemplate = compiledTemplate.replace('<script id="subtitle"></script>', '<script id="subtitle" type="text/vtt" data-label="English" data-lang="en">' + subs + '</script>')
-      res.send(compiledTemplate)
+      res.send(fn())
     })
   }
   function favicon () {
     return utils.extractFilename(config.get('application.favicon'))
   }
+}
+
+function subtitleFilename () {
+  return utils.extractFilename(config.get<string>('application.promotion.subtitles') ?? 'owasp_promo.vtt')
 }
 
 function getSubsFromFile () {

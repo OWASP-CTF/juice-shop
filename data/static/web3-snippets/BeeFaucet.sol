@@ -12,9 +12,12 @@ contract BeeFaucet {
     uint8 public balance = 200;
 
     function withdraw(uint8 amount) public {
+        // The balance was debited first and then checked with require(balance >= 0), which
+        // is always true for an unsigned integer and so never rejected anything. The
+        // comparison that was meant is against the amount, before the subtraction.
+        require(amount <= balance, "Withdrew more than the account balance!");
         balance -= amount;
-        require(balance >= 0, "Withdrew more than the account balance!");
-        token.transfer(msg.sender, uint256(amount) * 1000000000000000000);
+        require(token.transfer(msg.sender, uint256(amount) * 1000000000000000000), "Token transfer failed");
     }
 
     function getBalance() public view returns (uint8) {

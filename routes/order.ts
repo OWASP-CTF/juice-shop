@@ -36,7 +36,14 @@ export function placeOrder () {
       .then(async (basket: BasketModel | null) => {
         if (basket != null) {
           const customer = security.authenticatedUsers.from(req)
-          const email = customer ? customer.data ? customer.data.email : '' : ''
+          // The basket id comes from the URL and was never checked against the caller, so any
+          // authenticated customer could check out somebody else's basket - taking their items
+          // and, when the wallet is the payment method, their balance.
+          if (!customer?.data?.id || basket.UserId !== customer.data.id) {
+            res.status(403).json({ error: 'Malicious activity detected.' })
+            return
+          }
+          const email = customer.data.email ?? ''
           const orderId = security.hash(email).slice(0, 4) + '-' + utils.randomHexString(16)
           const pdfFile = `order_${orderId}.pdf`
           const { default: PDFDocument } = await import('pdfkit')
@@ -67,8 +74,15 @@ export function placeOrder () {
           let totalPrice = 0
           const basketProducts: Product[] = []
           let totalPoints = 0
-          for (const { BasketItem, price, deluxePrice, name, id } of basket.Products ?? []) {
+          for (const basketProduct of basket.Products ?? []) {
+            const { BasketItem, price, deluxePrice, name, id } = basketProduct
             if (BasketItem != null) {
+              // This query loads the products with paranoid: false, so a discontinued item
+              // that is already sitting in a basket still arrives here and would be billed
+              // and shipped. It is dropped from the order rather than sold.
+              if ((basketProduct as any).deletedAt != null) {
+                continue
+              }
               challengeUtils.solveIf(challenges.christmasSpecialChallenge, () => { return BasketItem.ProductId === products.christmasSpecial.id })
               try {
                 const quantityRow = await QuantityModel.findOne({ where: { ProductId: BasketItem.ProductId } })
@@ -136,6 +150,14 @@ export function placeOrder () {
           doc.moveDown()
           doc.moveDown()
           doc.font('Times-Roman').fontSize(15).text(req.__('Thank you for your order!'))
+
+          // An order can only ever cost money. A total that has come out below zero means a
+          // quantity, a price or a discount has been manipulated somewhere upstream, and
+          // settling it would credit the customer's wallet instead of debiting it.
+          if (totalPrice < 0) {
+            next(new Error('Invalid order total'))
+            return
+          }
 
           challengeUtils.solveIf(challenges.negativeOrderChallenge, () => { return totalPrice < 0 })
 

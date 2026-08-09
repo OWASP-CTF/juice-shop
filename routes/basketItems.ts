@@ -6,6 +6,7 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import { BasketItemModel } from '../models/basketitem'
 import { QuantityModel } from '../models/quantity'
+import { ProductModel } from '../models/product'
 import * as challengeUtils from '../lib/challengeUtils'
 
 import * as utils from '../lib/utils'
@@ -85,6 +86,21 @@ export function quantityCheckBeforeBasketItemUpdate () {
 async function quantityCheck (req: Request, res: Response, next: NextFunction, id: number, quantity: number) {
   const product = await QuantityModel.findOne({ where: { ProductId: id } })
   if (product == null) {
+    throw new Error('No such product found!')
+  }
+
+  // A quantity below one is not an order. Left unchecked it multiplies through to a
+  // negative line total, and enough of it turns the whole order total negative.
+  const orderedQuantity = Number(quantity)
+  if (!Number.isInteger(orderedQuantity) || orderedQuantity < 1) {
+    res.status(400).json({ error: res.__('Invalid quantity.') })
+    return
+  }
+
+  // QuantityModel is not paranoid but ProductModel is, so a discontinued product keeps
+  // its quantity row and would otherwise still pass the stock check below.
+  const orderedProduct = await ProductModel.findByPk(id)
+  if (orderedProduct == null) {
     throw new Error('No such product found!')
   }
 

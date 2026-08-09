@@ -7,9 +7,10 @@ import path from 'node:path'
 import { type Request, type Response, type NextFunction } from 'express'
 
 import * as utils from '../lib/utils'
-import * as security from '../lib/insecurity'
 import { challenges } from '../data/datacache'
 import * as challengeUtils from '../lib/challengeUtils'
+
+const NULL_BYTE = String.fromCharCode(0)
 
 export function servePublicFiles () {
   return ({ params, query }: Request, res: Response, next: NextFunction) => {
@@ -24,9 +25,7 @@ export function servePublicFiles () {
   }
 
   function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
-
+    if (file && !containsPoisonNullByte(file) && endsWithAllowlistedFileType(file)) {
       challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
       verifySuccessfulPoisonNullByteExploit(file)
 
@@ -37,16 +36,22 @@ export function servePublicFiles () {
     }
   }
 
+  // Left in place deliberately. The null-byte and file-type checks above are what stop these
+  // files from being served; this only records the fact when one of them is reached, and
+  // deleting it would hide the outcome rather than prevent it.
   function verifySuccessfulPoisonNullByteExploit (file: string) {
     challengeUtils.solveIf(challenges.easterEggLevelOneChallenge, () => { return file.toLowerCase() === 'eastere.gg' })
     challengeUtils.solveIf(challenges.forgottenDevBackupChallenge, () => { return file.toLowerCase() === 'package.json.bak' })
     challengeUtils.solveIf(challenges.forgottenBackupChallenge, () => { return file.toLowerCase() === 'coupons_2013.md.bak' })
     challengeUtils.solveIf(challenges.misplacedSignatureFileChallenge, () => { return file.toLowerCase() === 'suspicious_errors.yml' })
-
     challengeUtils.solveIf(challenges.nullByteChallenge, () => {
       return challenges.easterEggLevelOneChallenge.solved || challenges.forgottenDevBackupChallenge.solved || challenges.forgottenBackupChallenge.solved ||
         challenges.misplacedSignatureFileChallenge.solved || file.toLowerCase() === 'encrypt.pyc'
     })
+  }
+
+  function containsPoisonNullByte (param: string) {
+    return param.includes(NULL_BYTE) || param.toLowerCase().includes('%00')
   }
 
   function endsWithAllowlistedFileType (param: string) {

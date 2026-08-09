@@ -7,7 +7,6 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from 'models/user'
-import expressJwt from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -51,10 +50,69 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt(({ secret: publicKey }) as any)
-export const denyAll = () => expressJwt({ secret: '' + Math.random() } as any)
+// Tokens are minted RS256 and nothing else is legitimate. The two-argument jws.verify
+// takes the algorithm from the token's own header, so a token declaring alg:none, or one
+// signed HS256 using the RSA public key that is published at /encryptionkeys/jwt.pub,
+// would verify against this same key. The header is therefore pinned before the
+// signature is trusted, and express-jwt 0.1.3 forwards no algorithm restriction of its
+// own, so the same check runs in front of it.
+const hasAcceptedAlgorithm = (token: string) => {
+  try {
+    return jws.decode(token)?.header?.alg === 'RS256'
+  } catch {
+    return false
+  }
+}
+
+// A bearer token is only ever honoured when it carries the RS256 signature this shop
+// issues. Applied once in front of every route, so a forged token is refused before any
+// handler, detector or session lookup sees it rather than at each verification site.
+export const denyForgedTokenAlgorithm = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req) || req.cookies?.token
+    if (token && !hasAcceptedAlgorithm(token)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    next()
+  }
+}
+
+// express-jwt 0.1.3 is a 2013 release with published advisories and no maintained upgrade
+// path that keeps this application's behaviour, so the dependency is gone rather than
+// bumped. What it did here was small and is done directly: take the bearer token, insist on
+// the RS256 signature this shop issues, reject anything expired, and hand the claims to the
+// handler. Verification is no longer delegated to a library that decides which algorithm to
+// trust by reading the token's own header.
+export const isAuthorized = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = utils.jwtFrom(req)
+    if (!token || !verify(token)) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    const claims = decode(token) as { exp?: number } | undefined
+    if (!claims || (typeof claims.exp === 'number' && claims.exp * 1000 <= Date.now())) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+    const authenticated = req as Request & { user?: unknown }
+    authenticated.user = claims
+    next()
+  }
+}
+// These routes have no authorised caller at all, so this denies unconditionally rather
+// than checking a token against a random secret - a check alg:none walked straight past.
+export const denyAll = () => (req: Request, res: Response, next: NextFunction) => {
+  res.status(401).json({ error: 'Unauthorized' })
+}
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256' })
-export const verify = (token: string) => token ? (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey) : false
+export const verify = (token: string) => {
+  if (!token || !hasAcceptedAlgorithm(token)) {
+    return false
+  }
+  return (jws.verify as ((token: string, secret: string) => boolean))(token, publicKey)
+}
 export const decode = (token: string) => { return jws.decode(token)?.payload }
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
@@ -77,7 +135,19 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     this.idMap[user.data.id] = token
   },
   get: function (token?: string) {
-    return token ? this.tokenMap[utils.unquote(token)] : undefined
+    if (!token) {
+      return undefined
+    }
+    // The map is keyed by the raw token string, so any caller holding a string that happens
+    // to be a key was treated as that session - including one presented in a cookie, which
+    // several routes read without going through isAuthorized() at all. The signature is
+    // therefore checked here too, so a session is only ever handed out for a token this
+    // shop actually issued.
+    const presented = utils.unquote(token)
+    if (!verify(presented)) {
+      return undefined
+    }
+    return this.tokenMap[presented]
   },
   tokenOf: function (user: UserModel) {
     return user ? this.idMap[user.id] : undefined
@@ -87,8 +157,12 @@ export const authenticatedUsers: IAuthenticatedUsers = {
     return token ? this.get(token) : undefined
   },
   updateFrom: function (req: Request, user: ResponseWithUser) {
+    // Writing an unverified token into the map would create the very session the lookup
+    // above refuses to hand out, so the same check applies on the way in.
     const token = utils.jwtFrom(req)
-    this.put(token, user)
+    if (token && verify(token)) {
+      this.put(token, user)
+    }
   }
 }
 
@@ -123,9 +197,6 @@ function hasValidFormat (coupon: string) {
 // vuln-code-snippet start redirectCryptoCurrencyChallenge redirectChallenge
 export const redirectAllowlist = new Set([
   'https://github.com/juice-shop/juice-shop',
-  'https://blockchain.info/address/1AbKfgvw9psQ41NbLi8kufDQTezwG8DRZm', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://explorer.dash.org/address/Xr556RzuwX6hg5EGpkybbv5RanJoZN17kW', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
-  'https://etherscan.io/address/0x0f933ab9fcaaa782d0279c300d73750e1311eae6', // vuln-code-snippet vuln-line redirectCryptoCurrencyChallenge
   'http://shop.spreadshirt.com/juiceshop',
   'http://shop.spreadshirt.de/juiceshop',
   'https://www.stickeryou.com/products/owasp-juice-shop/794',
@@ -135,7 +206,7 @@ export const redirectAllowlist = new Set([
 export const isRedirectAllowed = (url: string) => {
   let allowed = false
   for (const allowedUrl of redirectAllowlist) {
-    allowed = allowed || url.includes(allowedUrl) // vuln-code-snippet vuln-line redirectChallenge
+    allowed = allowed || url === allowedUrl // vuln-code-snippet vuln-line redirectChallenge
   }
   return allowed
 }
@@ -164,6 +235,51 @@ export const isAccounting = () => {
   }
 }
 
+// The administration screen is guarded in the browser by AdminGuard, which decodes the
+// token without verifying it, so the role it reads is supplied by the caller. This
+// verifies the signature before the role claim is read.
+export const isAdmin = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
+    if (decodedToken?.data?.role === roles.admin) {
+      next()
+    } else {
+      res.status(403).json({ error: 'Malicious activity detected' })
+    }
+  }
+}
+
+// A state-changing endpoint that authorises from the ambient session cookie is reachable
+// by any page the victim happens to visit. A request that states where it came from has to
+// state this host; one that states nothing is left alone, so ordinary non-browser clients
+// and the shop's own same-origin forms keep working and only genuine cross-site
+// submissions are refused.
+export const sameOriginOnly = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const statedOrigin = req.headers.origin ?? req.headers.referer
+    if (!statedOrigin) {
+      // A request that states no origin at all cannot be shown to have come from this shop,
+      // and letting it through made the guard trivially avoidable: a cross-site form or a
+      // scripted client simply omits both headers. State-changing account endpoints require
+      // a stated, matching origin.
+      res.status(403).json({ error: 'A same-origin request is required' })
+      return
+    }
+    let statedHost
+    try {
+      statedHost = new URL(statedOrigin).host
+    } catch {
+      res.status(403).json({ error: 'Cross-site request refused' })
+      return
+    }
+    if (statedHost !== req.headers.host) {
+      res.status(403).json({ error: 'Cross-site request refused' })
+      return
+    }
+    next()
+  }
+}
+
 export const isDeluxe = (req: Request) => {
   const decodedToken = verify(utils.jwtFrom(req)) && decode(utils.jwtFrom(req))
   return decodedToken?.data?.role === roles.deluxe && decodedToken?.data?.deluxeToken && decodedToken?.data?.deluxeToken === deluxeToken(decodedToken?.data?.email)
@@ -177,7 +293,14 @@ export const isCustomer = (req: Request) => {
 export const appendUserId = () => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
-      req.body.UserId = authenticatedUsers.tokenMap[utils.jwtFrom(req)].data.id
+      // Reading tokenMap directly skipped the signature check that authenticatedUsers.get
+      // performs, so the owning user id was taken from an unverified token.
+      const user = authenticatedUsers.from(req)
+      if (!user?.data?.id) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' })
+        return
+      }
+      req.body.UserId = user.data.id
       next()
     } catch (error: unknown) {
       res.status(401).json({ status: 'error', message: utils.getErrorMessage(error) })
@@ -187,7 +310,9 @@ export const appendUserId = () => {
 
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
-  if (token) {
+  // jsonwebtoken 0.4.0 also reads the algorithm out of the header, so a forged token
+  // would be admitted to the session map here even though the guards reject it elsewhere.
+  if (token && hasAcceptedAlgorithm(token)) {
     jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
       if (err === null) {
         if (authenticatedUsers.get(token) === undefined) {
