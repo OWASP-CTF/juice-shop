@@ -6,12 +6,16 @@
 import config from 'config'
 import { type Request, type Response } from 'express'
 
+import { withoutUnreleasedTokenSale } from './tokenSale'
+
 export function retrieveAppConfiguration () {
   return (_req: Request, res: Response) => {
     const safeConfig = structuredClone(config.util.toObject(config))
     if (safeConfig.application?.chatBot) {
       delete safeConfig.application.chatBot.llmApiUrl
     }
+    /* The unreleased altcoin name is token sale material and is not published yet. */
+    withoutUnreleasedTokenSale(safeConfig)
     res.json({ config: safeConfig })
   }
 }
