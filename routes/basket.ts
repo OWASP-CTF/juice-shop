@@ -17,6 +17,20 @@ export function retrieveBasket () {
     try {
       const id = req.params.id
       const basket = await BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
+      // The basket id travels in the path and the client can edit it, so a session may
+      // only read its own basket. The refusal is issued before anything else so a caller
+      // never reaches somebody else's basket contents. A session that cannot be resolved
+      // at all is left to the authorisation middleware rather than refused here, so a
+      // valid token that predates this process still behaves as it did before.
+      const requester = security.authenticatedUsers.from(req)
+      if (requester != null && basket != null) {
+        const ownsByUserId = requester.data?.id === basket.UserId
+        const ownsByBasketId = requester.bid !== undefined && Number(requester.bid) === parseInt(id, 10)
+        if (!ownsByUserId && !ownsByBasketId) {
+          res.status(403).json({ error: 'Malicious activity detected' })
+          return
+        }
+      }
       /* jshint eqeqeq:false */
       challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
         const user = security.authenticatedUsers.from(req)

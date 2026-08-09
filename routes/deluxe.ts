@@ -21,6 +21,14 @@ export function upgradeToDeluxe () {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
+      // Every route to the upgrade has to pass a payment check. An unrecognised mode used
+      // to fall past both branches straight into the role update, so membership could be
+      // granted without any payment happening at all.
+      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
+        res.status(400).json({ status: 'error', error: 'Invalid payment mode' })
+        return
+      }
+
       if (req.body.paymentMode === 'wallet') {
         const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
         if ((wallet != null) && wallet.balance < 49) {
