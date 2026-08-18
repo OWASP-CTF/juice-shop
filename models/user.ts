@@ -46,11 +46,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         defaultValue: '',
         set (username: string) {
-          if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
-            username = security.sanitizeLegacy(username)
-          } else {
-            username = security.sanitizeSecure(username)
-          }
+          // Always apply the robust, allow-list based sanitizer. The weaker
+          // regex-based legacy sanitizer must never be used to persist
+          // user-controlled input, regardless of challenge enablement state,
+          // since that flag collapses to "enabled" whenever Safety Mode is off.
+          username = security.sanitizeSecure(username)
           this.setDataValue('username', username)
         }
       },
@@ -58,6 +58,11 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
         type: DataTypes.STRING,
         unique: true,
         set (email: string) {
+          // The address is cleaned up front, so the value examined below is the one that will
+          // really end up on the account and be echoed back on the profile and admin screens.
+          // Anything markup-like is already gone by then, which is why nothing here can turn into
+          // a stored script no matter what the registration form was fed.
+          email = security.sanitizeSecure(email)
           if (utils.isChallengeEnabled(challenges.persistedXssUserChallenge)) {
             challengeUtils.solveIf(challenges.persistedXssUserChallenge, () => {
               return utils.contains(
@@ -65,8 +70,6 @@ const UserModelInit = (sequelize: Sequelize) => { // vuln-code-snippet start wea
                 '<iframe src="javascript:alert(`xss`)">'
               )
             })
-          } else {
-            email = security.sanitizeSecure(email)
           }
           this.setDataValue('email', email)
         }

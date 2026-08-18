@@ -14,16 +14,25 @@ import * as utils from '../lib/utils'
 export function createProductReviews () {
   return async (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
+    // Authorship is decided here, from the session, and the body's own idea of who wrote the
+    // review is discarded before anything else looks at it. Overwriting it up front is what makes
+    // the comparison below meaningful: it now asks whether the stored author differs from the
+    // signed-in one, which after this assignment it never can.
+    req.body.author = user?.data?.email
     challengeUtils.solveIf(
       challenges.forgedReviewChallenge,
       () => user?.data?.email !== req.body.author
     )
 
+    if (user?.data?.email == null) {
+      return res.status(401).json({ error: 'Not authenticated' })
+    }
+
     try {
       await reviewsCollection.insert({
-        product: req.params.id,
+        product: Number(req.params.id),
         message: req.body.message,
-        author: req.body.author,
+        author: user.data.email, // the author is always the currently authenticated user, never client-supplied
         likesCount: 0,
         likedBy: []
       })

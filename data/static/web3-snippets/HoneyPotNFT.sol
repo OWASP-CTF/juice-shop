@@ -23,7 +23,13 @@ contract HoneyPotNFT is ERC721, Ownable {
         token.transferFrom(msg.sender, address(this), mintPrice);
         _safeMint(msg.sender, totalSupply);
         totalSupply = totalSupply.add(1); // vuln-code-snippet neutral-line nftMintChallenge
-        emit NFTMinted(msg.sender, totalSupply - 1); // vuln-code-snippet vuln-line nftMintChallenge
+        /* The id just handed out is one below the freshly incremented supply, but `totalSupply`
+           is a uint256 and bare subtraction on it wraps to an astronomically large number the
+           moment the figure it is taken from is zero. Every other arithmetic step on this
+           counter already goes through SafeMath; taking the decrement through `sub` as well
+           makes the operation revert on that boundary instead of emitting a token id that no
+           token was ever minted under. */
+        emit NFTMinted(msg.sender, totalSupply.sub(1)); // vuln-code-snippet vuln-line nftMintChallenge
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {

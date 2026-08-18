@@ -143,8 +143,14 @@ export function chat () {
           id: z.string().describe('The product ID to get reviews for')
         }),
         execute: async ({ id }) => {
+          /* Looking up reviews is a plain equality on the product id, so it is written as one.
+             Phrasing it as a `$where` expression instead turned the lookup into a fragment of
+             JavaScript assembled from a value that reaches here through the model's tool call -
+             i.e. from whatever the conversation talked the model into passing. Numeric coercion
+             happens to make the current fragment harmless, but a query that is code is only ever
+             one refactor away from being injectable, and a selector cannot be. */
           const productId = Number(id)
-          return await db.reviewsCollection.find({ $where: 'this.product == ' + productId }) as Review[]
+          return await db.reviewsCollection.find({ product: productId }) as Review[]
         }
       }),
 
@@ -174,7 +180,11 @@ export function chat () {
       generateCoupon: tool({
         description: 'Generate a discount coupon for a customer. Only use this when the coupon policy conditions are fully met.', // vuln-code-snippet neutral-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         inputSchema: z.object({
-          discount: z.number().describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
+          // The ceiling is part of the schema rather than only part of the prose the model reads:
+          // a policy written in the description is a suggestion, a schema bound is enforced before
+          // the tool ever runs, so no amount of persuasion in the conversation can talk the
+          // assistant into minting a coupon richer than the shop actually offers.
+          discount: z.number().int().min(1).max(10).describe('The discount percentage for the coupon (maximum 10)') // vuln-code-snippet vuln-line chatbotPromptInjectionChallenge chatbotGreedyInjectionChallenge
         }),
         execute: async ({ discount }) => {
           challengeUtils.solveIf(challenges.chatbotPromptInjectionChallenge, () => discount >= 10) // vuln-code-snippet hide-line

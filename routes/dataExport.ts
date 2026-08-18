@@ -23,14 +23,24 @@ export function dataExport () {
 
         let memories, orders, reviews
         try {
-          memories = await MemoryModel.findAll({ where: { UserId: req.body.UserId } })
+          /* Whose data this export covers is settled by the session, never by the request body.
+             Taking the id from the body let a caller name somebody else and receive that
+             person's uploads back in their own export. */
+          memories = await MemoryModel.findAll({ where: { UserId: loggedInUser.data.id } })
         } catch (error) {
           next(error)
           return
         }
 
         try {
-          orders = await db.ordersCollection.find({ email: updatedEmail })
+          /* Orders are filed under the email with its vowels blanked out, which is not a
+             identifier at all - it collides freely, so two customers whose addresses differ
+             only in their vowels each get the other's order history in their export. The order
+             id itself carries a hash of the address that placed it (see routes/order.ts), so
+             that is what decides ownership; the masked address is only narrowing the search. */
+          const ownOrderPrefix = security.hash(email).slice(0, 4)
+          orders = (await db.ordersCollection.find({ email: updatedEmail }))
+            .filter((order: { orderId?: string }) => order.orderId?.split('-')[0] === ownOrderPrefix)
         } catch (error) {
           next(new Error(`Error retrieving orders for ${updatedEmail}`))
           return
