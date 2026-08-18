@@ -1,26 +1,74 @@
+import crypto from 'node:crypto'
 import { type Request, type Response } from 'express'
 import * as challengeUtils from '../lib/challengeUtils'
 import * as utils from '../lib/utils'
 import { challenges } from '../data/datacache'
 
+interface WalletKeys {
+  privateKey: string
+  publicKey: string
+  address: string
+}
+
+/*
+ * A BIP-39 seed phrase is not a piece of configuration that merely unlocks a wallet, it *is* the
+ * wallet: every key it can ever derive follows from those twelve words. Writing one into a tracked
+ * file therefore hands the wallet to everyone who clones the repository, mirrors it, pulls a
+ * published image built from it or simply searches the web for the phrase - and no later edit can
+ * take that back, because the phrase stays readable in the history.
+ *
+ * The endpoint below only ever needs the *derived* keys, to compare them against whatever a visitor
+ * submits, so the phrase itself belongs in the deployment's environment next to the other secrets:
+ * set NFT_WALLET_MNEMONIC to use a specific wallet. When it is unset - which is the case for a
+ * plain checkout - a throwaway wallet is generated in memory on first use, so a default install
+ * carries no long-lived secret at all and there is nothing left in the source tree to leak.
+ */
+let pendingWalletKeys: Promise<WalletKeys> | null = null
+
+async function deriveWalletKeys (): Promise<WalletKeys> {
+  const { HDNodeWallet, Wallet } = await import('ethers')
+  const configuredMnemonic = process.env.NFT_WALLET_MNEMONIC?.trim()
+  const wallet = configuredMnemonic ? HDNodeWallet.fromPhrase(configuredMnemonic) : Wallet.createRandom()
+  return { privateKey: wallet.privateKey, publicKey: wallet.publicKey, address: wallet.address }
+}
+
+async function walletKeys (): Promise<WalletKeys> {
+  // Derived once and reused, so that the generated wallet stays stable for the lifetime of the process.
+  pendingWalletKeys ??= deriveWalletKeys()
+  try {
+    return await pendingWalletKeys
+  } catch (error) {
+    pendingWalletKeys = null // a misconfigured phrase must not poison every later request
+    throw error
+  }
+}
+
+/*
+ * `===` on two strings stops at the first character that differs, so a rejected guess takes
+ * measurably longer the more of its prefix was right. Repeated often enough that difference alone
+ * reconstructs the key one character at a time, which is why every comparison against the wallet
+ * goes through a length check plus a comparison that always inspects every byte.
+ */
+function matchesSecret (candidate: unknown, secret: string): boolean {
+  if (typeof candidate !== 'string') return false
+  const offered = Buffer.from(candidate, 'utf8')
+  const expected = Buffer.from(secret, 'utf8')
+  return offered.length === expected.length && crypto.timingSafeEqual(offered, expected)
+}
+
 export function checkKeys () {
   return async (req: Request, res: Response) => {
     try {
-      const { HDNodeWallet } = await import('ethers')
-      const mnemonic = 'purpose betray marriage blame crunch monitor spin slide donate sport lift clutch'
-      const mnemonicWallet = HDNodeWallet.fromPhrase(mnemonic)
-      const privateKey = mnemonicWallet.privateKey
-      const publicKey = mnemonicWallet.publicKey
-      const address = mnemonicWallet.address
-      challengeUtils.solveIf(challenges.nftUnlockChallenge, () => {
-        return req.body.privateKey === privateKey
-      })
-      if (req.body.privateKey === privateKey) {
+      const { privateKey, publicKey, address } = await walletKeys()
+      const submitted: unknown = req.body?.privateKey
+      const unlocked = matchesSecret(submitted, privateKey)
+      challengeUtils.solveIf(challenges.nftUnlockChallenge, () => unlocked)
+      if (unlocked) {
         res.status(200).json({ success: true, message: 'Challenge successfully solved', status: challenges.nftUnlockChallenge })
       } else {
-        if (req.body.privateKey === address) {
+        if (matchesSecret(submitted, address)) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public address of my ethereum wallet!', status: challenges.nftUnlockChallenge })
-        } else if (req.body.privateKey === publicKey) {
+        } else if (matchesSecret(submitted, publicKey)) {
           res.status(401).json({ success: false, message: 'Looks like you entered the public key of my ethereum wallet!', status: challenges.nftUnlockChallenge })
         } else {
           res.status(401).json({ success: false, message: 'Looks like you entered a non-Ethereum private key to access me.', status: challenges.nftUnlockChallenge })

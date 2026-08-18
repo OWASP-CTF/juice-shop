@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { Component, inject, OnInit } from '@angular/core'
-import { DomSanitizer } from '@angular/platform-browser'
+import { Component, OnInit } from '@angular/core'
 import { jwtDecode } from 'jwt-decode'
 import { TranslateModule } from '@ngx-translate/core'
 import { MatCardModule } from '@angular/material/card'
@@ -17,9 +16,13 @@ import { MatCardModule } from '@angular/material/card'
 })
 
 export class LastLoginIpComponent implements OnInit {
-  private readonly sanitizer = inject(DomSanitizer)
-
-  lastLoginIp: any = '?'
+  /* The address shown here comes from a request header the visitor writes themselves, so it is a
+     string of unknown provenance and nothing more. It used to be pasted into a fragment of markup
+     that was then handed to the sanitiser bypass, which tells Angular to trust the result and
+     insert it as HTML - the one thing that turns an attacker-authored string into an attacker-
+     authored element. There is nothing to mark up: the wrapper is part of the template, and the
+     value is bound as text so the framework escapes it like any other piece of data. */
+  lastLoginIp = '?'
 
   ngOnInit (): void {
     try {
@@ -35,8 +38,7 @@ export class LastLoginIpComponent implements OnInit {
     if (token) {
       payload = jwtDecode(token)
       if (payload.data.lastLoginIp) {
-
-        this.lastLoginIp = this.sanitizer.bypassSecurityTrustHtml(`<small>${payload.data.lastLoginIp}</small>`)
+        this.lastLoginIp = String(payload.data.lastLoginIp)
       }
     }
   }

@@ -130,6 +130,9 @@ export class ContactComponent implements OnInit {
     this.captchaControl.markAsUntouched()
     this.captchaControl.markAsPristine()
     this.captchaControl.setValue('')
+    // The puzzle that was just answered is spent on the server, so the form asks for a fresh one
+    // instead of keeping an id that can no longer be redeemed.
+    this.getNewCaptcha()
   }
 
   resetCaptcha () {

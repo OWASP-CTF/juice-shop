@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import config from 'config'
-import * as utils from '../utils'
 import { Server } from 'socket.io'
 import { notifications, challenges } from '../../data/datacache'
 import * as challengeUtils from '../challengeUtils'
@@ -38,10 +36,10 @@ const registerWebsocketEvents = (server: any) => {
       }
     })
 
-    socket.on('verifyLocalXssChallenge', (data: any) => {
-      challengeUtils.solveIf(challenges.localXssChallenge, () => { return utils.contains(data, '<iframe src="javascript:alert(`xss`)">') })
-      challengeUtils.solveIf(challenges.xssBonusChallenge, () => { return utils.contains(data, config.get('challenges.xssBonusPayload')) })
-    })
+    /* The search page no longer reports the term it was given: the term is bound as an untrusted
+       string now, so there is no injection left for this channel to describe. Keeping the handler
+       would leave the shop taking a client's word for what happened on that page - anyone able to
+       open a socket could announce a payload that was never rendered anywhere. */
 
     socket.on('verifySvgInjectionChallenge', (data: any) => {
       challengeUtils.solveIf(challenges.svgInjectionChallenge, () => { return data?.match(/.*\.\.\/\.\.\/\.\.[\w/-]*?\/redirect\?to=https?:\/\/placecats.com\/(g\/)?[\d]+\/[\d]+.*/) && security.isRedirectAllowed(data) })

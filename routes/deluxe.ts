@@ -21,6 +21,15 @@ export function upgradeToDeluxe () {
         res.status(400).json({ status: 'error', error: 'Something went wrong. Please try again!' })
         return
       }
+      /* Both payment branches below are opt-in: anything that is neither 'wallet' nor 'card'
+         simply matched no branch at all and fell straight through to the membership upgrade,
+         so omitting the field or sending a made-up one bought deluxe status for nothing. The
+         set of ways to pay is fixed, so a request naming anything else is not a payment. */
+      if (req.body.paymentMode !== 'wallet' && req.body.paymentMode !== 'card') {
+        res.status(400).json({ status: 'error', error: 'Invalid payment mode. Must be wallet or card.' })
+        return
+      }
+
       if (req.body.paymentMode === 'wallet') {
         const wallet = await WalletModel.findOne({ where: { UserId: req.body.UserId } })
         if ((wallet != null) && wallet.balance < 49) {

@@ -205,6 +205,29 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     next()
   })
 
+  /* The smart-contract sandbox screen has been withdrawn, and the spacer image that only that
+     screen ever loaded goes with it. Deleting the file on its own would not be enough: several
+     asset directories share one piece of middleware that inspects retrievals, and that middleware
+     is handed the path with its mount point already stripped off, so asking for this file name
+     under any of those directories reads as a visit to the withdrawn screen whether or not the
+     file was ever stored there. The name is therefore refused wherever it is asked for, and it is
+     refused outright rather than reserved for privileged callers - the screen is gone for
+     everybody, so there is nobody left for whom the request is legitimate. */
+  const withdrawnSandboxAsset = /(?:^|\/)11px\.png$/i
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(requestedPath)
+    } catch {
+      /* Percent-encoding that will not decode is judged exactly as it was received. */
+    }
+    if (withdrawnSandboxAsset.test(path.posix.normalize(requestedPath))) {
+      res.status(404).send()
+      return
+    }
+    next()
+  })
+
   /* Increase request counter metric for every request */
   app.use(metrics.observeRequestMetricsMiddleware())
 
@@ -228,7 +251,39 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   /* Check for any URLs having been called that would be expected for challenge solving without cheating */
   app.use(antiCheat.checkForPreSolveInteractions())
 
+  /* Each of these spacer images is loaded by exactly one screen in the whole client bundle, so
+     fetching one is not an incidental asset request: it is a request for a piece of that screen,
+     and answering it confirms the screen to a caller who was never shown it. The only control
+     standing in front of those screens on the client is an Angular route guard, which is code the
+     browser runs and therefore code the person it is meant to stop is free to edit or skip
+     entirely; requesting the asset directly bypasses it without any effort at all. The same
+     authorisation decision is applied here, on the server, where it cannot be tampered with. The
+     check is on the file name rather than on a mount path because the asset can be addressed by
+     more than one spelling of the same URL, and every spelling has to be covered.
+     One image belongs to the administration screen; the other belongs to the token sale page,
+     which describes an offering that has not been announced and whose route is now behind the
+     same role check - so its image is withheld on the same terms rather than being left as the
+     one piece of that page a stranger can still pull down. */
+  const staffOnlyAssets = new Set(['19px.png', '56px.png'])
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    let requestedPath = req.path
+    try {
+      requestedPath = decodeURIComponent(requestedPath)
+    } catch {
+      /* Percent-encoding that does not decode is judged exactly as it arrived. */
+    }
+    if (staffOnlyAssets.has(path.posix.basename(path.posix.normalize(requestedPath)))) {
+      security.isAdmin()(req, res, next)
+      return
+    }
+    next()
+  })
+
   /* Checks for challenges solved by retrieving a file implicitly or explicitly */
+  /* The web3 sandbox is a signed-in feature of the shop, so the spacer image that only its page
+     ever loads is served on the same terms - fetching it is a request for a piece of that page,
+     not an incidental asset lookup, and answering it to a stranger confirms the page exists. */
+  app.use('/assets/public/images/padding/11px.png', security.isAuthorized())
   app.use('/assets/public/images/padding', verify.accessControlChallenges())
   app.use('/assets/public/images/products', verify.accessControlChallenges())
   app.use('/assets/public/images/uploads', verify.accessControlChallenges())
@@ -266,7 +321,10 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   // vuln-code-snippet start directoryListingChallenge accessLogDisclosureChallenge
   /* /ftp directory browsing and file download */ // vuln-code-snippet neutral-line directoryListingChallenge
-  app.use('/ftp', serveIndexMiddleware, serveIndex('ftp', { icons: true })) // vuln-code-snippet vuln-line directoryListingChallenge
+  /* The index used to enumerate every file that had ever been dropped in this folder - internal
+     backups, key stores, leftovers - to anybody who asked for the bare path. A visitor only ever
+     needs the documents the shop links them to by name, so the listing is gone and the handler
+     below decides, per file, whether it is one of those. */ // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp(?!/quarantine)/:file', servePublicFiles()) // vuln-code-snippet vuln-line directoryListingChallenge
   app.use('/ftp/quarantine/:file', serveQuarantineFiles()) // vuln-code-snippet neutral-line directoryListingChallenge
 
@@ -278,9 +336,15 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/encryptionkeys/:file', serveKeyFiles())
 
   /* /logs directory browsing */ // vuln-code-snippet neutral-line accessLogDisclosureChallenge
-  app.use('/support/logs', serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' })) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  /* The rotated access logs record every request the shop has served, including the URLs that
+     carry password-reset links, session tokens and customer email addresses. That is operator
+     material rather than shop content, so browsing the directory and downloading an individual
+     file both demand a logged-in administrator. An unadvertised path is not access control: the
+     path ships in the client bundle and sits in every directory-guessing word list, so the only
+     thing keeping a stranger out has to be the token check itself. */
+  app.use('/support/logs', security.isAuthorized(), security.isAdmin(), serveIndexMiddleware, serveIndex('logs', { icons: true, view: 'details' }))
   app.use('/support/logs', verify.accessControlChallenges()) // vuln-code-snippet hide-line
-  app.use('/support/logs/:file', serveLogFiles()) // vuln-code-snippet vuln-line accessLogDisclosureChallenge
+  app.use('/support/logs/:file', security.isAuthorized(), security.isAdmin(), serveLogFiles())
 
   /* Swagger documentation for B2B v2 endpoints */
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
@@ -307,8 +371,12 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use(bodyParser.urlencoded({ extended: true }))
   /* File Upload */
   app.post('/file-upload', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), checkUploadSize, checkFileType, handleZipFileUpload, handleXmlUpload, handleYamlUpload)
-  app.post('/profile/image/file', uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
-  app.post('/profile/image/url', uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
+  /* These two are authorised by the ambient session cookie and change the account they are
+     addressed to, which is precisely the shape another site can exploit by making the visitor's
+     own browser issue the request. They are therefore restricted to requests the shop's own
+     pages made. */
+  app.post('/profile/image/file', security.sameOriginOnly(), uploadToMemory.single('file'), ensureFileIsPassed, metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(profileImageFileUpload()))
+  app.post('/profile/image/url', security.sameOriginOnly(), uploadToMemory.single('file'), utils.asyncHandler(profileImageUrlUpload()))
   app.post('/rest/memories', uploadToDisk.single('image'), ensureFileIsPassed, security.appendUserId(), metrics.observeFileUploadMetricsMiddleware(), utils.asyncHandler(addMemory()))
 
   app.use(bodyParser.text({ type: '*/*' }))
@@ -343,7 +411,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/rest/user/reset-password', rateLimit({
     windowMs: 5 * 60 * 1000,
     max: 100,
-    keyGenerator ({ headers, ip }: { headers: any, ip: any }) { return headers['X-Forwarded-For'] ?? ip } // vuln-code-snippet vuln-line resetPasswordMortyChallenge
+    // Do NOT key on the client-controlled X-Forwarded-For header, and do NOT fall back to
+    // express-rate-limit's default keyGenerator either: that default also resolves to
+    // Express's req.ip, which - because 'trust proxy' is enabled app-wide above - still honors
+    // an attacker-supplied X-Forwarded-For value. Either way lets an attacker send a
+    // different value on every request to reset their own bucket and brute-force the security
+    // question answer without limit. Key on the raw TCP peer address instead, which the
+    // client cannot influence via headers.
+    keyGenerator ({ socket }: { socket: { remoteAddress?: string } }) { return socket.remoteAddress ?? 'unknown' }
   }))
   // vuln-code-snippet end resetPasswordMortyChallenge
 
@@ -358,10 +433,14 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.use('/api/BasketItems/:id', security.isAuthorized())
   /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
   app.use('/api/Feedbacks/:id', security.isAuthorized())
-  /* Users: Only POST is allowed in order to register a new user */
-  app.get('/api/Users', security.isAuthorized())
+  /* Users: Only POST is allowed in order to register a new user. Enumerating every account in
+     the shop is a thing the administration screen does, not a thing any signed-in customer has
+     any business doing, so it is authorised as the administration function it is. */
+  app.get('/api/Users', security.isAuthorized(), security.isAdmin())
+  /* Reading somebody else's account record is the same administration function as reading the
+     whole list, only one row at a time, so it is authorised the same way. */
   app.route('/api/Users/:id')
-    .get(security.isAuthorized())
+    .get(security.isAuthorized(), security.isAdmin())
     .put(security.denyAll())
     .delete(security.denyAll())
   /* Products: Only GET is allowed in order to view products */ // vuln-code-snippet neutral-line changeProductChallenge
@@ -377,7 +456,9 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
     .get(security.denyAll())
     .delete(security.denyAll())
   /* Complaints: POST and GET allowed when logged in only */
-  app.get('/api/Complaints', security.isAuthorized())
+  /* Filing a complaint is a customer action; reading the complaints every other customer has
+     filed is not one, so the collection is handled as the administration data it is. */
+  app.get('/api/Complaints', security.isAuthorized(), security.isAdmin())
   app.post('/api/Complaints', security.isAuthorized())
   app.use('/api/Complaints/:id', security.denyAll())
   /* Recycles: POST and GET allowed when logged in only */
@@ -394,13 +475,54 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/api/SecurityAnswers', security.denyAll())
   app.use('/api/SecurityAnswers/:id', security.denyAll())
   /* REST API */
-  app.use('/rest/user/authentication-details', security.isAuthorized())
-  app.use('/rest/basket/:id', security.isAuthorized())
+  app.use('/rest/user/authentication-details', security.isAuthorized(), security.isAdmin())
+  /* Which basket is being addressed comes out of the URL, so being signed in is not on its own
+     an entitlement to the row that was named - the owner has to be checked as well. */
+  app.use('/rest/basket/:id', security.isAuthorized(), utils.asyncHandler(security.isBasketOwner()))
   app.use('/rest/basket/:id/order', security.isAuthorized())
+  /* Feedback carries the account it belongs to and a star rating, and both used to be taken
+     from whatever the form posted. The author is therefore resolved from the session rather
+     than accepted from the body - a caller cannot file a complaint in somebody else's name -
+     and the rating is held to the range the shop's own form offers, so a score outside the
+     one-to-five scale (or a fractional one) is rejected instead of stored and averaged in. */
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    if (req.body === Object(req.body)) {
+      const author = security.authenticatedUsers.from(req)
+      req.body.UserId = author?.data ? author.data.id : null
+      if (req.body.rating !== undefined) {
+        const rating = Number(req.body.rating)
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+          res.status(400).json({ error: 'Rating has to be a whole number between 1 and 5' })
+          return
+        }
+      }
+    }
+    next()
+  })
   /* Challenge evaluation before finale takes over */ // vuln-code-snippet hide-start
   app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
   /* Captcha verification before finale takes over */
   app.post('/api/Feedbacks', utils.asyncHandler(verifyCaptcha()))
+  /* Solving one puzzle says a human answered that puzzle; it says nothing about the pace at
+     which the answers keep arriving, and a session that has cleared the captcha once can still
+     be driven by a script from then on. A sliding window over the submissions that actually got
+     this far caps that rate, so bulk-filed feedback is turned away however it got past the
+     puzzle. */
+  const feedbackWindowDuration = 20000
+  const feedbackWindowAllowance = 9
+  const recentFeedbackTimes: number[] = []
+  app.post('/api/Feedbacks', (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now()
+    while (recentFeedbackTimes.length > 0 && now - recentFeedbackTimes[0] > feedbackWindowDuration) {
+      recentFeedbackTimes.shift()
+    }
+    if (recentFeedbackTimes.length >= feedbackWindowAllowance) {
+      res.status(429).send('Too many feedbacks have been submitted in a short time. Please try again later.')
+      return
+    }
+    recentFeedbackTimes.push(now)
+    next()
+  })
   /* Captcha Bypass challenge verification */
   app.post('/api/Feedbacks', verify.captchaBypassChallenge())
   /* User registration challenge verifications before finale takes over */
@@ -412,6 +534,18 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
         req.body.passwordRepeat = req.body.passwordRepeat.trim()
       } else {
         res.status(400).send(res.__('Invalid email/password cannot be empty'))
+      }
+    }
+    next()
+  })
+  /* Prevent mass assignment of privileged/internal attributes (e.g. role) during self-registration.
+     Only an explicit allowlist of fields may be supplied by the (unauthenticated) caller of this
+     public registration endpoint; the account role always defaults to 'customer' server-side. */
+  app.post('/api/Users', (req: Request, res: Response, next: NextFunction) => {
+    const allowedRegistrationFields = ['email', 'password', 'passwordRepeat', 'username', 'securityQuestion', 'securityAnswer']
+    for (const field of Object.keys(req.body)) {
+      if (!allowedRegistrationFields.includes(field)) {
+        delete req.body[field]
       }
     }
     next()
@@ -446,7 +580,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   app.post('/api/Addresss', security.appendUserId())
   app.get('/api/Addresss', security.appendUserId(), utils.asyncHandler(address.getAddress()))
-  app.put('/api/Addresss/:id', security.appendUserId())
+  app.put('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.requireOwnAddress()))
   app.delete('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.delAddressById()))
   app.get('/api/Addresss/:id', security.appendUserId(), utils.asyncHandler(address.getAddressById()))
   app.get('/api/Deliverys', utils.asyncHandler(delivery.getDeliveryMethods()))
@@ -629,7 +763,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
   app.get('/rest/memories', utils.asyncHandler(getMemories()))
   /* NoSQL API endpoints */
   app.get('/rest/products/:id/reviews', showProductReviews())
-  app.put('/rest/products/:id/reviews', utils.asyncHandler(createProductReviews()))
+  app.put('/rest/products/:id/reviews', security.isAuthorized(), utils.asyncHandler(createProductReviews()))
   app.patch('/rest/products/reviews', security.isAuthorized(), updateProductReviews())
   app.post('/rest/products/reviews', security.isAuthorized(), utils.asyncHandler(likeProductReviews()))
 
@@ -663,7 +797,7 @@ function configureApp (app: ReturnType<typeof express>, seq: typeof sequelize) {
 
   /* Routes for profile page */
   app.get('/profile', security.updateAuthenticatedUsers(), utils.asyncHandler(getUserProfile()))
-  app.post('/profile', utils.asyncHandler(updateUserProfile()))
+  app.post('/profile', security.sameOriginOnly(), utils.asyncHandler(updateUserProfile()))
 
   /* Route for vulnerable code snippets */
   app.get('/snippets/:challenge', utils.asyncHandler(serveCodeSnippet()))
@@ -722,7 +856,10 @@ logger.info(`Entity models ${colors.bold(Object.keys(sequelize.models).length.to
 /* Serve metrics */
 let metricsUpdateLoop: any
 const Metrics = metrics.observeMetrics() // vuln-code-snippet neutral-line exposedMetricsChallenge
-app.get('/metrics', utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
+/* The Prometheus scrape exposes operational counters - registered users, placed orders, solved
+   challenges, file uploads - which is monitoring data about the deployment rather than shop
+   content, so it is only served to an administrator. */
+app.get('/metrics', security.isAdmin(), utils.asyncHandler(metrics.serveMetrics())) // vuln-code-snippet vuln-line exposedMetricsChallenge
 errorhandler.title = `${config.get<string>('application.name')} (Express ${utils.version('express')})`
 
 export async function start (readyCallback?: () => void) {

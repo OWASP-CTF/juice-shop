@@ -28,14 +28,22 @@ export function captchas () {
     }
     const captchaInstance = CaptchaModel.build(captcha)
     await captchaInstance.save()
-    res.json(captcha)
+    // Only the expression and its id may be sent to the client. The solution
+    // ("answer") must stay server-side (already persisted above) so that it
+    // cannot be read straight out of the API response and used to script
+    // past the CAPTCHA without ever solving it.
+    res.json({ captchaId, captcha: expression })
   }
 }
 
 export const verifyCaptcha = () => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const captcha = await CaptchaModel.findOne({ where: { captchaId: req.body.captchaId } })
+    const requestedId = Number(req.body.captchaId)
+    const captcha = Number.isInteger(requestedId) ? await CaptchaModel.findOne({ where: { captchaId: requestedId } }) : null
     if ((captcha != null) && req.body.captcha === captcha.answer) {
+      // One puzzle buys one submission. Leaving the row in place would let a single correct
+      // answer be replayed indefinitely, which turns the whole check into a formality.
+      await captcha.destroy()
       next()
     } else {
       res.status(401).send(res.__('Wrong answer to CAPTCHA. Please try again.'))

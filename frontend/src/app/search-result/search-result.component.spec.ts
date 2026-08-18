@@ -162,11 +162,12 @@ describe('SearchResultComponent', () => {
         expect(component).toBeTruthy()
     })
 
-    it('should render product descriptions as trusted HTML', () => {
+    it('should never mark a product description as trusted HTML', () => {
         productService.search.mockReturnValue(of([{ description: '<script>alert("XSS")</script>' }]))
         component.ngAfterViewInit()
         fixture.detectChanges()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>alert("XSS")</script>')
+        expect(sanitizer.bypassSecurityTrustHtml).not.toHaveBeenCalled()
+        expect(component.tableData[0].description).toBe('<script>alert("XSS")</script>')
     })
 
     it('should hold no products when product search API call fails', () => {
@@ -201,12 +202,11 @@ describe('SearchResultComponent', () => {
         expect(console.log).toHaveBeenCalledWith('Error')
     })
 
-    it('should notify socket if search query includes DOM XSS payload while filtering table', () => {
+    it('should not report the search query to the server while filtering table', () => {
         activatedRoute.setQueryParameter('<iframe src="javascript:alert(`xss`)"> Payload')
         vi.spyOn(mockSocket, 'emit')
         component.filterTable()
-        expect(vi.mocked(mockSocket.emit as any).mock.lastCall[0]).toBe('verifyLocalXssChallenge')
-        expect(vi.mocked(mockSocket.emit as any).mock.lastCall[1]).toBe(activatedRoute.snapshot.queryParams.q)
+        expect(mockSocket.emit).not.toHaveBeenCalled()
     })
 
     it('should trim the queryparameter while filtering the datasource', () => {
@@ -215,9 +215,10 @@ describe('SearchResultComponent', () => {
         expect(component.dataSource.filter).toEqual('product search')
     })
 
-    it('should pass the search query as trusted HTML', () => {
+    it('should keep the search query as an untrusted string', () => {
         activatedRoute.setQueryParameter('<script>scripttag</script>')
         component.filterTable()
-        expect(sanitizer.bypassSecurityTrustHtml).toHaveBeenCalledWith('<script>scripttag</script>')
+        expect(sanitizer.bypassSecurityTrustHtml).not.toHaveBeenCalled()
+        expect(component.searchValue).toBe('<script>scripttag</script>')
     })
 })
